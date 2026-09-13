@@ -8938,7 +8938,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
               className="rounded-2xl overflow-hidden mb-4"
               style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
             >
-              <div style={{ overflowX: "auto" }}>
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: `${pfCompareIds.length * 140 + 100}px` }}>
                   <thead>
                     <tr>
@@ -10483,7 +10483,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ];
 
     const insightsSubNav = (
-      <div className="flex gap-2 mb-6" style={{ overflowX: "auto" }}>
+      <div className="flex gap-2 mb-6" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
           return (
@@ -10574,6 +10574,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             border: `1px solid ${palette.border}`,
             boxShadow: palette.shadow,
             overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <div className="flex" style={{ gap: isDesktop ? "5px" : "3px", justifyContent: isDesktop ? "center" : "normal" }}>
@@ -15698,7 +15699,8 @@ const renderSidebar = () => (
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap');
 
   * { -webkit-tap-highlight-color: transparent; }
-  html, body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; }
+  html, body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; scroll-behavior: smooth; }
+  main, div { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: ${palette.border}; border-radius: 999px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -15781,6 +15783,7 @@ const renderSidebar = () => (
 .ledger-nav-item {
   position: relative;
   overflow: visible;
+  will-change: transform;
   transition:
     transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
     background 0.18s ease,
@@ -15993,6 +15996,7 @@ const renderSidebar = () => (
                 minHeight: 0,
                 overflowY: communityFullBleed ? "hidden" : "auto",
                 WebkitOverflowScrolling: "touch",
+                overscrollBehavior: "contain",
                 display: communityFullBleed ? "flex" : "block",
                 flexDirection: "column",
                 paddingTop: communityFullBleed ? (isDesktop ? "24px" : 0) : undefined,
@@ -18570,8 +18574,8 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
               width: rect.width + pad * 2,
               height: rect.height + pad * 2,
               borderRadius: "14px",
-              border: `2px solid ${palette.gold}`,
-              boxShadow: `0 0 0 4px ${palette.gold}33, 0 0 24px ${palette.gold}66`,
+              border: "none",
+              boxShadow: "none",
               pointerEvents: "none",
               transition: "top 0.25s ease, left 0.25s ease",
             }}

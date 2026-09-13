@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -844,6 +844,24 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent }) {
   );
 }
 
+const ONBOARDING_SLIDES = [
+  {
+    icon: BookOpen,
+    title: "Journal Every Trade",
+    desc: "Log entries, exits, and lessons learned so you build a track record you can actually learn from.",
+  },
+  {
+    icon: Scale,
+    title: "Master Your Risk",
+    desc: "Built-in risk-to-reward, consistency, and drawdown calculators keep every trade sized right.",
+  },
+  {
+    icon: Users,
+    title: "Trade Alongside Others",
+    desc: "Join private groups, share signals, and chat with traders working the same setups as you.",
+  },
+];
+
 const TABS = [
   { id: "risk", label: "Challenge", icon: Scale },
   { id: "propfirm", label: "Prop Firm", icon: Building2 },
@@ -1184,6 +1202,8 @@ const scopedKey = (base, accountId) => `${base}:${accountId}`;
 const COMMUNITY_API_BASE = "https://ledger-community.ledgercalc.workers.dev";
 const COMMUNITY_USERNAME_KEY = "community:username";
 const COMMUNITY_MEMBERSHIPS_KEY = "community:memberships";
+const COMMUNITY_SESSION_KEY = "community:session";
+const COMMUNITY_ONBOARDING_KEY = "community:onboarding_seen";
 const COMMUNITY_MESSAGE_POLL_MS = 6000;
 const COMMUNITY_JOIN_REQUESTS_KEY = "community:join-requests";
 
@@ -4185,6 +4205,24 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [communityUsername, setCommunityUsername] = useState("");
   const [communityUsernameLoaded, setCommunityUsernameLoaded] = useState(false);
   const [communityUsernameDraft, setCommunityUsernameDraft] = useState("");
+
+  // --- Community auth state ---
+  const [session, setSession] = useState(null); // { token, userId, email } | null
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // "login" | "signup"
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authScreenStep, setAuthScreenStep] = useState("choice"); // "choice" | "form"
+
+  // --- Onboarding carousel state ---
+  const [onboardingSeen, setOnboardingSeen] = useState(false);
+  const [onboardingSeenLoaded, setOnboardingSeenLoaded] = useState(false);
+  const [onboardingIndex, setOnboardingIndex] = useState(0);
+  const [onboardingDragX, setOnboardingDragX] = useState(0);
+  const [onboardingDragging, setOnboardingDragging] = useState(false);
+  const onboardingDragStartXRef = useRef(null);
   const [myGroups, setMyGroups] = useState([]);
   const [myGroupsLoaded, setMyGroupsLoaded] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState(null);
@@ -4587,9 +4625,11 @@ const deleteCommunityPost = async (postId) => {
     let cancelled = false;
     (async () => {
       try {
-        const [nameRes, membershipsRes] = await Promise.allSettled([
+        const [nameRes, membershipsRes, sessionRes, onboardingRes] = await Promise.allSettled([
           window.storage.get(COMMUNITY_USERNAME_KEY, false),
           window.storage.get(COMMUNITY_MEMBERSHIPS_KEY, false),
+          window.storage.get(COMMUNITY_SESSION_KEY, false),
+          window.storage.get(COMMUNITY_ONBOARDING_KEY, false),
         ]);
         if (cancelled) return;
         if (nameRes.status === "fulfilled" && nameRes.value) setCommunityUsername(nameRes.value.value);
@@ -4597,10 +4637,22 @@ const deleteCommunityPost = async (postId) => {
           const parsed = JSON.parse(membershipsRes.value.value);
           if (Array.isArray(parsed)) setMyGroups(parsed);
         }
+        if (sessionRes.status === "fulfilled" && sessionRes.value) {
+          const parsedSession = JSON.parse(sessionRes.value.value);
+          if (parsedSession && parsedSession.token) setSession(parsedSession);
+        }
+        if (onboardingRes.status === "fulfilled" && onboardingRes.value && onboardingRes.value.value === "1") {
+          setOnboardingSeen(true);
+        }
       } catch (err) {
         // non-critical, fail silently
       } finally {
-        if (!cancelled) { setCommunityUsernameLoaded(true); setMyGroupsLoaded(true); }
+        if (!cancelled) {
+          setCommunityUsernameLoaded(true);
+          setMyGroupsLoaded(true);
+          setSessionLoaded(true);
+          setOnboardingSeenLoaded(true);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -5381,6 +5433,80 @@ useEffect(() => {
     } catch (err) {}
   };
 
+  const persistSession = async (next) => {
+    setSession(next);
+    try {
+      if (next) await window.storage.set(COMMUNITY_SESSION_KEY, JSON.stringify(next), false);
+      else await window.storage.delete(COMMUNITY_SESSION_KEY, false);
+    } catch (err) {}
+  };
+
+  const handleAuthSubmit = async () => {
+    setAuthError("");
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !authPassword) {
+      setAuthError("Enter an email and password.");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      const data = await communityApi(`/auth/${authMode}`, {
+        method: "POST",
+        body: JSON.stringify({ email, password: authPassword }),
+      });
+      await persistSession({ token: data.token, userId: data.userId, email: data.email });
+      if (!communityUsername) await persistCommunityUsername(data.email.split("@")[0]);
+      setAuthPassword("");
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      if (session?.token) {
+        await communityApi("/auth/logout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.token}` },
+        });
+      }
+    } catch (err) {}
+    await persistSession(null);
+  };
+
+  const persistOnboardingSeen = async () => {
+    setOnboardingSeen(true);
+    try {
+      await window.storage.set(COMMUNITY_ONBOARDING_KEY, "1", false);
+    } catch (err) {}
+  };
+
+  const clampOnboardingIndex = (i) => Math.max(0, Math.min(ONBOARDING_SLIDES.length, i));
+
+  const onboardingDragStart = (clientX) => {
+    onboardingDragStartXRef.current = clientX;
+    setOnboardingDragging(true);
+  };
+  const onboardingDragMove = (clientX) => {
+    if (onboardingDragStartXRef.current == null) return;
+    setOnboardingDragX(clientX - onboardingDragStartXRef.current);
+  };
+  const onboardingDragEnd = () => {
+    setOnboardingDragX((delta) => {
+      const threshold = 45;
+      if (delta <= -threshold) {
+        setOnboardingIndex((i) => clampOnboardingIndex(i + 1));
+      } else if (delta >= threshold) {
+        setOnboardingIndex((i) => clampOnboardingIndex(i - 1));
+      }
+      return 0;
+    });
+    onboardingDragStartXRef.current = null;
+    setOnboardingDragging(false);
+  };
+
   const persistMyGroups = async (next) => {
     setMyGroups(next);
     try {
@@ -5981,6 +6107,350 @@ const updateSyncedJournalRow = (trade) => {
       setNotepadFocusBlock(null);
     }
   }, [notepadNotes, notepadFocusBlock, activeNoteId]);
+
+  // ---------- FIRST-LAUNCH GATE: sign up / log in before anything else ----------
+  if (!sessionLoaded || !onboardingSeenLoaded) {
+    return (
+      <div
+        className="w-full flex items-center justify-center"
+        style={{ background: palette.letterbox, height: "100dvh" }}
+      >
+        <div
+          className="flex items-center justify-center"
+          style={{
+            width: "56px",
+            height: "56px",
+            borderRadius: "16px",
+            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+            boxShadow: `0 8px 24px ${palette.gold}44`,
+          }}
+        >
+          <TrendingUp size={26} color={palette.letterbox} strokeWidth={2.4} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    if (!onboardingSeen) {
+      // ---------- ONBOARDING CAROUSEL (swipeable) ----------
+      const totalSlides = ONBOARDING_SLIDES.length + 1; // +1 for the closing "Get Started" slide
+      const isLastSlide = onboardingIndex === ONBOARDING_SLIDES.length;
+      return (
+        <div
+          className="w-full flex flex-col"
+          style={{ background: palette.letterbox, height: "100dvh" }}
+        >
+          <div className="flex justify-end p-4" style={{ minHeight: "44px" }}>
+            {!isLastSlide && (
+              <button
+                type="button"
+                onClick={() => setOnboardingIndex(ONBOARDING_SLIDES.length)}
+                className={TAP}
+                style={{ color: palette.textFaint, fontFamily: mono, fontSize: "12.5px", background: "transparent" }}
+              >
+                Skip
+              </button>
+            )}
+          </div>
+
+          <div
+            className="flex-1 overflow-hidden select-none"
+            style={{ touchAction: "pan-y", cursor: onboardingDragging ? "grabbing" : "grab" }}
+            onTouchStart={(e) => onboardingDragStart(e.touches[0].clientX)}
+            onTouchMove={(e) => onboardingDragMove(e.touches[0].clientX)}
+            onTouchEnd={onboardingDragEnd}
+            onMouseDown={(e) => onboardingDragStart(e.clientX)}
+            onMouseMove={(e) => { if (onboardingDragging) onboardingDragMove(e.clientX); }}
+            onMouseUp={onboardingDragEnd}
+            onMouseLeave={() => { if (onboardingDragging) onboardingDragEnd(); }}
+          >
+            <div
+              className="flex h-full"
+              style={{
+                width: `${totalSlides * 100}%`,
+                transform: `translateX(calc(${-onboardingIndex * (100 / totalSlides)}% + ${onboardingDragX}px))`,
+                transition: onboardingDragging ? "none" : "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              {ONBOARDING_SLIDES.map((slide, i) => {
+                const Icon = slide.icon;
+                return (
+                  <div
+                    key={i}
+                    className="flex flex-col items-center justify-center text-center px-8"
+                    style={{ width: `${100 / totalSlides}%`, flexShrink: 0 }}
+                  >
+                    <div
+                      className="flex items-center justify-center mb-6"
+                      style={{
+                        width: "88px",
+                        height: "88px",
+                        borderRadius: "24px",
+                        background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                        boxShadow: `0 10px 28px ${palette.gold}44`,
+                      }}
+                    >
+                      <Icon size={40} color={palette.letterbox} strokeWidth={2} />
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: display,
+                        fontSize: "22px",
+                        fontWeight: 800,
+                        color: palette.text,
+                        marginBottom: "10px",
+                      }}
+                    >
+                      {slide.title}
+                    </div>
+                    <p className="text-sm" style={{ color: palette.textMuted, maxWidth: "280px", lineHeight: 1.5 }}>
+                      {slide.desc}
+                    </p>
+                  </div>
+                );
+              })}
+
+              <div
+                className="flex flex-col items-center justify-center text-center px-8"
+                style={{ width: `${100 / totalSlides}%`, flexShrink: 0 }}
+              >
+                <div
+                  className="flex items-center justify-center mb-5"
+                  style={{
+                    width: "88px",
+                    height: "88px",
+                    borderRadius: "24px",
+                    background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                    boxShadow: `0 10px 28px ${palette.gold}55`,
+                  }}
+                >
+                  <TrendingUp size={40} color={palette.letterbox} strokeWidth={2.2} />
+                </div>
+                <div
+                  style={{
+                    fontFamily: display,
+                    fontSize: "26px",
+                    fontWeight: 800,
+                    color: palette.text,
+                    marginBottom: "8px",
+                  }}
+                >
+                  Tredzi
+                </div>
+                <p className="text-sm mb-8" style={{ color: palette.textMuted, maxWidth: "280px", lineHeight: 1.5 }}>
+                  Your trading journal, risk tools, and trader community, all in one place.
+                </p>
+                <button
+                  type="button"
+                  onClick={persistOnboardingSeen}
+                  className={`rounded-2xl px-10 py-3.5 ${TAP}`}
+                  style={{
+                    background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                    color: palette.letterbox,
+                    fontFamily: mono,
+                    fontSize: "14.5px",
+                    fontWeight: 700,
+                    boxShadow: `0 6px 18px ${palette.gold}44`,
+                  }}
+                >
+                  Get Started
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 pb-8 pt-2">
+            {Array.from({ length: totalSlides }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setOnboardingIndex(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                className={TAP}
+                style={{
+                  width: i === onboardingIndex ? "22px" : "7px",
+                  height: "7px",
+                  borderRadius: "999px",
+                  background: i === onboardingIndex ? palette.gold : palette.border,
+                  transition: "width 0.25s ease, background 0.25s ease",
+                  border: "none",
+                  padding: 0,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ---------- LOGIN / SIGNUP ----------
+    return (
+      <div
+        className="w-full flex items-center justify-center"
+        style={{ background: palette.letterbox, height: "100dvh", padding: "24px" }}
+      >
+        <div
+          className="w-full modal-in"
+          style={{
+            maxWidth: "380px",
+            background: palette.surface,
+            border: `1px solid ${palette.border}`,
+            borderRadius: "28px",
+            boxShadow: palette.shadow,
+            padding: "36px 28px 28px",
+          }}
+        >
+          <div className="flex flex-col items-center text-center mb-7">
+            <div
+              className="flex items-center justify-center mb-4"
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "18px",
+                background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                boxShadow: `0 8px 24px ${palette.gold}55`,
+              }}
+            >
+              <TrendingUp size={30} color={palette.letterbox} strokeWidth={2.4} />
+            </div>
+            <div
+              style={{
+                fontFamily: display,
+                fontSize: "26px",
+                fontWeight: 800,
+                color: palette.text,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Tredzi
+            </div>
+            <p className="text-sm mt-1.5" style={{ color: palette.textMuted, maxWidth: "260px" }}>
+              Your trading journal, risk tools, and trader community, all in one place.
+            </p>
+          </div>
+
+          {authScreenStep === "choice" ? (
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => { setAuthMode("signup"); setAuthScreenStep("form"); setAuthError(""); }}
+                className={`w-full rounded-2xl py-3.5 ${TAP}`}
+                style={{
+                  background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                  color: palette.letterbox,
+                  fontFamily: mono,
+                  fontSize: "14.5px",
+                  fontWeight: 700,
+                  boxShadow: `0 6px 18px ${palette.gold}44`,
+                }}
+              >
+                Create Account
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode("login"); setAuthScreenStep("form"); setAuthError(""); }}
+                className={`w-full rounded-2xl py-3.5 ${TAP}`}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${palette.border}`,
+                  color: palette.text,
+                  fontFamily: mono,
+                  fontSize: "14.5px",
+                  fontWeight: 700,
+                }}
+              >
+                Log In
+              </button>
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>
+                Free to join, no card required.
+              </p>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => { setAuthScreenStep("choice"); setAuthError(""); }}
+                className={`flex items-center gap-1 mb-4 ${TAP}`}
+                style={{ color: palette.textFaint, fontFamily: mono, fontSize: "12px", background: "transparent" }}
+              >
+                <ChevronLeft size={14} /> Back
+              </button>
+
+              <div
+                style={{
+                  fontFamily: display,
+                  fontSize: "17px",
+                  fontWeight: 700,
+                  color: palette.text,
+                  marginBottom: "14px",
+                }}
+              >
+                {authMode === "signup" ? "Create your account" : "Welcome back"}
+              </div>
+
+              <span className="block mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
+                Email
+              </span>
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoFocus
+                className="w-full rounded-2xl px-4 py-3.5 mb-3 bg-transparent outline-none"
+                style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "15px" }}
+              />
+
+              <span className="block mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
+                Password
+              </span>
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAuthSubmit(); }}
+                placeholder="At least 8 characters"
+                className="w-full rounded-2xl px-4 py-3.5 mb-3 bg-transparent outline-none"
+                style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "15px" }}
+              />
+
+              {authError && (
+                <p className="text-xs mb-3" style={{ color: palette.red }}>{authError}</p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAuthSubmit}
+                disabled={authBusy || !authEmail.trim() || !authPassword}
+                className={`w-full rounded-2xl py-3.5 ${TAP}`}
+                style={{
+                  background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                  color: palette.letterbox,
+                  fontFamily: mono,
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  boxShadow: `0 6px 18px ${palette.gold}44`,
+                  opacity: authBusy ? 0.6 : 1,
+                }}
+              >
+                {authBusy ? "Please wait…" : authMode === "signup" ? "Sign Up" : "Log In"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}
+                className={`w-full mt-3 ${TAP}`}
+                style={{ color: palette.textFaint, fontFamily: mono, fontSize: "12.5px", textDecoration: "underline", background: "transparent" }}
+              >
+                {authMode === "login" ? "Need an account? Sign up" : "Already have an account? Log in"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleJournalCellKeyDown = (e, rowIdx, colIdx, rows) => {
     if (!e.altKey) return;
@@ -15062,6 +15532,15 @@ const renderSidebar = () => (
           aria-label="Edit profile"
         >
           <Pencil size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={logout}
+          className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
+          style={{ width: "28px", height: "28px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+          aria-label="Log out"
+        >
+          <LogOut size={12} />
         </button>
       </div>
 

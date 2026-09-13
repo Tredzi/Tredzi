@@ -865,26 +865,63 @@ const ONBOARDING_SLIDES = [
 ];
 
 // ---------- Onboarding ambient background ----------
-// Two quiet, monochrome price-line traces at different depths (parallax),
-// plus a soft breathing halo behind the top mark. Same accent color
-// throughout — depth comes from layering and speed, not extra hues.
-function makeLoopPath(points) {
-  const head = points
-    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`)
-    .join(" ");
-  const tail = points.map(([x, y]) => `L${x + 480},${y}`).join(" ");
-  return `${head} ${tail}`;
-}
+// A real candlestick ticker tape, not an abstract decorative squiggle —
+// something a trader would actually recognize. Quiet, desaturated, and
+// married to a fine grain texture for a filmic finish instead of a flat
+// gradient. No glow, no particles, no color for color's sake.
+const ONBOARD_CANDLES = [
+  14, 22, 10, 30, 18, 26, 12, 34, 20, 16, 28, 24, 12, 32, 18, 22, 14, 26, 30, 16,
+  20, 28, 12, 24, 18, 34, 16, 22, 26, 14, 30, 20, 12, 28, 18, 24,
+].map((h, i) => ({ h, up: i % 3 !== 0 }));
 
-// Domain is 0-480, first/last y match so each doubled path tiles with no seam.
-const ONBOARD_BG_PATH_A = makeLoopPath([
-  [0, 54], [48, 40], [96, 50], [144, 26], [192, 44],
-  [240, 18], [288, 38], [336, 22], [384, 34], [432, 44], [480, 54],
-]);
-const ONBOARD_BG_PATH_B = makeLoopPath([
-  [0, 30], [60, 44], [120, 24], [180, 46], [240, 30],
-  [300, 50], [360, 28], [420, 42], [480, 30],
-]);
+function OnboardingTickerRow({ candles, opacity, speed, reverse, height }) {
+  const doubled = [...candles, ...candles];
+  return (
+    <div
+      className="onboard-ticker-track"
+      style={{
+        position: "absolute",
+        left: 0,
+        width: "200%",
+        height,
+        display: "flex",
+        alignItems: "center",
+        animationDuration: speed,
+        animationDirection: reverse ? "reverse" : "normal",
+      }}
+    >
+      {doubled.map((c, i) => (
+        <div key={i} style={{ position: "relative", width: "16px", height: "100%", flexShrink: 0 }}>
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "1px",
+              height: `${c.h + 14}px`,
+              background: c.up ? palette.green : palette.red,
+              opacity,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "4px",
+              height: `${c.h}px`,
+              borderRadius: "1px",
+              background: c.up ? palette.green : palette.red,
+              opacity: opacity * 1.7,
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function OnboardingAmbientBG() {
   return (
@@ -893,66 +930,35 @@ function OnboardingAmbientBG() {
       style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}
     >
       <div
-        className="onboard-bg-halo"
-        style={{
-          position: "absolute",
-          top: "-6%",
-          left: "50%",
-          width: "260px",
-          height: "260px",
-          transform: "translateX(-50%)",
-          background: `radial-gradient(closest-side, ${palette.gold}22, transparent 72%)`,
-        }}
-      />
-      <div
-        className="onboard-bg-vignette"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "58%",
-          background: `linear-gradient(to bottom, ${palette.gold}0d, transparent)`,
-        }}
-      />
-
-      <div
-        className="onboard-bg-line-track onboard-bg-line-back"
-        style={{ position: "absolute", top: "8%", left: 0, width: "200%", height: "140px" }}
+        className="onboard-bg-grain"
+        style={{ position: "absolute", inset: 0, opacity: 0.05, mixBlendMode: "overlay" }}
       >
-        <svg width="100%" height="100%" viewBox="0 0 960 90" preserveAspectRatio="none">
-          <path d={ONBOARD_BG_PATH_B} fill="none" stroke={palette.gold} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.09" />
+        <svg width="100%" height="100%">
+          <filter id="onboardGrain">
+            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+            <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0" />
+          </filter>
+          <rect width="100%" height="100%" filter="url(#onboardGrain)" />
         </svg>
       </div>
-      <div
-        className="onboard-bg-line-track onboard-bg-line-front"
-        style={{ position: "absolute", top: "68%", left: 0, width: "200%", height: "140px" }}
-      >
-        <svg width="100%" height="100%" viewBox="0 0 960 80" preserveAspectRatio="none">
-          <path d={ONBOARD_BG_PATH_A} fill="none" stroke={palette.gold} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" />
-        </svg>
+
+      <div style={{ position: "absolute", left: 0, right: 0, top: "18%", height: "70px", overflow: "hidden" }}>
+        <OnboardingTickerRow candles={ONBOARD_CANDLES} opacity={0.1} speed="70s" height="70px" />
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: "10%", height: "90px", overflow: "hidden" }}>
+        <OnboardingTickerRow candles={ONBOARD_CANDLES} opacity={0.16} speed="46s" height="90px" reverse />
       </div>
 
       <style>{`
-        @keyframes onboardBgDriftSlow {
+        @keyframes onboardTickerDrift {
           from { transform: translateX(0); }
           to { transform: translateX(-50%); }
-        }
-        @keyframes onboardBgDriftFast {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        @keyframes onboardBgHaloBreathe {
-          0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
-          50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
         }
         @media (prefers-reduced-motion: no-preference) {
-          .onboard-bg-line-back { animation: onboardBgDriftSlow 85s linear infinite; }
-          .onboard-bg-line-front { animation: onboardBgDriftFast 55s linear infinite reverse; }
-          .onboard-bg-halo { animation: onboardBgHaloBreathe 7s ease-in-out infinite; }
+          .onboard-ticker-track { animation-name: onboardTickerDrift; animation-timing-function: linear; animation-iteration-count: infinite; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .onboard-bg-line-track, .onboard-bg-halo { animation: none !important; }
+          .onboard-ticker-track { animation: none !important; }
         }
       `}</style>
     </div>
@@ -6298,6 +6304,33 @@ const updateSyncedJournalRow = (trade) => {
               </button>
             )}
           </div>
+
+          {!isLastSlide && (
+            <button
+              type="button"
+              onClick={() => setOnboardingIndex((i) => clampOnboardingIndex(i + 1))}
+              aria-label="Next"
+              className={TAP}
+              style={{
+                position: "absolute",
+                right: "18px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 2,
+                width: "40px",
+                height: "40px",
+                borderRadius: "999px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: palette.field,
+                border: `1px solid ${palette.border}`,
+                color: palette.text,
+              }}
+            >
+              <ChevronRight size={20} />
+            </button>
+          )}
 
           <div
             className="flex-1 overflow-hidden select-none"

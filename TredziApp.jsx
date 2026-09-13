@@ -14615,14 +14615,14 @@ if (activeTab === "community") {
   <>
     <div className="flex-1 px-4 py-4" style={{ background: `radial-gradient(ellipse 800px 400px at 50% 0%, ${palette.gold}08, transparent), ${palette.bg}`, overflowY: "auto", minHeight: 0 }}>
       {!groupMessagesLoaded ? (
-        <p className="text-xs" style={{ color: palette.textFaint }}>Loading signals…</p>
+        <p className="text-xs" style={{ color: palette.textFaint, fontFamily: sans }}>Loading signals…</p>
       ) : signalMessages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "52px", height: "52px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
             <TrendingUp size={22} style={{ color: palette.gold }} />
           </span>
-          <p style={{ color: palette.text, fontSize: "14px", fontWeight: 600, marginBottom: "3px" }}>No signals yet</p>
-          <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px" }}>
+          <p style={{ color: palette.text, fontSize: "14px", fontWeight: 600, marginBottom: "3px", fontFamily: sans }}>No signals yet</p>
+          <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px", fontFamily: sans }}>
             {canPostSignal ? "Post the first trade signal below." : "Only the owner and admins can post signals here."}
           </p>
         </div>
@@ -14631,47 +14631,62 @@ if (activeTab === "community") {
           {signalMessages.map((m) => {
             const isMe = m.author === communityUsername;
             const canDelete = isMe || isGroupOwner;
+            const isSell = m.direction === "sell";
+            const dirColor = isSell ? palette.red : palette.green;
+            const entryNum = num(m.entry), slNum = num(m.sl), tpNum = num(m.tp);
+            const hasRR = entryNum && slNum && tpNum && entryNum !== slNum;
+            const rr = hasRR ? Math.abs(tpNum - entryNum) / Math.abs(entryNum - slNum) : null;
             return (
-              <div key={m.id} className="flex" style={{ justifyContent: isMe ? "flex-end" : "flex-start", gap: "8px" }}>
-                {!isMe && <Avatar name={m.author} size={28} />}
-                <div style={{ maxWidth: isDesktop ? "62%" : "78%" }}>
-                  {!isMe && (
-                    <div style={{ color: palette.gold, fontSize: "11.5px", fontWeight: 700, marginBottom: "3px", marginLeft: "3px" }}>
-                      {m.author}
-                    </div>
-                  )}
-                  <div className="rounded-2xl p-3.5" style={{ background: palette.surface, border: `1px solid ${m.direction === "sell" ? palette.red : palette.green}55`, borderTop: `3px solid ${m.direction === "sell" ? palette.red : palette.green}`, boxShadow: palette.shadow }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span style={{ fontSize: "9.5px", fontFamily: mono, fontWeight: 800, color: m.direction === "sell" ? palette.red : palette.green, background: `${m.direction === "sell" ? palette.red : palette.green}1E`, borderRadius: "999px", padding: "2px 9px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                        {m.direction === "sell" ? "↓ Sell" : "↑ Buy"}
-                      </span>
-                      <span style={{ fontFamily: mono, fontSize: "14px", color: palette.text, fontWeight: 800 }}>{m.pair}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {[["Entry", m.entry], ["SL", m.sl], ["TP", m.tp]].map(([lbl, val]) => (
-                        <div key={lbl} style={{ background: palette.field, borderRadius: "8px", padding: "5px 6px", textAlign: "center", border: `1px solid ${palette.border}` }}>
-                          <div style={{ fontSize: "8.5px", color: palette.textFaint, textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</div>
-                          <div style={{ fontFamily: mono, fontSize: "12px", color: palette.text, fontWeight: 700 }}>{val || "—"}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {m.text && <div style={{ color: palette.textMuted, fontSize: "12.5px", marginTop: "8px", lineHeight: 1.4 }}>{m.text}</div>}
-                  </div>
-                  <div className="flex items-center gap-3" style={{ justifyContent: isMe ? "flex-end" : "flex-start", marginTop: "3px" }}>
-                    <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>
+              <div
+                key={m.id}
+                className="rounded-lg overflow-hidden flex"
+                style={{ background: palette.surface, boxShadow: palette.shadow }}
+              >
+                <div style={{ width: "4px", flexShrink: 0, background: dirColor }} />
+                <div className="flex-1 min-w-0" style={{ padding: "12px 14px" }}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <Avatar name={m.author} size={22} />
+                    <span style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 600, fontFamily: sans }}>{m.author}</span>
+                    <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
                       {new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
+                    <span className="flex-1" />
                     {isGroupOwner && (
-                      <button type="button" onClick={() => pinCommunityMessage(pinnedMessageId === m.id ? null : m.id)} className={TAP} style={{ color: pinnedMessageId === m.id ? palette.gold : palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>
-                        {pinnedMessageId === m.id ? "Unpin" : "Pin"}
+                      <button type="button" onClick={() => pinCommunityMessage(pinnedMessageId === m.id ? null : m.id)} className={`flex items-center justify-center rounded-full ${TAP}`}
+                        style={{ width: "22px", height: "22px", color: pinnedMessageId === m.id ? palette.gold : palette.textFaint }} aria-label="Pin signal">
+                        <Bell size={12} />
                       </button>
                     )}
                     {canDelete && (
-                      <button type="button" onClick={() => setPendingDeleteMsg(m.id)} className={TAP} style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>
-                        Delete
+                      <button type="button" onClick={() => setPendingDeleteMsg(m.id)} className={`flex items-center justify-center rounded-full ${TAP}`}
+                        style={{ width: "22px", height: "22px", color: palette.textFaint }} aria-label="Delete signal">
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <span style={{ fontFamily: display, fontSize: "17px", fontWeight: 800, color: palette.text, letterSpacing: "0.01em" }}>{m.pair}</span>
+                    <span style={{ fontSize: "10px", fontFamily: sans, fontWeight: 800, color: dirColor, background: `${dirColor}1A`, borderRadius: "6px", padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      {isSell ? "↓ Sell" : "↑ Buy"}
+                    </span>
+                    {rr !== null && (
+                      <span style={{ fontSize: "10px", fontFamily: mono, fontWeight: 700, color: palette.textMuted, border: `1px solid ${palette.border}`, borderRadius: "6px", padding: "3px 8px" }}>
+                        R:R 1:{fmt(rr, 1)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
+                    {[["Entry", m.entry, palette.text], ["Stop Loss", m.sl, palette.red], ["Take Profit", m.tp, palette.green]].map(([lbl, val, color], i) => (
+                      <div key={lbl} style={{ padding: "8px 4px", textAlign: "center", borderLeft: i > 0 ? `1px solid ${palette.border}` : "none" }}>
+                        <div style={{ fontSize: "9px", color: palette.textFaint, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: sans, marginBottom: "2px" }}>{lbl}</div>
+                        <div style={{ fontFamily: mono, fontSize: "13px", color, fontWeight: 700 }}>{val || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {m.text && <div style={{ color: palette.textMuted, fontSize: "12.5px", marginTop: "10px", lineHeight: 1.45, fontFamily: sans }}>{m.text}</div>}
                 </div>
               </div>
             );
@@ -14681,64 +14696,74 @@ if (activeTab === "community") {
       )}
     </div>
 
-    <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, background: palette.surface, padding: isDesktop ? "12px 16px 16px" : "8px 12px 12px" }}>
+    <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, background: palette.surface, padding: isDesktop ? "14px 16px 16px" : "10px 12px 12px" }}>
       {canPostSignal ? (
         <>
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <TrendingUp size={13} style={{ color: palette.gold }} />
+            <span style={{ fontSize: "10.5px", fontWeight: 700, color: palette.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: sans }}>New Signal</span>
+          </div>
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: palette.field, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <input type="text" value={signalPair} onChange={(e) => setSignalPair(e.target.value.toUpperCase())} placeholder="Pair (XAUUSD)"
-                className="rounded-xl px-3 py-2 bg-transparent outline-none"
-                style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
-              <div className="flex gap-1">
-                {["buy", "sell"].map((d) => (
-                  <button key={d} type="button" onClick={() => setSignalDirection(d)} className={`flex-1 rounded-xl py-2 ${TAP}`}
-                    style={{
-                      background: signalDirection === d ? (d === "sell" ? palette.red : palette.green) : palette.surface,
-                      color: signalDirection === d ? "#FFFFFF" : palette.textMuted,
-                      border: `1px solid ${signalDirection === d ? "transparent" : palette.border}`,
-                      fontFamily: mono, fontSize: "11.5px", textTransform: "uppercase", fontWeight: 700,
-                    }}>
-                    {d}
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-2 mb-2.5">
+              <div>
+                <div style={{ fontSize: "9.5px", color: palette.textFaint, marginBottom: "4px", fontFamily: sans, fontWeight: 600 }}>Pair</div>
+                <input type="text" value={signalPair} onChange={(e) => setSignalPair(e.target.value.toUpperCase())} placeholder="XAUUSD"
+                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none"
+                  style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: "9.5px", color: palette.textFaint, marginBottom: "4px", fontFamily: sans, fontWeight: 600 }}>Direction</div>
+                <div className="flex gap-1">
+                  {["buy", "sell"].map((d) => (
+                    <button key={d} type="button" onClick={() => setSignalDirection(d)} className={`flex-1 rounded-xl py-2 ${TAP}`}
+                      style={{
+                        background: signalDirection === d ? (d === "sell" ? palette.red : palette.green) : palette.surface,
+                        color: signalDirection === d ? "#FFFFFF" : palette.textMuted,
+                        border: `1px solid ${signalDirection === d ? "transparent" : palette.border}`,
+                        fontFamily: sans, fontSize: "11.5px", textTransform: "uppercase", fontWeight: 700,
+                      }}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <input type="text" value={signalEntry} onChange={(e) => setSignalEntry(e.target.value)} placeholder="Entry"
-                className="rounded-xl px-2.5 py-2 bg-transparent outline-none"
-                style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12px" }} />
-              <input type="text" value={signalSL} onChange={(e) => setSignalSL(e.target.value)} placeholder="SL"
-                className="rounded-xl px-2.5 py-2 bg-transparent outline-none"
-                style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12px" }} />
-              <input type="text" value={signalTP} onChange={(e) => setSignalTP(e.target.value)} placeholder="TP"
-                className="rounded-xl px-2.5 py-2 bg-transparent outline-none"
-                style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12px" }} />
+              {[["Entry", signalEntry, setSignalEntry], ["Stop Loss", signalSL, setSignalSL], ["Take Profit", signalTP, setSignalTP]].map(([lbl, val, setter]) => (
+                <div key={lbl}>
+                  <div style={{ fontSize: "9.5px", color: palette.textFaint, marginBottom: "4px", fontFamily: sans, fontWeight: 600 }}>{lbl}</div>
+                  <input type="text" value={val} onChange={(e) => setter(e.target.value)} placeholder="0.00"
+                    className="w-full rounded-xl px-2.5 py-2 bg-transparent outline-none"
+                    style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12px" }} />
+                </div>
+              ))}
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl" style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}>
+          <div className="flex items-center gap-2 rounded-2xl mb-2.5" style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}>
             <input type="text" value={communityMsgText} onChange={(e) => setCommunityMsgText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendCommunityMessage(); } }}
               placeholder="Add a note (optional)"
-              className={isDesktop ? "flex-1 bg-transparent py-3 outline-none" : "flex-1 bg-transparent py-3.5 outline-none"}
-              style={{ color: palette.text, fontSize: isDesktop ? "14px" : "15px" }} />
-            <button type="button" onClick={sendCommunityMessage} disabled={!signalPair.trim()}
-              className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
-              style={{
-                width: isDesktop ? "40px" : "42px", height: isDesktop ? "40px" : "42px",
-                background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
-                color: palette.letterbox, boxShadow: `0 3px 10px ${palette.gold}44`,
-                opacity: !signalPair.trim() ? 0.5 : 1,
-              }} aria-label="Send signal">
-              <Send size={16} />
-            </button>
+              className="flex-1 bg-transparent py-2.5 outline-none"
+              style={{ color: palette.text, fontSize: "13px", fontFamily: sans }} />
           </div>
+          <button type="button" onClick={sendCommunityMessage} disabled={!signalPair.trim()}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 ${TAP}`}
+            style={{
+              background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+              color: palette.letterbox, boxShadow: `0 3px 10px ${palette.gold}44`,
+              opacity: !signalPair.trim() ? 0.5 : 1,
+              fontFamily: sans, fontSize: "13.5px", fontWeight: 700,
+            }} aria-label="Post signal">
+            <Send size={15} />
+            Post Signal
+          </button>
         </>
       ) : (
-        <p className="text-xs text-center py-2" style={{ color: palette.textFaint }}>
+        <p className="text-xs text-center py-2" style={{ color: palette.textFaint, fontFamily: sans }}>
           Only the owner and admins can post signals in this group.
         </p>
       )}
-      {communityApiError && <p className="text-xs mt-2" style={{ color: palette.red }}>{communityApiError}</p>}
+      {communityApiError && <p className="text-xs mt-2" style={{ color: palette.red, fontFamily: sans }}>{communityApiError}</p>}
     </div>
   </>
 

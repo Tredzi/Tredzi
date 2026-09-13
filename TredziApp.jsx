@@ -4205,6 +4205,8 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [communityUsername, setCommunityUsername] = useState("");
   const [communityUsernameLoaded, setCommunityUsernameLoaded] = useState(false);
   const [communityUsernameDraft, setCommunityUsernameDraft] = useState("");
+  const [communityUsernameError, setCommunityUsernameError] = useState("");
+  const [communityUsernameBusy, setCommunityUsernameBusy] = useState(false);
 
   // --- Community auth state ---
   const [session, setSession] = useState(null); // { token, userId, email } | null
@@ -5441,6 +5443,30 @@ useEffect(() => {
     } catch (err) {}
   };
 
+  // Claim a unique username on the signed-in account. The backend rejects it if
+  // another account already has it (case-insensitively) — this is what makes
+  // usernames one-per-person instead of just a local display name.
+  const claimCommunityUsername = async (name) => {
+    setCommunityUsernameError("");
+    if (!session?.token) {
+      setCommunityUsernameError("You need to be signed in to set a username.");
+      return;
+    }
+    setCommunityUsernameBusy(true);
+    try {
+      const data = await communityApi("/auth/username", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ username: name }),
+      });
+      await persistCommunityUsername(data.username);
+    } catch (err) {
+      setCommunityUsernameError(err.message);
+    } finally {
+      setCommunityUsernameBusy(false);
+    }
+  };
+
   const handleAuthSubmit = async () => {
     setAuthError("");
     const email = authEmail.trim().toLowerCase();
@@ -5455,7 +5481,10 @@ useEffect(() => {
         body: JSON.stringify({ email, password: authPassword }),
       });
       await persistSession({ token: data.token, userId: data.userId, email: data.email });
-      if (!communityUsername) await persistCommunityUsername(data.email.split("@")[0]);
+      // Trust the account's own saved username (or lack of one) rather than
+      // guessing one from the email — guessed names were never checked for
+      // uniqueness against other accounts.
+      await persistCommunityUsername(data.username || "");
       setAuthPassword("");
     } catch (err) {
       setAuthError(err.message);
@@ -15526,7 +15555,7 @@ const renderSidebar = () => (
         </div>
         <button
           type="button"
-          onClick={() => { setCommunityUsernameDraft(communityUsername); persistCommunityUsername(""); }}
+          onClick={() => { setCommunityUsernameDraft(communityUsername); setCommunityUsernameError(""); persistCommunityUsername(""); }}
           className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
           style={{ width: "28px", height: "28px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
           aria-label="Edit profile"
@@ -15822,39 +15851,48 @@ const renderSidebar = () => (
             Join the Trader Community
           </div>
           <p className="text-xs mt-1.5" style={{ color: palette.textMuted, maxWidth: "300px", margin: "6px auto 0" }}>
-            Private groups, live chat, and shared trade signals — pick a display name to get started.
+            Private groups, live chat, and shared trade signals — pick a username to get started.
           </p>
         </div>
 
         <span className="block mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
-          Your Display Name
+          Your Username
         </span>
         <input
           type="text"
           value={communityUsernameDraft}
-          onChange={(e) => setCommunityUsernameDraft(e.target.value)}
+          onChange={(e) => { setCommunityUsernameDraft(e.target.value); setCommunityUsernameError(""); }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && communityUsernameDraft.trim()) {
-              persistCommunityUsername(communityUsernameDraft.trim());
+            if (e.key === "Enter" && communityUsernameDraft.trim() && !communityUsernameBusy) {
+              claimCommunityUsername(communityUsernameDraft.trim());
             }
           }}
           placeholder="e.g. FX_Rafi"
           maxLength={24}
-          className="w-full rounded-2xl px-4 py-3.5 mb-3 bg-transparent outline-none"
-          style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "15px" }}
+          className="w-full rounded-2xl px-4 py-3.5 mb-1.5 bg-transparent outline-none"
+          style={{ background: palette.field, border: `1px solid ${communityUsernameError ? palette.red : palette.border}`, color: palette.text, fontFamily: mono, fontSize: "15px" }}
         />
+        {communityUsernameError ? (
+          <p className="text-xs mb-3" style={{ color: palette.red }}>{communityUsernameError}</p>
+        ) : (
+          <p className="text-xs mb-3" style={{ color: palette.textFaint }}>
+            3–24 characters: letters, numbers, and underscores. It's yours alone — nobody else can take it.
+          </p>
+        )}
         <button
           type="button"
-          onClick={() => communityUsernameDraft.trim() && persistCommunityUsername(communityUsernameDraft.trim())}
+          disabled={communityUsernameBusy || !communityUsernameDraft.trim()}
+          onClick={() => communityUsernameDraft.trim() && claimCommunityUsername(communityUsernameDraft.trim())}
           className={`w-full rounded-2xl py-3.5 ${TAP}`}
           style={{
             background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
             color: palette.letterbox,
             fontFamily: mono, fontSize: "14px", fontWeight: 700,
             boxShadow: `0 6px 18px ${palette.gold}44`,
+            opacity: communityUsernameBusy || !communityUsernameDraft.trim() ? 0.6 : 1,
           }}
         >
-          Continue
+          {communityUsernameBusy ? "Checking…" : "Continue"}
         </button>
         <p className="text-xs mt-3 text-center" style={{ color: palette.textFaint }}>
           Your name, groups, and messages here are visible to everyone using this app.
@@ -15918,7 +15956,7 @@ const renderSidebar = () => (
             </div>
             <button
               type="button"
-              onClick={() => { setCommunityUsernameDraft(communityUsername); persistCommunityUsername(""); }}
+              onClick={() => { setCommunityUsernameDraft(communityUsername); setCommunityUsernameError(""); persistCommunityUsername(""); }}
               className={`px-2.5 py-1.5 rounded-lg ${TAP}`}
               style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "10.5px", fontFamily: mono }}
             >

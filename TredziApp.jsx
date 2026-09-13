@@ -865,9 +865,9 @@ const ONBOARDING_SLIDES = [
 ];
 
 // ---------- Onboarding ambient background ----------
-// A single restrained motif: one faint, slow-drifting line (built once per
-// mount, not per render) plus a barely-there vignette. Monochrome, quiet,
-// no competing colors or scattered particles.
+// Two quiet, monochrome price-line traces at different depths (parallax),
+// plus a soft breathing halo behind the top mark. Same accent color
+// throughout — depth comes from layering and speed, not extra hues.
 function makeLoopPath(points) {
   const head = points
     .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`)
@@ -876,10 +876,14 @@ function makeLoopPath(points) {
   return `${head} ${tail}`;
 }
 
-// Domain is 0-480, first/last y match so the doubled path tiles with no seam.
-const ONBOARD_BG_PATH = makeLoopPath([
+// Domain is 0-480, first/last y match so each doubled path tiles with no seam.
+const ONBOARD_BG_PATH_A = makeLoopPath([
   [0, 54], [48, 40], [96, 50], [144, 26], [192, 44],
   [240, 18], [288, 38], [336, 22], [384, 34], [432, 44], [480, 54],
+]);
+const ONBOARD_BG_PATH_B = makeLoopPath([
+  [0, 30], [60, 44], [120, 24], [180, 46], [240, 30],
+  [300, 50], [360, 28], [420, 42], [480, 30],
 ]);
 
 function OnboardingAmbientBG() {
@@ -888,6 +892,18 @@ function OnboardingAmbientBG() {
       aria-hidden="true"
       style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}
     >
+      <div
+        className="onboard-bg-halo"
+        style={{
+          position: "absolute",
+          top: "-6%",
+          left: "50%",
+          width: "260px",
+          height: "260px",
+          transform: "translateX(-50%)",
+          background: `radial-gradient(closest-side, ${palette.gold}22, transparent 72%)`,
+        }}
+      />
       <div
         className="onboard-bg-vignette"
         style={{
@@ -899,27 +915,44 @@ function OnboardingAmbientBG() {
           background: `linear-gradient(to bottom, ${palette.gold}0d, transparent)`,
         }}
       />
+
       <div
-        className="onboard-bg-line-track"
-        style={{ position: "absolute", top: "16%", left: 0, width: "200%", height: "120px" }}
+        className="onboard-bg-line-track onboard-bg-line-back"
+        style={{ position: "absolute", top: "8%", left: 0, width: "200%", height: "140px" }}
+      >
+        <svg width="100%" height="100%" viewBox="0 0 960 90" preserveAspectRatio="none">
+          <path d={ONBOARD_BG_PATH_B} fill="none" stroke={palette.gold} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.09" />
+        </svg>
+      </div>
+      <div
+        className="onboard-bg-line-track onboard-bg-line-front"
+        style={{ position: "absolute", top: "68%", left: 0, width: "200%", height: "140px" }}
       >
         <svg width="100%" height="100%" viewBox="0 0 960 80" preserveAspectRatio="none">
-          <path d={ONBOARD_BG_PATH} fill="none" stroke={palette.gold} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.14" />
+          <path d={ONBOARD_BG_PATH_A} fill="none" stroke={palette.gold} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" />
         </svg>
       </div>
 
       <style>{`
-        @keyframes onboardBgDrift {
+        @keyframes onboardBgDriftSlow {
           from { transform: translateX(0); }
           to { transform: translateX(-50%); }
         }
+        @keyframes onboardBgDriftFast {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @keyframes onboardBgHaloBreathe {
+          0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+          50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+        }
         @media (prefers-reduced-motion: no-preference) {
-          .onboard-bg-line-track {
-            animation: onboardBgDrift 70s linear infinite;
-          }
+          .onboard-bg-line-back { animation: onboardBgDriftSlow 85s linear infinite; }
+          .onboard-bg-line-front { animation: onboardBgDriftFast 55s linear infinite reverse; }
+          .onboard-bg-halo { animation: onboardBgHaloBreathe 7s ease-in-out infinite; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .onboard-bg-line-track { animation: none !important; }
+          .onboard-bg-line-track, .onboard-bg-halo { animation: none !important; }
         }
       `}</style>
     </div>
@@ -4289,6 +4322,7 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [onboardingDragX, setOnboardingDragX] = useState(0);
   const [onboardingDragging, setOnboardingDragging] = useState(false);
   const onboardingDragStartXRef = useRef(null);
+  const onboardingDraggingRef = useRef(false);
   const [myGroups, setMyGroups] = useState([]);
   const [myGroupsLoaded, setMyGroupsLoaded] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState(null);
@@ -5580,6 +5614,7 @@ useEffect(() => {
 
   const onboardingDragStart = (clientX) => {
     onboardingDragStartXRef.current = clientX;
+    onboardingDraggingRef.current = true;
     setOnboardingDragging(true);
   };
   const onboardingDragMove = (clientX) => {
@@ -5587,6 +5622,8 @@ useEffect(() => {
     setOnboardingDragX(clientX - onboardingDragStartXRef.current);
   };
   const onboardingDragEnd = () => {
+    if (!onboardingDraggingRef.current) return; // guard against double-firing
+    onboardingDraggingRef.current = false;
     setOnboardingDragX((delta) => {
       const threshold = 45;
       if (delta <= -threshold) {
@@ -5599,6 +5636,22 @@ useEffect(() => {
     onboardingDragStartXRef.current = null;
     setOnboardingDragging(false);
   };
+
+  // On PC, a fast swipe can carry the cursor outside the carousel's own
+  // bounds before mouseup fires, which used to cut the drag short (or let a
+  // stray mouseleave + mouseup both fire and double-advance the slide).
+  // Tracking the drag on window instead keeps it to exactly one step.
+  useEffect(() => {
+    if (!onboardingDragging) return;
+    const handleMove = (e) => onboardingDragMove(e.clientX);
+    const handleUp = () => onboardingDragEnd();
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [onboardingDragging]);
 
   const persistMyGroups = async (next) => {
     setMyGroups(next);
@@ -6208,18 +6261,16 @@ const updateSyncedJournalRow = (trade) => {
         className="w-full flex items-center justify-center"
         style={{ background: palette.letterbox, height: "100dvh" }}
       >
-        <div
-          className="flex items-center justify-center"
+        <img
+          src={TREDZI_LOGO_SRC}
+          alt="Tredzi"
           style={{
             width: "56px",
             height: "56px",
             borderRadius: "16px",
-            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
             boxShadow: `0 8px 24px ${palette.gold}44`,
           }}
-        >
-          <TrendingUp size={26} color={palette.letterbox} strokeWidth={2.4} />
-        </div>
+        />
       </div>
     );
   }
@@ -6255,9 +6306,6 @@ const updateSyncedJournalRow = (trade) => {
             onTouchMove={(e) => onboardingDragMove(e.touches[0].clientX)}
             onTouchEnd={onboardingDragEnd}
             onMouseDown={(e) => onboardingDragStart(e.clientX)}
-            onMouseMove={(e) => { if (onboardingDragging) onboardingDragMove(e.clientX); }}
-            onMouseUp={onboardingDragEnd}
-            onMouseLeave={() => { if (onboardingDragging) onboardingDragEnd(); }}
           >
             <div
               className="flex h-full"
@@ -6309,18 +6357,17 @@ const updateSyncedJournalRow = (trade) => {
                 className="flex flex-col items-center justify-center text-center px-8"
                 style={{ width: `${100 / totalSlides}%`, flexShrink: 0 }}
               >
-                <div
-                  className="flex items-center justify-center mb-5"
+                <img
+                  src={TREDZI_LOGO_SRC}
+                  alt="Tredzi"
+                  className="mb-5"
                   style={{
                     width: "88px",
                     height: "88px",
                     borderRadius: "24px",
-                    background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
                     boxShadow: `0 10px 28px ${palette.gold}55`,
                   }}
-                >
-                  <TrendingUp size={40} color={palette.letterbox} strokeWidth={2.2} />
-                </div>
+                />
                 <div
                   style={{
                     fontFamily: display,
@@ -6335,11 +6382,6 @@ const updateSyncedJournalRow = (trade) => {
                 <p className="text-sm mb-8" style={{ color: palette.textMuted, maxWidth: "280px", lineHeight: 1.5 }}>
                   Your trading journal, risk tools, and trader community, all in one place.
                 </p>
-                <img
-                  src={TREDZI_LOGO_SRC}
-                  alt="Tredzi"
-                  style={{ width: "56px", height: "56px", borderRadius: "14px", marginBottom: "14px" }}
-                />
                 <button
                   type="button"
                   onClick={persistOnboardingSeen}
@@ -6401,18 +6443,17 @@ const updateSyncedJournalRow = (trade) => {
           }}
         >
           <div className="flex flex-col items-center text-center mb-7">
-            <div
-              className="flex items-center justify-center mb-4"
+            <img
+              src={TREDZI_LOGO_SRC}
+              alt="Tredzi"
+              className="mb-4"
               style={{
                 width: "64px",
                 height: "64px",
                 borderRadius: "18px",
-                background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
                 boxShadow: `0 8px 24px ${palette.gold}55`,
               }}
-            >
-              <TrendingUp size={30} color={palette.letterbox} strokeWidth={2.4} />
-            </div>
+            />
             <div
               style={{
                 fontFamily: display,

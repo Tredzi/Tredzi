@@ -15744,12 +15744,10 @@ const renderSidebar = () => (
   from {
     opacity: 0;
     transform: translateY(8px);
-    filter: blur(1px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -15986,7 +15984,7 @@ const renderSidebar = () => (
           return (
 <main
   key={activeTab}
-  className={`ledger-page-transition ${
+  className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "px-8" : "px-0")
       : (isDesktop ? "px-8 py-6" : "px-5 py-5")
@@ -18562,10 +18560,10 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
     <div className="fixed inset-0" style={{ zIndex: 90 }}>
       {rect ? (
         <>
-          <div onClick={() => endTour(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, height: Math.max(0, rect.top - pad), background: "rgba(5,7,12,0.78)" }} />
-          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top + rect.height + pad, left: 0, right: 0, bottom: 0, background: "rgba(5,7,12,0.78)" }} />
-          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top - pad, left: 0, width: Math.max(0, rect.left - pad), height: rect.height + pad * 2, background: "rgba(5,7,12,0.78)" }} />
-          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top - pad, left: rect.left + rect.width + pad, right: 0, height: rect.height + pad * 2, background: "rgba(5,7,12,0.78)" }} />
+          <div onClick={() => endTour(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, height: Math.max(0, rect.top - pad), background: "transparent" }} />
+          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top + rect.height + pad, left: 0, right: 0, bottom: 0, background: "transparent" }} />
+          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top - pad, left: 0, width: Math.max(0, rect.left - pad), height: rect.height + pad * 2, background: "transparent" }} />
+          <div onClick={() => endTour(false)} style={{ position: "fixed", top: rect.top - pad, left: rect.left + rect.width + pad, right: 0, height: rect.height + pad * 2, background: "transparent" }} />
           <div
             style={{
               position: "fixed",
@@ -18573,11 +18571,10 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
               left: rect.left - pad,
               width: rect.width + pad * 2,
               height: rect.height + pad * 2,
-              borderRadius: "14px",
-              border: "none",
-              boxShadow: "none",
+              borderRadius: "9999px",
+              boxShadow: "0 0 0 9999px rgba(5,7,12,0.78)",
               pointerEvents: "none",
-              transition: "top 0.25s ease, left 0.25s ease",
+              transition: "top 0.25s ease, left 0.25s ease, width 0.2s ease, height 0.2s ease",
             }}
           />
         </>
@@ -18587,7 +18584,7 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
 
       <div
         className="modal-in rounded-2xl p-5"
-        style={{ ...cardStyle, background: palette.surface, border: `1px solid ${palette.gold}55`, boxShadow: palette.shadow, zIndex: 91 }}
+        style={{ ...cardStyle, transition: "top 0.2s ease, left 0.2s ease, bottom 0.2s ease", background: palette.surface, border: `1px solid ${palette.gold}55`, boxShadow: palette.shadow, zIndex: 91 }}
       >
         <div className="flex items-center justify-between mb-2">
           <span style={{ fontFamily: mono, fontSize: "10px", color: palette.gold, letterSpacing: "0.1em" }}>

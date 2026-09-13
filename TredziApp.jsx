@@ -16032,146 +16032,145 @@ const renderSidebar = () => (
               Navigate
             </div>
           )}
-{isDesktop && active && (
-  <span
-    className="ledger-nav-indicator"
-    style={{
-      position: "absolute",
-      left: "-16px",
-      top: "8px",
-      bottom: "8px",
-      width: "3px",
-      borderRadius: "0 3px 3px 0",
-      background: `linear-gradient(180deg, ${palette.gold}, ${palette.goldBright})`,
-      boxShadow: `0 0 12px ${palette.gold}55`,
-    }}
-  />
-)}
-<button
-  type="button"
-  data-tour-id={`tab-${tab.id}`}
-  onClick={() => {
-    setActiveTab(tab.id);
-    setMoreMenuOpen(false);
-  }}
-  className={
-    isDesktop
-      ? `ledger-nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl ${TAP}`
-      : `ledger-nav-item w-full flex flex-col items-center justify-center gap-1 py-3 ${TAP}`
-  }
-                  style={{
-                    color: active ? palette.goldBright : palette.textMuted,
-                    background: active
-                      ? isDesktop
-                        ? `linear-gradient(135deg, ${palette.gold}22, ${palette.gold}0A)`
-                        : `${palette.gold}16`
-                      : "transparent",
-                    borderRadius: isDesktop ? "10px" : "12px",
-                    border: isDesktop ? `1px solid ${active ? `${palette.gold}3A` : "transparent"}` : "none",
-                    boxShadow: isDesktop && active ? `0 2px 10px ${palette.gold}22` : "none",
-                    transition: `${THEME_TRANSITION}, transform 0.15s ease, background 0.15s ease`,
-                  }}
-                >
-<span
-  className="flex items-center justify-center flex-shrink-0 relative"
-  style={{
-    width: isDesktop ? "30px" : "auto",
-    height: isDesktop ? "30px" : "auto",
-    borderRadius: isDesktop ? "9px" : 0,
-    background: isDesktop && active ? `${palette.gold}20` : "transparent",
-  }}
->
-  <Icon
-    size={isDesktop ? 17 : 18}
-    strokeWidth={active ? 2.4 : 1.8}
-  />
 
-  {!isDesktop && active && (
-    <span
-      className="ledger-nav-dot"
-      style={{
-        position: "absolute",
-        bottom: "-5px",
-        width: "4px",
-        height: "4px",
-        borderRadius: "999px",
-        background: palette.goldBright,
-        boxShadow: `0 0 8px ${palette.gold}88`,
-      }}
-    />
-  )}
-</span>
-                    <span
-  className="flex items-center justify-center flex-shrink-0 relative"
-  style={{
-    width: isDesktop ? "30px" : "auto",
-    height: isDesktop ? "30px" : "auto",
-    borderRadius: isDesktop ? "9px" : 0,
-    background: isDesktop && active ? `${palette.gold}20` : "transparent",
-  }}
->
-  <Icon
-    size={isDesktop ? 17 : 18}
-    strokeWidth={active ? 2.4 : 1.8}
-  />
 
-  {!isDesktop && active && (
-    <span
-      className="ledger-nav-dot"
-      style={{
-        position: "absolute",
-        bottom: "-5px",
-        width: "4px",
-        height: "4px",
-        borderRadius: "999px",
-        background: palette.goldBright,
-        boxShadow: `0 0 8px ${palette.gold}88`,
-      }}
-    />
-  )}
-</span>
+{(isDesktop ? navTabs : mobileNavPrimaryTabs).map((tab) => {
+  const Icon = tab.icon;
+  const active = activeTab === tab.id;
 
-<span
-  style={{
-    fontSize: isDesktop ? "14px" : "10px",
-    letterSpacing: "0.02em",
-    fontWeight: isDesktop ? 600 : 400
-  }}
->
-  {tab.label}
-</span>
-                  </span>
-                  <span style={{ fontSize: isDesktop ? "14px" : "10px", letterSpacing: "0.02em", fontWeight: isDesktop ? 600 : 400 }}>
-                    {tab.label}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+  return (
+    <div
+      key={tab.id}
+      className={isDesktop ? "flex relative" : "flex flex-1 items-stretch"}
+    >
+      {isDesktop && active && (
+        <span
+          className="ledger-nav-indicator"
+          style={{
+            position: "absolute",
+            left: "-16px",
+            top: "8px",
+            bottom: "8px",
+            width: "3px",
+            borderRadius: "0 3px 3px 0",
+            background: `linear-gradient(180deg, ${palette.gold}, ${palette.goldBright})`,
+            boxShadow: `0 0 12px ${palette.gold}55`,
+          }}
+        />
+      )}
 
-          {!isDesktop && mobileNavOverflowTabs.length > 0 && (
-            <div className="flex flex-1 items-stretch">
-              <button
-                type="button"
-                onClick={() => setMoreMenuOpen(true)}
-                className={`w-full flex flex-col items-center justify-center gap-1 py-3 ${TAP}`}
-                style={{
-                  color: activeInMobileOverflow ? palette.goldBright : palette.textMuted,
-                  background: activeInMobileOverflow ? `${palette.gold}16` : "transparent",
-                  borderRadius: "12px",
-                  transition: `${THEME_TRANSITION}, transform 0.15s ease, background 0.15s ease`,
-                }}
-              >
-                <span className="flex items-center justify-center flex-shrink-0">
-                  <LayoutGrid size={18} strokeWidth={activeInMobileOverflow ? 2.4 : 1.8} />
-                </span>
-                <span style={{ fontSize: "10px", letterSpacing: "0.02em", fontWeight: activeInMobileOverflow ? 600 : 400 }}>
-                  More
-                </span>
-              </button>
-            </div>
+      <button
+        type="button"
+        data-tour-id={`tab-${tab.id}`}
+        onClick={() => {
+          setActiveTab(tab.id);
+          setMoreMenuOpen(false);
+        }}
+        className={
+          isDesktop
+            ? `ledger-nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl ${TAP}`
+            : `ledger-nav-item w-full flex flex-col items-center justify-center gap-1 py-3 ${TAP}`
+        }
+        style={{
+          color: active ? palette.goldBright : palette.textMuted,
+          background: active
+            ? isDesktop
+              ? `linear-gradient(135deg, ${palette.gold}22, ${palette.gold}0A)`
+              : `${palette.gold}16`
+            : "transparent",
+          borderRadius: isDesktop ? "10px" : "12px",
+          border: isDesktop
+            ? `1px solid ${active ? `${palette.gold}3A` : "transparent"}`
+            : "none",
+          boxShadow: isDesktop && active
+            ? `0 2px 10px ${palette.gold}22`
+            : "none",
+          transition: `${THEME_TRANSITION}, transform 0.15s ease, background 0.15s ease`,
+        }}
+      >
+        <span
+          className="flex items-center justify-center flex-shrink-0 relative"
+          style={{
+            width: isDesktop ? "30px" : "auto",
+            height: isDesktop ? "30px" : "auto",
+            borderRadius: isDesktop ? "9px" : 0,
+            background: isDesktop && active
+              ? `${palette.gold}20`
+              : "transparent",
+          }}
+        >
+          <Icon
+            size={isDesktop ? 17 : 18}
+            strokeWidth={active ? 2.4 : 1.8}
+          />
+
+          {!isDesktop && active && (
+            <span
+              className="ledger-nav-dot"
+              style={{
+                position: "absolute",
+                bottom: "-5px",
+                width: "4px",
+                height: "4px",
+                borderRadius: "999px",
+                background: palette.goldBright,
+                boxShadow: `0 0 8px ${palette.gold}88`,
+              }}
+            />
           )}
-          </div>
+        </span>
+
+        <span
+          style={{
+            fontSize: isDesktop ? "14px" : "10px",
+            letterSpacing: "0.02em",
+            fontWeight: isDesktop ? 600 : 400,
+          }}
+        >
+          {tab.label}
+        </span>
+      </button>
+    </div>
+  );
+})}
+
+{!isDesktop && mobileNavOverflowTabs.length > 0 && (
+  <div className="flex flex-1 items-stretch">
+    <button
+      type="button"
+      onClick={() => setMoreMenuOpen(true)}
+      className={`w-full flex flex-col items-center justify-center gap-1 py-3 ${TAP}`}
+      style={{
+        color: activeInMobileOverflow
+          ? palette.goldBright
+          : palette.textMuted,
+        background: activeInMobileOverflow
+          ? `${palette.gold}16`
+          : "transparent",
+        borderRadius: "12px",
+        transition: `${THEME_TRANSITION}, transform 0.15s ease, background 0.15s ease`,
+      }}
+    >
+      <span className="flex items-center justify-center flex-shrink-0">
+        <LayoutGrid
+          size={18}
+          strokeWidth={activeInMobileOverflow ? 2.4 : 1.8}
+        />
+      </span>
+
+      <span
+        style={{
+          fontSize: "10px",
+          letterSpacing: "0.02em",
+          fontWeight: activeInMobileOverflow ? 600 : 400,
+        }}
+      >
+        More
+      </span>
+    </button>
+  </div>
+)}
+</div>
 
 {isDesktop && (() => {
             const pulseTodayKey = dayKeyFromDate(new Date());

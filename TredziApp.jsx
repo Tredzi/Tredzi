@@ -862,6 +862,163 @@ const ONBOARDING_SLIDES = [
   },
 ];
 
+// ---------- Onboarding ambient background ----------
+// Seamless-loop price-line paths. Each array is built over a 0-400 domain
+// with matching first/last y so the doubled path (0-400, 400-800) tiles
+// perfectly when the track is translated by exactly -50%.
+function makeLoopPath(points) {
+  const head = points
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`)
+    .join(" ");
+  const tail = points.map(([x, y]) => `L${x + 400},${y}`).join(" ");
+  return `${head} ${tail}`;
+}
+
+const ONBOARD_BG_LINES = [
+  {
+    points: [[0, 62], [36, 48], [72, 58], [108, 34], [144, 50], [180, 22], [216, 44], [252, 16], [288, 40], [324, 12], [360, 32], [400, 62]],
+    key: "gold",
+    top: "10%",
+    height: "150px",
+    duration: "32s",
+    width: 1.5,
+  },
+  {
+    points: [[0, 42], [40, 58], [80, 36], [120, 60], [160, 38], [200, 54], [240, 30], [280, 52], [320, 34], [360, 48], [400, 42]],
+    key: "green",
+    top: "44%",
+    height: "170px",
+    duration: "44s",
+    width: 1.25,
+  },
+  {
+    points: [[0, 50], [32, 30], [64, 46], [96, 20], [128, 42], [160, 18], [192, 38], [224, 14], [256, 36], [288, 22], [320, 40], [360, 26], [400, 50]],
+    key: "red",
+    top: "76%",
+    height: "140px",
+    duration: "56s",
+    width: 1,
+  },
+];
+
+function OnboardingAmbientBG() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}
+    >
+      <div
+        className="onboard-bg-glow"
+        style={{
+          position: "absolute",
+          top: "-18%",
+          left: "50%",
+          width: "150%",
+          maxWidth: "620px",
+          height: "42%",
+          transform: "translateX(-50%)",
+          background: `radial-gradient(closest-side, ${palette.gold}26, transparent 72%)`,
+          filter: "blur(4px)",
+        }}
+      />
+
+      <div
+        className="onboard-bg-grid"
+        style={{
+          position: "absolute",
+          inset: "-15% -10%",
+          backgroundImage: `radial-gradient(${palette.border} 1px, transparent 1px)`,
+          backgroundSize: "24px 24px",
+          opacity: 0.4,
+          maskImage: "radial-gradient(closest-side, black, transparent 85%)",
+          WebkitMaskImage: "radial-gradient(closest-side, black, transparent 85%)",
+        }}
+      />
+
+      {ONBOARD_BG_LINES.map((line) => {
+        const stroke =
+          line.key === "gold" ? palette.gold : line.key === "green" ? palette.green : palette.red;
+        const d = makeLoopPath(line.points);
+        return (
+          <div
+            key={line.key}
+            className="onboard-bg-line-track"
+            style={{
+              position: "absolute",
+              top: line.top,
+              left: 0,
+              width: "200%",
+              height: line.height,
+              animationDuration: line.duration,
+            }}
+          >
+            <svg width="100%" height="100%" viewBox="0 0 800 100" preserveAspectRatio="none">
+              <path d={d} fill="none" stroke={stroke} strokeWidth={line.width} strokeLinecap="round" strokeLinejoin="round" opacity={0.16} />
+            </svg>
+          </div>
+        );
+      })}
+
+      {Array.from({ length: 9 }).map((_, i) => {
+        const tint = i % 3 === 0 ? palette.gold : i % 3 === 1 ? palette.green : palette.red;
+        return (
+          <span
+            key={i}
+            className="onboard-bg-tick"
+            style={{
+              position: "absolute",
+              bottom: "-6%",
+              left: `${(i * 11 + 6) % 100}%`,
+              width: "3px",
+              height: "3px",
+              borderRadius: "999px",
+              background: tint,
+              animationDelay: `${i * 1.4}s`,
+              animationDuration: `${9 + (i % 4) * 2}s`,
+            }}
+          />
+        );
+      })}
+
+      <style>{`
+        @keyframes onboardBgDrift {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @keyframes onboardBgBreathe {
+          0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+          50% { opacity: 0.9; transform: translateX(-50%) scale(1.06); }
+        }
+        @keyframes onboardBgGridDrift {
+          from { transform: translate(0, 0); }
+          to { transform: translate(24px, 24px); }
+        }
+        @keyframes onboardBgTickRise {
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          12% { opacity: 0.8; }
+          85% { opacity: 0.35; }
+          100% { transform: translateY(-620px) scale(1); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .onboard-bg-line-track {
+            animation-name: onboardBgDrift;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+          }
+          .onboard-bg-glow { animation: onboardBgBreathe 6.5s ease-in-out infinite; }
+          .onboard-bg-grid { animation: onboardBgGridDrift 20s linear infinite; }
+          .onboard-bg-tick { animation-name: onboardBgTickRise; animation-timing-function: ease-in; animation-iteration-count: infinite; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .onboard-bg-line-track, .onboard-bg-glow, .onboard-bg-grid, .onboard-bg-tick {
+            animation: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "risk", label: "Challenge", icon: Scale },
   { id: "propfirm", label: "Prop Firm", icon: Building2 },
@@ -6168,9 +6325,10 @@ const updateSyncedJournalRow = (trade) => {
       return (
         <div
           className="w-full flex flex-col"
-          style={{ background: palette.letterbox, height: "100dvh" }}
+          style={{ background: palette.letterbox, height: "100dvh", position: "relative", overflow: "hidden" }}
         >
-          <div className="flex justify-end p-4" style={{ minHeight: "44px" }}>
+          <OnboardingAmbientBG />
+          <div className="flex justify-end p-4" style={{ minHeight: "44px", position: "relative", zIndex: 1 }}>
             {!isLastSlide && (
               <button
                 type="button"
@@ -6185,7 +6343,7 @@ const updateSyncedJournalRow = (trade) => {
 
           <div
             className="flex-1 overflow-hidden select-none"
-            style={{ touchAction: "pan-y", cursor: onboardingDragging ? "grabbing" : "grab" }}
+            style={{ touchAction: "pan-y", cursor: onboardingDragging ? "grabbing" : "grab", position: "relative", zIndex: 1 }}
             onTouchStart={(e) => onboardingDragStart(e.touches[0].clientX)}
             onTouchMove={(e) => onboardingDragMove(e.touches[0].clientX)}
             onTouchEnd={onboardingDragEnd}
@@ -6289,7 +6447,7 @@ const updateSyncedJournalRow = (trade) => {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-2 pb-8 pt-2">
+          <div className="flex items-center justify-center gap-2 pb-8 pt-2" style={{ position: "relative", zIndex: 1 }}>
             {Array.from({ length: totalSlides }).map((_, i) => (
               <button
                 key={i}

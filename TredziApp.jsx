@@ -15533,15 +15533,6 @@ const renderSidebar = () => (
         >
           <Pencil size={12} />
         </button>
-        <button
-          type="button"
-          onClick={logout}
-          className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
-          style={{ width: "28px", height: "28px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
-          aria-label="Log out"
-        >
-          <LogOut size={12} />
-        </button>
       </div>
 
       <div className="flex gap-1.5 px-2.5 pt-2.5 pb-1">
@@ -17907,6 +17898,38 @@ const renderSidebar = () => (
             </div>
           )}
         </SettingsSection>
+
+        {/* COMMUNITY */}
+        {session && (
+          <SettingsSection icon={Users} title="Community">
+            <SettingsSubLabel>Signed In As</SettingsSubLabel>
+            <div
+              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 mb-3"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar name={communityUsername || session.email} size={26} />
+                <div className="min-w-0">
+                  <div className="truncate" style={{ color: palette.text, fontSize: "12px", fontWeight: 600 }}>
+                    {communityUsername || session.email}
+                  </div>
+                  <div className="truncate" style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
+                    {session.email}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { logout(); setSettingsOpen(false); }}
+              className={`w-full flex items-center justify-center gap-2 rounded-lg py-2.5 ${TAP}`}
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "12.5px", fontWeight: 600 }}
+            >
+              <LogOut size={13} />
+              Log Out
+            </button>
+          </SettingsSection>
+        )}
 
         {/* DANGER ZONE */}
         <SettingsSection icon={AlertTriangle} title="Danger Zone" danger>

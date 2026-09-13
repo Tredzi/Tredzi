@@ -4207,6 +4207,7 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [signalEntry, setSignalEntry] = useState("");
   const [signalSL, setSignalSL] = useState("");
   const [signalTP, setSignalTP] = useState("");
+  const [signalComposerOpen, setSignalComposerOpen] = useState(false);
   const communityMessagesEndRef = useRef(null);
 const [groupManageOpen, setGroupManageOpen] = useState(false);
 const [groupManageTab, setGroupManageTab] = useState("members");
@@ -14696,14 +14697,63 @@ if (activeTab === "community") {
       )}
     </div>
 
-    <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, background: palette.surface, padding: isDesktop ? "14px 16px 16px" : "10px 12px 12px" }}>
+    <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, background: palette.surface, padding: isDesktop ? "12px 16px" : "10px 12px", paddingBottom: isDesktop ? "12px" : "calc(10px + env(safe-area-inset-bottom))" }}>
       {canPostSignal ? (
-        <>
-          <div className="flex items-center gap-1.5 mb-2.5">
-            <TrendingUp size={13} style={{ color: palette.gold }} />
-            <span style={{ fontSize: "10.5px", fontWeight: 700, color: palette.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: sans }}>New Signal</span>
+        <button type="button" onClick={() => setSignalComposerOpen(true)}
+          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 ${TAP}`}
+          style={{
+            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+            color: palette.letterbox, boxShadow: `0 3px 10px ${palette.gold}44`,
+            fontFamily: sans, fontSize: "13.5px", fontWeight: 700,
+          }} aria-label="Post a new signal">
+          <Plus size={15} />
+          Post Signal
+        </button>
+      ) : (
+        <p className="text-xs text-center" style={{ color: palette.textFaint, fontFamily: sans }}>
+          Only the owner and admins can post signals in this group.
+        </p>
+      )}
+      {communityApiError && <p className="text-xs mt-2 text-center" style={{ color: palette.red, fontFamily: sans }}>{communityApiError}</p>}
+    </div>
+
+    {signalComposerOpen && (
+      <div
+        className="fixed inset-0 flex items-end justify-center"
+        style={{ background: "rgba(5,7,12,0.75)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", zIndex: 95 }}
+        onClick={() => setSignalComposerOpen(false)}
+      >
+        <div
+          className="w-full sheet-in"
+          style={{
+            maxWidth: "440px",
+            background: palette.surface,
+            border: `1px solid ${palette.border}`,
+            borderTopLeftRadius: "22px",
+            borderTopRightRadius: "22px",
+            boxShadow: palette.shadow,
+            padding: "16px",
+            paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+            maxHeight: "85vh",
+            overflowY: "auto",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-center pb-2">
+            <span style={{ width: "36px", height: "4px", borderRadius: "999px", background: palette.border }} />
           </div>
-          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: palette.field, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <TrendingUp size={14} style={{ color: palette.gold }} />
+              <span style={{ fontSize: "13px", fontWeight: 700, color: palette.text, fontFamily: sans }}>New Signal</span>
+            </div>
+            <button type="button" onClick={() => setSignalComposerOpen(false)} className={`flex items-center justify-center rounded-full ${TAP}`}
+              style={{ width: "26px", height: "26px", background: palette.field, color: palette.textMuted }} aria-label="Close">
+              <X size={13} />
+            </button>
+          </div>
+
+          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
             <div className="grid grid-cols-2 gap-2 mb-2.5">
               <div>
                 <div style={{ fontSize: "9.5px", color: palette.textFaint, marginBottom: "4px", fontFamily: sans, fontWeight: 600 }}>Pair</div>
@@ -14739,14 +14789,14 @@ if (activeTab === "community") {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl mb-2.5" style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}>
+          <div className="flex items-center gap-2 rounded-2xl mb-3" style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}>
             <input type="text" value={communityMsgText} onChange={(e) => setCommunityMsgText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendCommunityMessage(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendCommunityMessage(); setSignalComposerOpen(false); } }}
               placeholder="Add a note (optional)"
               className="flex-1 bg-transparent py-2.5 outline-none"
               style={{ color: palette.text, fontSize: "13px", fontFamily: sans }} />
           </div>
-          <button type="button" onClick={sendCommunityMessage} disabled={!signalPair.trim()}
+          <button type="button" onClick={() => { sendCommunityMessage(); setSignalComposerOpen(false); }} disabled={!signalPair.trim()}
             className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 ${TAP}`}
             style={{
               background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
@@ -14757,14 +14807,10 @@ if (activeTab === "community") {
             <Send size={15} />
             Post Signal
           </button>
-        </>
-      ) : (
-        <p className="text-xs text-center py-2" style={{ color: palette.textFaint, fontFamily: sans }}>
-          Only the owner and admins can post signals in this group.
-        </p>
-      )}
-      {communityApiError && <p className="text-xs mt-2" style={{ color: palette.red, fontFamily: sans }}>{communityApiError}</p>}
-    </div>
+          {communityApiError && <p className="text-xs mt-2 text-center" style={{ color: palette.red, fontFamily: sans }}>{communityApiError}</p>}
+        </div>
+      </div>
+    )}
   </>
 
 

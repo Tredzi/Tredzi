@@ -865,13 +865,13 @@ const ONBOARDING_SLIDES = [
 ];
 
 // ---------- Onboarding ambient background ----------
-// Two soft equity-curve lines, a faint chart grid, and a fine grain
-// texture. The earlier version scrolled on an infinite linear loop —
-// that "conveyor belt" motion is what reads as robotic. This version
-// never loops: each layer just sways a few pixels on a slow, eased
-// cubic-bezier curve (not linear), so it feels alive rather than
-// mechanical. The two layers use different durations and a phase
-// offset so they never move in lockstep.
+// A live equity-curve motif: two soft traced lines, each with a small
+// bright point of light continuously traveling along the path (the
+// standard SVG stroke-dasharray/dashoffset "flowing line" technique used
+// for live-data visualizations — GitHub's contribution graph, AWS
+// architecture diagrams, Stripe's pipeline diagrams). That's the visible,
+// obviously-animating signal; the lines themselves stay still so it never
+// turns into a scrolling ticker.
 const ONBOARD_CURVE_BACK =
   "M0,420 C60,405 100,380 160,390 C220,400 260,460 320,450 C380,440 420,385 480,400 C540,415 580,425 640,420" +
   " C700,405 740,380 800,390 C860,400 900,460 960,450 C1020,440 1060,385 1120,400 C1180,415 1220,425 1280,420";
@@ -880,33 +880,38 @@ const ONBOARD_CURVE_FRONT =
   "M0,560 C60,540 100,505 160,520 C220,535 260,615 320,600 C380,585 420,525 480,540 C540,555 580,575 640,560" +
   " C700,540 740,505 800,520 C860,535 900,615 960,600 C1020,585 1060,525 1120,540 C1180,555 1220,575 1280,560";
 
-function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFill, swayDuration, swayDelay, swayX, swayY, fillId }) {
+function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFill, fillId, glowId, travelDuration, travelDelay, travelOpacity }) {
   return (
     <div style={{ position: "absolute", left: 0, right: 0, top, height, overflow: "hidden" }}>
-      <div
-        className="onboard-curve-sway"
-        style={{
-          position: "absolute",
-          left: "-8%",
-          width: "116%",
-          height: "100%",
-          animationDuration: swayDuration,
-          animationDelay: swayDelay,
-          ["--sway-x"]: swayX,
-          ["--sway-y"]: swayY,
-        }}
-      >
-        <svg width="100%" height="100%" viewBox={`0 0 1280 ${viewBoxH}`} preserveAspectRatio="none">
-          <defs>
-            <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={palette.gold} stopOpacity={opacityFill} />
-              <stop offset="100%" stopColor={palette.gold} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={`${d} L1280,${viewBoxH} L0,${viewBoxH} Z`} fill={`url(#${fillId})`} />
-          <path d={d} fill="none" stroke={palette.gold} strokeWidth="1.25" opacity={opacityLine} />
-        </svg>
-      </div>
+      <svg width="100%" height="100%" viewBox={`0 0 1280 ${viewBoxH}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={palette.gold} stopOpacity={opacityFill} />
+            <stop offset="100%" stopColor={palette.gold} stopOpacity="0" />
+          </linearGradient>
+          <filter id={glowId} x="-200%" y="-200%" width="500%" height="500%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <path d={`${d} L1280,${viewBoxH} L0,${viewBoxH} Z`} fill={`url(#${fillId})`} />
+        <path d={d} fill="none" stroke={palette.gold} strokeWidth="1.25" opacity={opacityLine} />
+        <path
+          className="onboard-curve-travel"
+          d={d}
+          fill="none"
+          stroke={palette.goldBright || "#FFE7BA"}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray="14 1500"
+          opacity={travelOpacity}
+          filter={`url(#${glowId})`}
+          style={{ animationDuration: travelDuration, animationDelay: travelDelay }}
+        />
+      </svg>
     </div>
   );
 }
@@ -917,14 +922,6 @@ function OnboardingAmbientBG() {
       aria-hidden="true"
       style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}
     >
-      <div
-        style={{
-          position: "absolute", inset: 0,
-          backgroundImage: `repeating-linear-gradient(to bottom, ${palette.border}30 0, ${palette.border}30 1px, transparent 1px, transparent 140px)`,
-          opacity: 0.5,
-        }}
-      />
-
       <div
         className="onboard-bg-grain"
         style={{ position: "absolute", inset: 0, opacity: 0.035, mixBlendMode: "overlay" }}
@@ -945,11 +942,11 @@ function OnboardingAmbientBG() {
         viewBoxH={520}
         opacityLine={0.22}
         opacityFill={0.05}
-        swayDuration="34s"
-        swayDelay="0s"
-        swayX="-14px"
-        swayY="-3px"
         fillId="onboardCurveFillBack"
+        glowId="onboardGlowBack"
+        travelDuration="5.5s"
+        travelDelay="0s"
+        travelOpacity={0.6}
       />
       <OnboardingCurveLayer
         d={ONBOARD_CURVE_FRONT}
@@ -958,27 +955,27 @@ function OnboardingAmbientBG() {
         viewBoxH={640}
         opacityLine={0.42}
         opacityFill={0.08}
-        swayDuration="26s"
-        swayDelay="-9s"
-        swayX="18px"
-        swayY="4px"
         fillId="onboardCurveFillFront"
+        glowId="onboardGlowFront"
+        travelDuration="3.8s"
+        travelDelay="-1.4s"
+        travelOpacity={0.85}
       />
 
       <style>{`
-        @keyframes onboardCurveSway {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(var(--sway-x), var(--sway-y)); }
+        @keyframes onboardCurveTravel {
+          from { stroke-dashoffset: 0; }
+          to { stroke-dashoffset: -1514; }
         }
         @media (prefers-reduced-motion: no-preference) {
-          .onboard-curve-sway {
-            animation-name: onboardCurveSway;
-            animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+          .onboard-curve-travel {
+            animation-name: onboardCurveTravel;
+            animation-timing-function: linear;
             animation-iteration-count: infinite;
           }
         }
         @media (prefers-reduced-motion: reduce) {
-          .onboard-curve-sway { animation: none !important; }
+          .onboard-curve-travel { display: none; }
         }
       `}</style>
     </div>

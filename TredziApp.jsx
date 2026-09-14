@@ -880,10 +880,17 @@ const ONBOARD_CURVE_FRONT =
   "M0,560 C60,540 100,505 160,520 C220,535 260,615 320,600 C380,585 420,525 480,540 C540,555 580,575 640,560" +
   " C700,540 740,505 800,520 C860,535 900,615 960,600 C1020,585 1060,525 1120,540 C1180,555 1220,575 1280,560";
 
-function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFill, fillId, glowId, travelDuration, travelDelay, travelOpacity }) {
+function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFill, fillId, glowId, travelDuration, travelDelay, travelOpacity, swayClass, swayDuration, swayDelay }) {
   return (
     <div style={{ position: "absolute", left: 0, right: 0, top, height, overflow: "hidden" }}>
-      <svg width="100%" height="100%" viewBox={`0 0 1280 ${viewBoxH}`} preserveAspectRatio="none">
+      <svg
+        className={swayClass}
+        width="106%"
+        height="100%"
+        style={{ position: "relative", left: "-3%", animationDuration: swayDuration, animationDelay: swayDelay }}
+        viewBox={`0 0 1280 ${viewBoxH}`}
+        preserveAspectRatio="none"
+      >
         <defs>
           <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={palette.gold} stopOpacity={opacityFill} />
@@ -947,6 +954,9 @@ function OnboardingAmbientBG() {
         travelDuration="5.5s"
         travelDelay="0s"
         travelOpacity={0.6}
+        swayClass="onboard-curve-sway-back"
+        swayDuration="22s"
+        swayDelay="0s"
       />
       <OnboardingCurveLayer
         d={ONBOARD_CURVE_FRONT}
@@ -960,9 +970,26 @@ function OnboardingAmbientBG() {
         travelDuration="3.8s"
         travelDelay="-1.4s"
         travelOpacity={0.85}
+        swayClass="onboard-curve-sway-front"
+        swayDuration="16s"
+        swayDelay="-5s"
       />
 
       <style>{`
+        @keyframes onboardCurveSwayBack {
+          0% { transform: translate(0, 0); }
+          25% { transform: translate(-12px, -6px); }
+          50% { transform: translate(8px, 4px); }
+          75% { transform: translate(-5px, 6px); }
+          100% { transform: translate(0, 0); }
+        }
+        @keyframes onboardCurveSwayFront {
+          0% { transform: translate(0, 0); }
+          30% { transform: translate(16px, 6px); }
+          55% { transform: translate(-10px, -7px); }
+          80% { transform: translate(6px, -4px); }
+          100% { transform: translate(0, 0); }
+        }
         @keyframes onboardCurveTravel {
           from { stroke-dashoffset: 0; }
           to { stroke-dashoffset: -1514; }
@@ -973,9 +1000,20 @@ function OnboardingAmbientBG() {
             animation-timing-function: linear;
             animation-iteration-count: infinite;
           }
+          .onboard-curve-sway-back {
+            animation-name: onboardCurveSwayBack;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+          }
+          .onboard-curve-sway-front {
+            animation-name: onboardCurveSwayFront;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+          }
         }
         @media (prefers-reduced-motion: reduce) {
           .onboard-curve-travel { display: none; }
+          .onboard-curve-sway-back, .onboard-curve-sway-front { animation: none !important; }
         }
       `}</style>
     </div>

@@ -16905,7 +16905,7 @@ const renderSidebar = () => (
   key={activeTab}
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
-      ? (isDesktop ? "px-12" : "px-0")
+      ? (isDesktop ? "" : "px-0")
       : (isDesktop ? "px-8 py-6" : "px-5 py-5")
   }`}
               style={{
@@ -16916,8 +16916,10 @@ const renderSidebar = () => (
                 overscrollBehavior: "contain",
                 display: communityFullBleed ? "flex" : "block",
                 flexDirection: "column",
-                paddingTop: communityFullBleed ? (isDesktop ? "22px" : 0) : undefined,
-                paddingBottom: communityFullBleed ? (isDesktop ? "16px" : 0) : undefined,
+                paddingLeft: communityFullBleed && isDesktop ? "12px" : undefined,
+                paddingRight: communityFullBleed && isDesktop ? "12px" : undefined,
+                paddingTop: communityFullBleed ? (isDesktop ? "4px" : 0) : undefined,
+                paddingBottom: communityFullBleed ? (isDesktop ? "8px" : 0) : undefined,
               }}
             >
               {communityFullBleed || !isDesktop ? (

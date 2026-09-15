@@ -15151,7 +15151,7 @@ if (activeTab === "community") {
       <div className="flex flex-col h-full" style={heightStyle}>
         {/* Header */}
         <div
-          className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
+          className="flex items-center gap-3.5 px-5 py-4 flex-shrink-0"
           style={{
             borderBottom: `1px solid ${palette.border}`,
             background: `linear-gradient(180deg, ${palette.surface}, ${palette.surface}CC)`,
@@ -15170,9 +15170,9 @@ if (activeTab === "community") {
               <ChevronLeft size={16} />
             </button>
           )}
-          <Avatar name={group ? group.name : "?"} size={40} online src={groupAvatarMap[activeGroupId]} />
+          <Avatar name={group ? group.name : "?"} size={48} online src={groupAvatarMap[activeGroupId]} />
           <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: display, fontSize: "15px", fontWeight: 700, color: palette.text }} className="truncate">
+            <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text }} className="truncate">
               {group ? group.name : "Group"}
             </div>
             <button
@@ -15252,34 +15252,6 @@ if (activeTab === "community") {
           </button>
         </div>
 
-        {groupMembersLoaded && groupMembersList.length > 0 && (
-          <div
-            className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
-            style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, overflowX: "auto" }}
-          >
-            {groupMembersList.map((mem) => {
-              const isSelf = mem.username === communityUsername;
-              const ringColor = mem.isOwner ? palette.gold : (mem.isAdmin || mem.isSignalProvider) ? palette.green : palette.border;
-              return (
-                <div key={mem.username} className="flex flex-col items-center flex-shrink-0" style={{ width: "44px" }} title={mem.username}>
-                  <span
-                    className="flex items-center justify-center rounded-full"
-                    style={{ width: "34px", height: "34px", boxShadow: `0 0 0 2px ${ringColor}` , borderRadius: "999px" }}
-                  >
-                    <Avatar name={mem.username} size={30} />
-                  </span>
-                  <span
-                    className="truncate"
-                    style={{ fontSize: "9px", fontFamily: mono, color: isSelf ? palette.gold : palette.textFaint, marginTop: "3px", maxWidth: "44px" }}
-                  >
-                    {isSelf ? "You" : mem.username}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
              {pinnedMessageId && (() => {
           const pinned = groupMessages.find((m) => m.id === pinnedMessageId);
           if (!pinned) return null;
@@ -15306,7 +15278,7 @@ if (activeTab === "community") {
           );
         })()}
 
-<div className="flex gap-2 px-4 pt-3 pb-1 flex-shrink-0">
+<div className="flex gap-2 px-4 pt-4 pb-3 flex-shrink-0">
   {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "posts", label: "Announcements" }].map((t) => {
             const active = communityPanelTab === t.id;
             return (
@@ -15314,12 +15286,12 @@ if (activeTab === "community") {
                 key={t.id}
                 type="button"
                 onClick={() => setCommunityPanelTab(t.id)}
-                className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                className={`px-4 py-2 rounded-full transition-colors ${TAP}`}
                 style={{
                   background: active ? palette.gold : palette.field,
                   color: active ? palette.letterbox : palette.textMuted,
                   border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
+                  fontFamily: mono, fontSize: "12px", fontWeight: 700,
                 }}
               >
                 {t.label}
@@ -15858,19 +15830,19 @@ const renderSidebar = () => (
     <div
       className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden"
       style={{
-        width: "260px",
+        width: "312px",
         border: `1px solid ${palette.border}`,
         boxShadow: palette.shadow,
         background: palette.surface,
       }}
     >
-      <div className="flex items-center gap-2.5 p-4" style={{ borderBottom: `1px solid ${palette.border}` }}>
-        <Avatar name={communityUsername} size={38} ring />
+      <div className="flex items-center gap-3 p-5" style={{ borderBottom: `1px solid ${palette.border}` }}>
+        <Avatar name={communityUsername} size={44} ring />
         <div className="flex-1 min-w-0">
-          <div style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }} className="truncate">
+          <div style={{ color: palette.text, fontSize: "14.5px", fontWeight: 700 }} className="truncate">
             {communityUsername}
           </div>
-          <div style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
+          <div style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
             {myGroups.length} group{myGroups.length === 1 ? "" : "s"}
           </div>
         </div>
@@ -15878,25 +15850,25 @@ const renderSidebar = () => (
           type="button"
           onClick={() => { setCommunityUsernameDraft(communityUsername); setCommunityUsernameError(""); persistCommunityUsername(""); }}
           className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
-          style={{ width: "28px", height: "28px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+          style={{ width: "30px", height: "30px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
           aria-label="Edit profile"
         >
-          <Pencil size={12} />
+          <Pencil size={13} />
         </button>
       </div>
 
-      <div className="flex gap-1.5 px-2.5 pt-2.5 pb-1">
+      <div className="flex gap-2 px-3.5 pt-3.5 pb-2">
         {[{ id: "mine", label: "Groups" }, { id: "discover", label: "Discover" }].map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => { setCommunityLobbyTab(t.id); if (t.id === "discover" && !discoverLoaded) loadDiscoverGroups(); }}
-            className={`flex-1 px-2 py-1.5 rounded-lg ${TAP}`}
+            className={`flex-1 px-2 py-2 rounded-lg ${TAP}`}
             style={{
               background: communityLobbyTab === t.id ? palette.gold : palette.field,
               color: communityLobbyTab === t.id ? palette.letterbox : palette.textMuted,
               border: `1px solid ${communityLobbyTab === t.id ? palette.gold : palette.border}`,
-              fontFamily: mono, fontSize: "11px", fontWeight: 700,
+              fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
             }}
           >
             {t.label}
@@ -15904,7 +15876,7 @@ const renderSidebar = () => (
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-3">
 
 
 {communityLobbyTab === "discover" ? (
@@ -16026,7 +15998,7 @@ const renderSidebar = () => (
                   key={g.id}
                   type="button"
                   onClick={() => setActiveGroupId(g.id)}
-                  className={`relative w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 mb-1.5 text-left ${TAP}`}
+                  className={`relative w-full flex items-center gap-3 rounded-xl px-3 py-3 mb-2 text-left ${TAP}`}
                   style={{
                     background: active ? `linear-gradient(135deg, ${palette.gold}1A, ${palette.field}88)` : "transparent",
                     border: `1px solid ${active ? `${palette.gold}44` : "transparent"}`,
@@ -16035,10 +16007,10 @@ const renderSidebar = () => (
                   {active && (
                     <span style={{ position: "absolute", left: 0, top: "10px", bottom: "10px", width: "3px", borderRadius: "999px", background: palette.gold }} />
                   )}
-                  <Avatar name={g.name} size={36} online={active} src={groupAvatarMap[g.id]} />
+                  <Avatar name={g.name} size={42} online={active} src={groupAvatarMap[g.id]} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <div style={{ color: active ? palette.goldBright : palette.text, fontSize: "13px", fontWeight: active ? 700 : 600 }} className="truncate">
+                      <div style={{ color: active ? palette.goldBright : palette.text, fontSize: "13.5px", fontWeight: active ? 700 : 600 }} className="truncate">
                         {g.name}
                       </div>
                       {isOwner && (
@@ -16047,7 +16019,7 @@ const renderSidebar = () => (
                         </span>
                       )}
                     </div>
-                    <div style={{ color: palette.textFaint, fontSize: "10.5px" }} className="truncate">
+                    <div style={{ color: palette.textFaint, fontSize: "11px" }} className="truncate">
                       {g.description || "Private trading group"}
                     </div>
                   </div>
@@ -16944,8 +16916,8 @@ const renderSidebar = () => (
                 overscrollBehavior: "contain",
                 display: communityFullBleed ? "flex" : "block",
                 flexDirection: "column",
-                paddingTop: communityFullBleed ? (isDesktop ? "24px" : 0) : undefined,
-                paddingBottom: communityFullBleed ? (isDesktop ? "24px" : 0) : undefined,
+                paddingTop: communityFullBleed ? (isDesktop ? "12px" : 0) : undefined,
+                paddingBottom: communityFullBleed ? (isDesktop ? "16px" : 0) : undefined,
               }}
             >
               {communityFullBleed || !isDesktop ? (
@@ -17023,7 +16995,7 @@ const renderSidebar = () => (
         }}
         className={
           isDesktop
-            ? `ledger-nav-item w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl ${TAP}`
+            ? `ledger-nav-item w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl ${TAP}`
             : `ledger-nav-item w-full flex flex-col items-center justify-center gap-1 py-3 ${TAP}`
         }
         style={{
@@ -17043,47 +17015,59 @@ const renderSidebar = () => (
           transition: `${THEME_TRANSITION}, transform 0.15s ease, background 0.15s ease`,
         }}
       >
-        <span
-          className="flex items-center justify-center flex-shrink-0 relative"
-          style={{
-            width: isDesktop ? "30px" : "auto",
-            height: isDesktop ? "30px" : "auto",
-            borderRadius: isDesktop ? "9px" : 0,
-            background: isDesktop && active
-              ? `${palette.gold}20`
-              : "transparent",
-          }}
-        >
-          <Icon
-            size={isDesktop ? 17 : 18}
-            strokeWidth={active ? 2.4 : 1.8}
-          />
-
-          {!isDesktop && active && (
-            <span
-              className="ledger-nav-dot"
-              style={{
-                position: "absolute",
-                bottom: "-5px",
-                width: "4px",
-                height: "4px",
-                borderRadius: "999px",
-                background: palette.goldBright,
-                boxShadow: `0 0 8px ${palette.gold}88`,
-              }}
+        <span className={isDesktop ? "flex items-center gap-3 min-w-0" : "contents"}>
+          <span
+            className="flex items-center justify-center flex-shrink-0 relative"
+            style={{
+              width: isDesktop ? "30px" : "auto",
+              height: isDesktop ? "30px" : "auto",
+              borderRadius: isDesktop ? "9px" : 0,
+              background: isDesktop && active
+                ? `${palette.gold}20`
+                : "transparent",
+            }}
+          >
+            <Icon
+              size={isDesktop ? 17 : 18}
+              strokeWidth={active ? 2.4 : 1.8}
             />
-          )}
+
+            {!isDesktop && active && (
+              <span
+                className="ledger-nav-dot"
+                style={{
+                  position: "absolute",
+                  bottom: "-5px",
+                  width: "4px",
+                  height: "4px",
+                  borderRadius: "999px",
+                  background: palette.goldBright,
+                  boxShadow: `0 0 8px ${palette.gold}88`,
+                }}
+              />
+            )}
+          </span>
+
+          <span
+            className="truncate"
+            style={{
+              fontSize: isDesktop ? "14px" : "10px",
+              letterSpacing: "0.02em",
+              fontWeight: isDesktop ? 600 : 400,
+            }}
+          >
+            {tab.label}
+          </span>
         </span>
 
-        <span
-          style={{
-            fontSize: isDesktop ? "14px" : "10px",
-            letterSpacing: "0.02em",
-            fontWeight: isDesktop ? 600 : 400,
-          }}
-        >
-          {tab.label}
-        </span>
+        {isDesktop && (
+          <ChevronRight
+            size={14}
+            strokeWidth={2.2}
+            className="flex-shrink-0"
+            style={{ color: palette.gold, opacity: active ? 0.75 : 0 }}
+          />
+        )}
       </button>
     </div>
   );
@@ -17127,6 +17111,8 @@ const renderSidebar = () => (
 )}
 </div>
 
+{isDesktop && <div style={{ flex: "1 1 auto", minHeight: "20px" }} />}
+
 {isDesktop && (() => {
             const pulseTodayKey = dayKeyFromDate(new Date());
             const pulseTodayTrades = trades.filter((t) => dayKeyFromTs(t.ts) === pulseTodayKey);
@@ -17139,10 +17125,11 @@ const renderSidebar = () => (
               <button
                 type="button"
                 onClick={() => setPulseOpen(true)}
-                className={`mx-4 mt-auto rounded-xl px-3 py-3 text-left ${TAP}`}
+                className={`mx-4 mb-5 rounded-xl px-3.5 py-3.5 text-left ${TAP}`}
                 style={{
                   background: `linear-gradient(135deg, ${palette.gold}16, ${palette.gold}05)`,
                   border: `1px solid ${palette.gold}2A`,
+                  boxShadow: palette.shadow,
                   cursor: "pointer",
                 }}
               >

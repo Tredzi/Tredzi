@@ -16224,7 +16224,7 @@ const renderSidebar = () => (
 } else if (isDesktop) {
     // ---------- DESKTOP: persistent sidebar + chat pane (Discord/Telegram merged) ----------
     body = (
-      <div className="flex gap-4 flex-1" style={{ minHeight: 0 }}>
+      <div className="flex gap-4 flex-1" style={{ minHeight: 0, height: "100%" }}>
         {renderSidebar()}
         <div
           className="flex-1 min-w-0 rounded-2xl overflow-hidden"
@@ -16916,8 +16916,8 @@ const renderSidebar = () => (
                 overscrollBehavior: "contain",
                 display: communityFullBleed ? "flex" : "block",
                 flexDirection: "column",
-                paddingTop: communityFullBleed ? (isDesktop ? "12px" : 0) : undefined,
-                paddingBottom: communityFullBleed ? (isDesktop ? "16px" : 0) : undefined,
+                paddingTop: communityFullBleed ? (isDesktop ? "6px" : 0) : undefined,
+                paddingBottom: communityFullBleed ? (isDesktop ? "10px" : 0) : undefined,
               }}
             >
               {communityFullBleed || !isDesktop ? (
@@ -16947,6 +16947,8 @@ const renderSidebar = () => (
             paddingTop: isDesktop ? 0 : 0,
             width: isDesktop ? "252px" : "auto",
             height: isDesktop ? "100%" : "auto",
+            overflowY: isDesktop ? "auto" : "visible",
+            overflowX: "hidden",
             transition: THEME_TRANSITION,
           }}
         >
@@ -17111,7 +17113,7 @@ const renderSidebar = () => (
 )}
 </div>
 
-{isDesktop && <div style={{ flex: "1 1 auto", minHeight: "20px" }} />}
+{isDesktop && <div style={{ flex: "1 1 auto", minHeight: "12px" }} />}
 
 {isDesktop && (() => {
             const pulseTodayKey = dayKeyFromDate(new Date());
@@ -17125,7 +17127,7 @@ const renderSidebar = () => (
               <button
                 type="button"
                 onClick={() => setPulseOpen(true)}
-                className={`mx-4 mb-5 rounded-xl px-3.5 py-3.5 text-left ${TAP}`}
+                className={`mx-4 mb-1 rounded-xl px-3.5 py-3 text-left ${TAP}`}
                 style={{
                   background: `linear-gradient(135deg, ${palette.gold}16, ${palette.gold}05)`,
                   border: `1px solid ${palette.gold}2A`,

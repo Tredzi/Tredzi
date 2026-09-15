@@ -7048,6 +7048,28 @@ const updateSyncedJournalRow = (trade) => {
     }
   };
 
+  // Pulls a community signal into the trade log form, pre-filled, so a
+  // member can log their own execution of it once they've actually taken
+  // and closed the trade. Never fabricates a P/L — that part is left blank
+  // for the member to fill in themselves.
+  const shadowSignalToTrade = (m) => {
+    resetTradeForm();
+    setTradePair(m.pair || "");
+    const dir = m.direction === "sell" ? "Sell" : "Buy";
+    const parts = [`Shadowed from @${m.author}'s ${m.pair || "signal"} ${dir} call`];
+    if (m.entry) parts.push(`Entry ${m.entry}`);
+    if (m.sl) parts.push(`SL ${m.sl}`);
+    if (m.tp) parts.push(`TP ${m.tp}`);
+    if (m.text) parts.push(`"${m.text}"`);
+    setTradeNote(parts.join(" \u00b7 "));
+    setActiveTab("risk");
+    setTimeout(() => {
+      if (logFormRef.current) {
+        logFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 60);
+  };
+
   const cancelEditTrade = () => {
     resetTradeForm();
   };
@@ -15468,6 +15490,24 @@ if (activeTab === "community") {
                   </div>
 
                   {m.text && <div style={{ color: palette.textMuted, fontSize: "12.5px", marginTop: "10px", lineHeight: 1.45, fontFamily: sans }}>{m.text}</div>}
+
+                  <button
+                    type="button"
+                    onClick={() => shadowSignalToTrade(m)}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg w-full ${TAP}`}
+                    style={{
+                      marginTop: "10px",
+                      padding: "7px",
+                      background: palette.field,
+                      border: `1px solid ${palette.border}`,
+                      color: palette.textMuted,
+                      fontFamily: sans, fontSize: "11.5px", fontWeight: 600,
+                    }}
+                    aria-label="Log this trade in your journal"
+                  >
+                    <BookOpen size={12} />
+                    Shadow to My Journal
+                  </button>
                 </div>
               </div>
             );
@@ -16764,7 +16804,7 @@ const renderSidebar = () => (
       <div
         className="w-full flex flex-col md:flex-row"
         style={{
-          maxWidth: isDesktop ? "1200px" : isTablet ? "760px" : "440px",
+          maxWidth: isDesktop ? "100%" : isTablet ? "760px" : "440px",
           height: "100%",
           background: palette.bg,
           fontFamily: sans,
@@ -16908,7 +16948,13 @@ const renderSidebar = () => (
                 paddingBottom: communityFullBleed ? (isDesktop ? "24px" : 0) : undefined,
               }}
             >
-              {body}
+              {communityFullBleed || !isDesktop ? (
+                body
+              ) : (
+                <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+                  {body}
+                </div>
+              )}
             </main>
           );
         })()}

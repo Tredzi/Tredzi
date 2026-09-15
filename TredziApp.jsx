@@ -15153,10 +15153,64 @@ if (activeTab === "community") {
             <div style={{ fontFamily: display, fontSize: "15px", fontWeight: 700, color: palette.text }} className="truncate">
               {group ? group.name : "Group"}
             </div>
-            <div className="flex items-center gap-1.5" style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
-              <span style={{ width: "6px", height: "6px", borderRadius: "999px", background: palette.green, display: "inline-block", boxShadow: `0 0 6px ${palette.green}` }} />
-              Live · {groupMembersList.length || "…"} member{groupMembersList.length === 1 ? "" : "s"} · {groupMessages.length} message{groupMessages.length === 1 ? "" : "s"}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setManageNameDraft(group?.name || "");
+                setManageDescDraft(group?.description || "");
+                setManageMsg("");
+                setGroupManageTab("members");
+                setGroupManageOpen(true);
+              }}
+              className={TAP}
+              style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: 0, marginTop: "2px" }}
+              aria-label="View members"
+            >
+              {groupMembersLoaded && groupMembersList.length > 0 && (
+                <span className="flex items-center" style={{ marginLeft: "2px" }}>
+                  {groupMembersList.slice(0, 4).map((mem, i) => (
+                    <span
+                      key={mem.username}
+                      style={{
+                        marginLeft: i === 0 ? 0 : "-7px",
+                        borderRadius: "999px",
+                        boxShadow: `0 0 0 2px ${palette.surface}`,
+                        position: "relative",
+                        zIndex: 4 - i,
+                      }}
+                    >
+                      <Avatar name={mem.username} size={18} />
+                    </span>
+                  ))}
+                  {groupMembersList.length > 4 && (
+                    <span
+                      style={{
+                        marginLeft: "-7px",
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "999px",
+                        background: palette.field,
+                        border: `2px solid ${palette.surface}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "8px",
+                        fontFamily: mono,
+                        fontWeight: 700,
+                        color: palette.textMuted,
+                        position: "relative",
+                        zIndex: 0,
+                      }}
+                    >
+                      +{groupMembersList.length - 4}
+                    </span>
+                  )}
+                </span>
+              )}
+              <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
+                {groupMembersList.length || "…"} member{groupMembersList.length === 1 ? "" : "s"} · {groupMessages.length} message{groupMessages.length === 1 ? "" : "s"}
+              </span>
+            </button>
           </div>
           <button
             type="button"
@@ -15175,6 +15229,34 @@ if (activeTab === "community") {
             <Users size={15} />
           </button>
         </div>
+
+        {groupMembersLoaded && groupMembersList.length > 0 && (
+          <div
+            className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
+            style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, overflowX: "auto" }}
+          >
+            {groupMembersList.map((mem) => {
+              const isSelf = mem.username === communityUsername;
+              const ringColor = mem.isOwner ? palette.gold : (mem.isAdmin || mem.isSignalProvider) ? palette.green : palette.border;
+              return (
+                <div key={mem.username} className="flex flex-col items-center flex-shrink-0" style={{ width: "44px" }} title={mem.username}>
+                  <span
+                    className="flex items-center justify-center rounded-full"
+                    style={{ width: "34px", height: "34px", boxShadow: `0 0 0 2px ${ringColor}` , borderRadius: "999px" }}
+                  >
+                    <Avatar name={mem.username} size={30} />
+                  </span>
+                  <span
+                    className="truncate"
+                    style={{ fontSize: "9px", fontFamily: mono, color: isSelf ? palette.gold : palette.textFaint, marginTop: "3px", maxWidth: "44px" }}
+                  >
+                    {isSelf ? "You" : mem.username}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
              {pinnedMessageId && (() => {
           const pinned = groupMessages.find((m) => m.id === pinnedMessageId);
@@ -15842,13 +15924,20 @@ const renderSidebar = () => (
         const alreadyIn = myGroups.some((m) => m.id === g.id);
         const requested = pendingJoinRequests.some((r) => r.id === g.id);
         return (
-          <div key={g.id} className="rounded-xl px-2.5 py-2 mb-1.5" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+          <div key={g.id} className="rounded-xl px-2.5 py-2.5 mb-1.5" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
             <div className="flex items-center gap-2">
-              <Avatar name={g.name} size={30} />
+              <Avatar name={g.name} size={32} />
               <div className="flex-1 min-w-0">
-                <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>{g.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>{g.name}</div>
+                  {g.memberCount != null && g.memberCount >= 20 && (
+                    <span style={{ flexShrink: 0, fontSize: "8px", fontFamily: mono, fontWeight: 700, color: palette.green, border: `1px solid ${palette.green}55`, borderRadius: "999px", padding: "1px 5px", textTransform: "uppercase" }}>
+                      Popular
+                    </span>
+                  )}
+                </div>
                 <div className="truncate" style={{ color: palette.textFaint, fontSize: "10px" }}>
-                  {g.description || "Public group"}{g.memberCount != null ? ` · ${g.memberCount} members` : ""}
+                  {g.description || "Public group"}
                 </div>
               </div>
               <button
@@ -15866,18 +15955,22 @@ const renderSidebar = () => (
                 {alreadyIn ? "Joined" : requested ? "Sent" : "Join"}
               </button>
             </div>
-            {Array.isArray(g.tags) && g.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap mt-1.5" style={{ paddingLeft: "38px" }}>
-                {g.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    style={{ fontSize: "9px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5" style={{ paddingLeft: "40px" }}>
+              {g.memberCount != null && (
+                <span className="flex items-center gap-1" style={{ fontSize: "9px", fontFamily: mono, color: palette.textFaint, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "1px 6px" }}>
+                  <Users size={9} />
+                  {g.memberCount}
+                </span>
+              )}
+              {Array.isArray(g.tags) && g.tags.map((tag) => (
+                <span
+                  key={tag}
+                  style={{ fontSize: "9px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
           </div>
         );
       })
@@ -15887,21 +15980,32 @@ const renderSidebar = () => (
           <>
             {myGroups.map((g) => {
               const active = g.id === activeGroupId;
+              const isOwner = g.role === "owner";
               return (
                 <button
                   key={g.id}
                   type="button"
                   onClick={() => setActiveGroupId(g.id)}
-                  className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 mb-1 text-left ${TAP}`}
+                  className={`relative w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 mb-1.5 text-left ${TAP}`}
                   style={{
-                    background: active ? `${palette.gold}16` : "transparent",
+                    background: active ? `linear-gradient(135deg, ${palette.gold}1A, ${palette.field}88)` : "transparent",
                     border: `1px solid ${active ? `${palette.gold}44` : "transparent"}`,
                   }}
                 >
-                  <Avatar name={g.name} size={34} online={active} src={groupAvatarMap[g.id]} />
+                  {active && (
+                    <span style={{ position: "absolute", left: 0, top: "10px", bottom: "10px", width: "3px", borderRadius: "999px", background: palette.gold }} />
+                  )}
+                  <Avatar name={g.name} size={36} online={active} src={groupAvatarMap[g.id]} />
                   <div className="flex-1 min-w-0">
-                    <div style={{ color: active ? palette.goldBright : palette.text, fontSize: "13px", fontWeight: active ? 700 : 600 }} className="truncate">
-                      {g.name}
+                    <div className="flex items-center gap-1.5">
+                      <div style={{ color: active ? palette.goldBright : palette.text, fontSize: "13px", fontWeight: active ? 700 : 600 }} className="truncate">
+                        {g.name}
+                      </div>
+                      {isOwner && (
+                        <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 5px", textTransform: "uppercase" }}>
+                          Owner
+                        </span>
+                      )}
                     </div>
                     <div style={{ color: palette.textFaint, fontSize: "10.5px" }} className="truncate">
                       {g.description || "Private trading group"}
@@ -15911,9 +16015,16 @@ const renderSidebar = () => (
               );
             })}
             {myGroups.length === 0 && (
-              <p className="text-xs px-2 py-3" style={{ color: palette.textFaint }}>
-                No groups yet — create or join one below.
-              </p>
+              <div className="flex flex-col items-center text-center px-3 py-8">
+                <span
+                  className="flex items-center justify-center rounded-full mb-3"
+                  style={{ width: "44px", height: "44px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}
+                >
+                  <Users size={19} style={{ color: palette.gold }} />
+                </span>
+                <p style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600, marginBottom: "3px" }}>No groups yet</p>
+                <p className="text-xs" style={{ color: palette.textFaint }}>Create one or find a public group to join below.</p>
+              </div>
             )}
           </>
         )}
@@ -16235,19 +16346,30 @@ const renderSidebar = () => (
                     <div className="flex items-center gap-3">
                       <Avatar name={g.name} size={40} />
                       <div className="flex-1 min-w-0">
-                        <div style={{ color: palette.text, fontSize: "14px", fontWeight: 600 }} className="truncate">{g.name}</div>
-                        <div style={{ color: palette.textFaint, fontSize: "11px" }} className="truncate">
-                          {g.description || "Public trading group"} {g.memberCount != null && `\u00b7 ${g.memberCount} members`}
+                        <div className="flex items-center gap-1.5">
+                          <div style={{ color: palette.text, fontSize: "14px", fontWeight: 600 }} className="truncate">{g.name}</div>
+                          {g.memberCount != null && g.memberCount >= 20 && (
+                            <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.green, border: `1px solid ${palette.green}55`, borderRadius: "999px", padding: "1px 6px", textTransform: "uppercase" }}>
+                              Popular
+                            </span>
+                          )}
                         </div>
-                        {Array.isArray(g.tags) && g.tags.length > 0 && (
-                          <div className="flex gap-1 flex-wrap mt-1">
-                            {g.tags.map((tag) => (
-                              <span key={tag} style={{ fontSize: "9.5px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}>
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <div style={{ color: palette.textFaint, fontSize: "11px" }} className="truncate">
+                          {g.description || "Public trading group"}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {g.memberCount != null && (
+                            <span className="flex items-center gap-1" style={{ fontSize: "9.5px", fontFamily: mono, color: palette.textFaint, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "1px 6px" }}>
+                              <Users size={9} />
+                              {g.memberCount}
+                            </span>
+                          )}
+                          {Array.isArray(g.tags) && g.tags.map((tag) => (
+                            <span key={tag} style={{ fontSize: "9.5px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -16404,8 +16526,15 @@ const renderSidebar = () => (
                 >
                   <Avatar name={g.name} size={44} src={groupAvatarMap[g.id]} />
                   <div className="flex-1 min-w-0">
-                    <div style={{ color: palette.text, fontSize: "14.5px", fontWeight: 700 }} className="truncate">
-                      {g.name}
+                    <div className="flex items-center gap-1.5">
+                      <div style={{ color: palette.text, fontSize: "14.5px", fontWeight: 700 }} className="truncate">
+                        {g.name}
+                      </div>
+                      {g.role === "owner" && (
+                        <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px", textTransform: "uppercase" }}>
+                          Owner
+                        </span>
+                      )}
                     </div>
                     <div style={{ color: palette.textFaint, fontSize: "11.5px" }} className="truncate">
                       {g.description || "Private trading group"}

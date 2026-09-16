@@ -4453,6 +4453,8 @@ const [qaReplyDrafts, setQaReplyDrafts] = useState({});
 const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
 const [signalStatsOpen, setSignalStatsOpen] = useState(false);
+const [selectedCommunityMember, setSelectedCommunityMember] = useState(null);
+const [leaderboardMetric, setLeaderboardMetric] = useState("winRate");
 const [groupPosts, setGroupPosts] = useState([]);
 const [groupPostsLoaded, setGroupPostsLoaded] = useState(false);
 const [newPostText, setNewPostText] = useState("");
@@ -4683,6 +4685,52 @@ const memberAvatarByUsername = useMemo(() => {
   return map;
 }, [groupMembersList, communityUsername, communityAvatar]);
 const avatarForAuthor = (author) => memberAvatarByUsername[author] || undefined;
+
+const openCommunityMemberProfile = (username) => {
+  if (!username) return;
+  const member = groupMembersList.find((m) => m.username === username) || { username };
+  setSelectedCommunityMember(member);
+};
+
+const getCommunityMemberStats = (member) => {
+  const isMe = member?.username === communityUsername;
+  if (isMe) {
+    const ordered = [...trades].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const wins = ordered.filter((t) => num(t.pnl) > 0).length;
+    const winRate = ordered.length ? (wins / ordered.length) * 100 : null;
+    const net = ordered.reduce((sum, t) => sum + (num(t.pnl) || 0), 0);
+    const bal = num(startingBalance);
+    const pnlPct = bal > 0 ? (net / bal) * 100 : null;
+    let streak = 0;
+    for (let i = ordered.length - 1; i >= 0; i -= 1) {
+      if (num(ordered[i].pnl) > 0) streak += 1;
+      else break;
+    }
+    const equityCurve = ordered.map((t) => num(t.pnl) || 0).reduce((arr, pnl) => {
+      arr.push((arr[arr.length - 1] || 0) + pnl);
+      return arr;
+    }, []);
+    return { winRate, pnlPct, streak, trades: ordered.length, avgR: null, equityCurve, statsPublic: true };
+  }
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const value = member?.[key];
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+    return null;
+  };
+  const curve = pick("equityCurve", "equity", "curve");
+  const publicFields = ["winRate", "win_rate", "pnlPct", "pnlPercent", "pnl_percent", "streak", "winStreak", "win_streak", "trades", "tradeCount", "trade_count"];
+  return {
+    winRate: num(pick("winRate", "win_rate")),
+    pnlPct: num(pick("pnlPct", "pnlPercent", "pnl_percent")),
+    streak: num(pick("streak", "winStreak", "win_streak")),
+    trades: num(pick("trades", "tradeCount", "trade_count")),
+    avgR: num(pick("avgR", "avgRR", "avg_r")),
+    equityCurve: Array.isArray(curve) ? curve.map((v) => num(v)).filter((v) => Number.isFinite(v)) : [],
+    statsPublic: publicFields.some((key) => pick(key) !== null),
+  };
+};
 
 useEffect(() => {
   if (!activeGroupId || communityPanelTab !== "posts") return;
@@ -15562,7 +15610,7 @@ if (activeTab === "community") {
         })()}
 
 <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "posts", label: "Announcements" }].map((t) => {
+  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "posts", label: "Announcements" }, { id: "leaderboard", label: "Leaderboard" }].map((t) => {
             const active = communityPanelTab === t.id;
             return (
               <button
@@ -15652,7 +15700,7 @@ if (activeTab === "community") {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <Avatar name={p.author} size={26} src={groupAvatarMap[activeGroupId]} />
-                        <span style={{ color: palette.gold, fontSize: "12px", fontWeight: 700 }}>{p.author}</span>
+                        <button type="button" onClick={() => openCommunityMemberProfile(p.author)} className={TAP} style={{ color: palette.gold, fontSize: "12px", fontWeight: 700, background: "none", border: "none", padding: 0 }}>{p.author}</button>
                         <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
                           {new Date(p.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
@@ -15823,7 +15871,7 @@ if (activeTab === "community") {
                     </div>
                     <div className="flex items-center gap-1.5" style={{ marginTop: "1px" }}>
                       <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} />
-                      <span style={{ color: palette.textMuted, fontSize: "10.5px", fontWeight: 600, fontFamily: sans }}>{m.author}</span>
+                      <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "10.5px", fontWeight: 600, fontFamily: sans, background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       {authorRole && (
                         <span style={{ color: palette.textFaint, fontSize: "9px", fontFamily: mono, border: `1px solid ${palette.border}`, borderRadius: "4px", padding: "0 4px" }}>
                           {authorRole}
@@ -16076,7 +16124,7 @@ if (activeTab === "community") {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar name={idea.author} size={22} src={avatarForAuthor(idea.author)} />
-                          <span style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 700, fontFamily: sans }}>{idea.author}</span>
+                          <button type="button" onClick={() => openCommunityMemberProfile(idea.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 700, fontFamily: sans, background: "none", border: "none", padding: 0 }}>{idea.author}</button>
                           <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
                             {new Date(idea.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
@@ -16151,7 +16199,7 @@ if (activeTab === "community") {
                         )}
                       </div>
                       <div className="flex items-center gap-2 mb-2">
-                        <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>asked by {q.author}</span>
+                        <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>asked by <button type="button" onClick={() => openCommunityMemberProfile(q.author)} className={TAP} style={{ color: palette.gold, background: "none", border: "none", padding: 0, font: "inherit" }}>{q.author}</button></span>
                         <button type="button" onClick={() => setQaOpenId(isOpen ? null : q.id)} className={TAP} style={{ color: palette.gold, fontSize: "10.5px", fontFamily: mono, fontWeight: 700 }}>
                           {q.answers.length} answer{q.answers.length === 1 ? "" : "s"}
                         </button>
@@ -16162,7 +16210,7 @@ if (activeTab === "community") {
                             <div key={i} className="flex items-start gap-2 mb-2">
                               <Avatar name={a.author} size={18} src={avatarForAuthor(a.author)} />
                               <div className="min-w-0">
-                                <span style={{ color: palette.textMuted, fontSize: "11px", fontWeight: 700, marginRight: "6px" }}>{a.author}</span>
+                                <button type="button" onClick={() => openCommunityMemberProfile(a.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "11px", fontWeight: 700, marginRight: "6px", background: "none", border: "none", padding: 0 }}>{a.author}</button>
                                 <span style={{ color: palette.text, fontSize: "12.5px" }}>{a.text}</span>
                               </div>
                             </div>
@@ -16188,6 +16236,85 @@ if (activeTab === "community") {
               )}
               <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Questions are shared with this group.</p>
             </div>
+          </>
+
+        ) : communityPanelTab === "leaderboard" ? (
+          <>
+            {(() => {
+              const members = groupMembersList.length ? groupMembersList : (communityUsername ? [{ username: communityUsername, avatar: communityAvatar }] : []);
+              const rows = members.map((member) => ({ member, stats: getCommunityMemberStats(member) }));
+              const valueFor = (row) => {
+                const v = row.stats[leaderboardMetric];
+                return Number.isFinite(v) ? v : null;
+              };
+              rows.sort((a, b) => {
+                const av = valueFor(a), bv = valueFor(b);
+                if (av === null && bv === null) return 0;
+                if (av === null) return 1;
+                if (bv === null) return -1;
+                return bv - av;
+              });
+              const top = rows.slice(0, 3);
+              const rest = rows.slice(3);
+              const metricText = (stats) => {
+                const v = stats[leaderboardMetric];
+                if (!Number.isFinite(v)) return "—";
+                if (leaderboardMetric === "winRate" || leaderboardMetric === "pnlPct") return `${v >= 0 && leaderboardMetric === "pnlPct" ? "+" : ""}${v.toFixed(0)}%`;
+                return `${v}`;
+              };
+              const podium = top.length === 3 ? [top[1], top[0], top[2]] : top;
+              return (
+                <div className="flex-1 px-4 py-4 overflow-y-auto" style={{ minHeight: 0, background: palette.bg }}>
+                  <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto", scrollbarWidth: "none" }}>
+                    {[{ id: "winRate", label: "Win rate" }, { id: "pnlPct", label: "P&L %" }, { id: "streak", label: "Streak" }].map((t) => (
+                      <button key={t.id} type="button" onClick={() => setLeaderboardMetric(t.id)} className={`px-3 py-1.5 rounded-full flex-shrink-0 ${TAP}`} style={{ background: leaderboardMetric === t.id ? palette.text : palette.field, color: leaderboardMetric === t.id ? palette.letterbox : palette.textMuted, border: `1px solid ${leaderboardMetric === t.id ? palette.text : palette.border}`, fontFamily: sans, fontSize: "11px", fontWeight: 700 }}>{t.label}</button>
+                    ))}
+                    <span className="flex-1" />
+                    <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono, whiteSpace: "nowrap" }}>This group</span>
+                  </div>
+                  {rows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "52px", height: "52px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}><Users size={22} style={{ color: palette.gold }} /></span>
+                      <p style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>No members yet</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-end justify-center gap-3 mb-7" style={{ minHeight: "190px" }}>
+                        {podium.map((row) => {
+                          const rank = rows.indexOf(row) + 1;
+                          const isMe = row.member.username === communityUsername;
+                          const h = rank === 1 ? 106 : rank === 2 ? 82 : 68;
+                          return (
+                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`flex flex-col items-center ${TAP}`} style={{ width: "88px", alignSelf: "flex-end" }}>
+                              <Avatar name={row.member.username} size={rank === 1 ? 58 : 48} src={avatarForAuthor(row.member.username)} ring />
+                              <span className="truncate" style={{ width: "100%", marginTop: "7px", color: palette.text, fontSize: "11.5px", fontWeight: 700 }}>{row.member.username}</span>
+                              <span style={{ color: rank === 1 ? palette.green : palette.textMuted, fontSize: "12px", fontWeight: 800, marginTop: "2px" }}>{metricText(row.stats)}</span>
+                              <div style={{ width: "84px", height: `${h}px`, marginTop: "6px", background: isMe ? `${palette.blue}12` : palette.surface, border: `1px solid ${rank === 1 ? palette.gold : isMe ? palette.blue : palette.border}`, borderBottom: "none", borderRadius: "10px 10px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: rank === 1 ? palette.gold : palette.textMuted, fontFamily: mono, fontSize: "16px", fontWeight: 800 }}>{rank}</span></div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {rest.map((row, idx) => {
+                          const rank = idx + 4;
+                          const isMe = row.member.username === communityUsername;
+                          return (
+                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left ${TAP}`} style={{ background: isMe ? `${palette.blue}10` : palette.surface, border: `1px solid ${isMe ? palette.blue + "66" : palette.border}` }}>
+                              <span style={{ width: "22px", textAlign: "center", color: palette.textFaint, fontFamily: mono, fontSize: "11px" }}>{rank}</span>
+                              <Avatar name={row.member.username} size={30} src={avatarForAuthor(row.member.username)} />
+                              <span className="flex-1 min-w-0 truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{row.member.username}</span>
+                              {isMe && <span style={{ color: palette.blue, background: `${palette.blue}18`, border: `1px solid ${palette.blue}44`, borderRadius: "999px", padding: "3px 7px", fontSize: "9px", fontFamily: mono, fontWeight: 700 }}>YOU</span>}
+                              <span style={{ color: palette.text, fontSize: "12.5px", fontWeight: 800 }}>{metricText(row.stats)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  <p className="text-xs text-center mt-4" style={{ color: palette.textFaint }}>Leaderboard uses public member stats when available. Private stats stay hidden.</p>
+                </div>
+              );
+            })()}
           </>
 
         ) : (
@@ -16259,9 +16386,7 @@ if (activeTab === "community") {
                     )}
                     <div style={{ maxWidth: isDesktop ? "62%" : "78%" }}>
                       {!isMe && !grouped && (
-                        <div style={{ color: palette.gold, fontSize: "11.5px", fontWeight: 700, marginBottom: "3px", marginLeft: "3px" }}>
-                          {m.author}
-                        </div>
+                        <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.gold, fontSize: "11.5px", fontWeight: 700, marginBottom: "3px", marginLeft: "3px", background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       )}
                       <div
                         className="rounded-2xl px-4 py-2.5"
@@ -16404,6 +16529,50 @@ if (activeTab === "community") {
         </div>
           </>
         )}
+
+        {selectedCommunityMember && (() => {
+          const member = selectedCommunityMember;
+          const stats = getCommunityMemberStats(member);
+          const isMe = member.username === communityUsername;
+          const role = member.isOwner ? "Owner" : member.isAdmin ? "Admin" : member.isSignalProvider ? "Signal provider" : "Member";
+          const joined = member.memberSince || member.joinedAt || member.createdAt;
+          const joinedText = joined ? new Date(joined).toLocaleDateString([], { month: "short", year: "numeric" }) : "Community member";
+          const curve = stats.equityCurve || [];
+          const min = curve.length ? Math.min(...curve) : 0;
+          const max = curve.length ? Math.max(...curve) : 0;
+          const range = max - min || 1;
+          const points = curve.map((v, i) => `${(i / Math.max(1, curve.length - 1)) * 100},${100 - ((v - min) / range) * 70 - 15}`).join(" ");
+          const badges = Array.isArray(member.badges) ? member.badges : [role !== "Member" ? role : null].filter(Boolean);
+          return (
+            <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.76)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 110 }} onClick={() => setSelectedCommunityMember(null)}>
+              <div className="w-full rounded-3xl overflow-hidden" style={{ maxWidth: "430px", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Member profile</span>
+                  <button type="button" onClick={() => setSelectedCommunityMember(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: palette.field, color: palette.textMuted }} aria-label="Close profile"><X size={14} /></button>
+                </div>
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-5">
+                    <Avatar name={member.username} size={58} src={avatarForAuthor(member.username)} ring />
+                    <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="truncate" style={{ color: palette.text, fontSize: "18px", fontWeight: 800 }}>{member.username}</span>{isMe && <span style={{ color: palette.blue, fontSize: "9px", fontFamily: mono, fontWeight: 700 }}>YOU</span>}</div><div style={{ color: palette.textMuted, fontSize: "11.5px", marginTop: "3px" }}>{joinedText} · {role}</div></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5 mb-5">
+                    {[
+                      ["Win rate", stats.winRate == null ? "—" : `${stats.winRate.toFixed(0)}%`, palette.green],
+                      ["Avg R", stats.avgR == null ? "—" : stats.avgR.toFixed(1), palette.text],
+                      ["Trades", stats.trades == null ? "—" : String(stats.trades), palette.text],
+                    ].map(([label, value, color]) => <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div style={{ color: palette.textFaint, fontSize: "9.5px", marginBottom: "5px" }}>{label}</div><div style={{ color, fontSize: "16px", fontWeight: 800 }}>{value}</div></div>)}
+                  </div>
+                  <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                    <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>30-day equity curve</div>
+                    {points ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "92px", display: "block" }}><polyline points={points} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" /></svg> : <div className="flex items-center justify-center" style={{ height: "92px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">{badges.length ? badges.slice(0, 4).map((badge) => <span key={String(badge)} style={{ color: palette.gold, background: `${palette.gold}12`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "5px 9px", fontSize: "9.5px", fontFamily: mono, fontWeight: 700 }}>{badge}</span>) : <span style={{ color: palette.textFaint, fontSize: "10.5px" }}>No badges yet</span>}</div>
+                  {!isMe && !stats.statsPublic && <p className="text-xs mt-4" style={{ color: palette.textFaint }}>This member hasn't shared public performance stats.</p>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   };

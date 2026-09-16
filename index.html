@@ -1,107 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#12151C" />
-<title>Tredzi — Trade Math Calculator</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#0b0f16" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Tredzi — Trade Math Calculator</title>
 
-<link rel="manifest" href="manifest.json" />
-<link rel="icon" href="icon.png" />
-<link rel="apple-touch-icon" href="icon.png" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Tredzi" />
+    <!--
+      No Google Fonts / webfont <link> tags on purpose.
+      Tredzi now renders every number using each platform's own native
+      system font (SF Pro on iOS/Mac, Roboto on Android, Segoe UI on
+      Windows) — the same approach Telegram, WhatsApp and Facebook use.
+      This means: no network request for fonts, nothing that can be
+      blocked by an ad-blocker/privacy shield, and no risk of a
+      dotted/slashed "0" ever showing up, on any device, ever again.
+    -->
 
-<!-- Tailwind (utility classes used throughout TredziApp.jsx) -->
-<script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0b0f16; }
+      #root { min-height: 100dvh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
 
-<!-- In-browser JSX transpiler (no build step required) -->
-<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-
-<!-- Import map: bare specifiers used inside TredziApp.jsx resolve to ESM builds -->
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom": "https://esm.sh/react-dom@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
-    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react,react-dom"
-  }
-}
-</script>
-
-<style>
-  html, body, #root {
-    height: 100%;
-    margin: 0;
-    background: #0A0C11;
-  }
-
-  #boot-error {
-    display: none;
-    white-space: pre-wrap;
-    color: #F0897E;
-    padding: 20px;
-    font-family: monospace;
-    font-size: 12px;
-  }
-</style>
-</head>
-
-<body>
-<div id="root"></div>
-<pre id="boot-error"></pre>
-
-<script type="module">
-  import React from "react";
-  import { createRoot } from "react-dom/client";
-
-  async function main() {
-    const res = await fetch("./TredziApp.jsx", { cache: "no-store" });
-
-    if (!res.ok) {
-      throw new Error(
-        "Couldn't fetch TredziApp.jsx (" +
-        res.status +
-        "). Make sure it's in the same folder as index.html."
-      );
-    }
-
-    const source = await res.text();
-
-    const { code } = Babel.transform(source, {
-      presets: ["react"],
-      filename: "TredziApp.jsx",
-      sourceType: "module",
-    });
-
-    const blob = new Blob([code], { type: "text/javascript" });
-    const blobUrl = URL.createObjectURL(blob);
-    const mod = await import(blobUrl);
-    const TredziApp = mod.default;
-
-    createRoot(document.getElementById("root"))
-      .render(React.createElement(TredziApp));
-  }
-
-  main().catch((err) => {
-    const pre = document.getElementById("boot-error");
-    pre.style.display = "block";
-    pre.textContent =
-      (err && err.stack) ? err.stack : String(err);
-    console.error(err);
-  });
-
-  // Register the PWA service worker
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./sw.js")
-        .catch(() => {});
-    });
-  }
-</script>
-</body>
+    <!--
+      Adjust this section to match your actual build tool (Vite, CRA,
+      Capacitor, etc). If you're using Vite, this is typically just:
+        <script type="module" src="/src/main.jsx"></script>
+      and main.jsx does:
+        import { createRoot } from "react-dom/client";
+        import TredziApp from "./Tredzi.jsx";
+        createRoot(document.getElementById("root")).render(<TredziApp />);
+    -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

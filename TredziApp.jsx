@@ -1362,6 +1362,7 @@ const COMMUNITY_API_BASE = "https://ledger-community.ledgercalc.workers.dev";
 const COMMUNITY_USERNAME_KEY = "community:username";
 const COMMUNITY_MEMBERSHIPS_KEY = "community:memberships";
 const COMMUNITY_SESSION_KEY = "community:session";
+const COMMUNITY_AVATAR_KEY = "community:avatar";
 const COMMUNITY_ONBOARDING_KEY = "community:onboarding_seen";
 const COMMUNITY_MESSAGE_POLL_MS = 6000;
 const COMMUNITY_JOIN_REQUESTS_KEY = "community:join-requests";
@@ -4366,6 +4367,8 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [communityUsernameDraft, setCommunityUsernameDraft] = useState("");
   const [communityUsernameError, setCommunityUsernameError] = useState("");
   const [communityUsernameBusy, setCommunityUsernameBusy] = useState(false);
+  const [communityAvatar, setCommunityAvatar] = useState("");
+  const [communityAvatarUploading, setCommunityAvatarUploading] = useState(false);
 
   // --- Community auth state ---
   const [session, setSession] = useState(null); // { token, userId, email } | null
@@ -4376,6 +4379,16 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authScreenStep, setAuthScreenStep] = useState("choice"); // "choice" | "form"
+
+  // --- Change password (Profile settings) ---
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [changePasswordError, setChangePasswordError] = useState("");
+  const [changePasswordMsg, setChangePasswordMsg] = useState("");
+  const [changePasswordBusy, setChangePasswordBusy] = useState(false);
+  const [communityPassword, setCommunityPassword] = useState("");
+  const [showPasswordPlain, setShowPasswordPlain] = useState(false);
 
   // --- Onboarding carousel state ---
   const [onboardingSeen, setOnboardingSeen] = useState(false);
@@ -4787,11 +4800,12 @@ const deleteCommunityPost = async (postId) => {
     let cancelled = false;
     (async () => {
       try {
-        const [nameRes, membershipsRes, sessionRes, onboardingRes] = await Promise.allSettled([
+        const [nameRes, membershipsRes, sessionRes, onboardingRes, avatarRes] = await Promise.allSettled([
           window.storage.get(COMMUNITY_USERNAME_KEY, false),
           window.storage.get(COMMUNITY_MEMBERSHIPS_KEY, false),
           window.storage.get(COMMUNITY_SESSION_KEY, false),
           window.storage.get(COMMUNITY_ONBOARDING_KEY, false),
+          window.storage.get(COMMUNITY_AVATAR_KEY, false),
         ]);
         if (cancelled) return;
         if (nameRes.status === "fulfilled" && nameRes.value) setCommunityUsername(nameRes.value.value);
@@ -4803,6 +4817,7 @@ const deleteCommunityPost = async (postId) => {
           const parsedSession = JSON.parse(sessionRes.value.value);
           if (parsedSession && parsedSession.token) setSession(parsedSession);
         }
+        if (avatarRes.status === "fulfilled" && avatarRes.value) setCommunityAvatar(avatarRes.value.value);
         if (onboardingRes.status === "fulfilled" && onboardingRes.value && onboardingRes.value.value === "1") {
           setOnboardingSeen(true);
         }
@@ -5603,6 +5618,71 @@ useEffect(() => {
     } catch (err) {}
   };
 
+  // Upload/replace the user's own profile picture.
+  // NOTE: this calls a backend route (PATCH /auth/avatar) that does not exist yet —
+  // see the note in chat for the exact contract the Worker needs to support.
+  const uploadCommunityAvatar = async (file) => {
+    if (!file || !session?.token) return;
+    setCommunityAvatarUploading(true);
+    try {
+      const dataUrl = await resizeImageFile(file, 300);
+      const data = await communityApi("/auth/avatar", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ avatar: dataUrl }),
+      });
+      setCommunityAvatar(data.avatar);
+      try { await window.storage.set(COMMUNITY_AVATAR_KEY, data.avatar, false); } catch (err) {}
+    } catch (err) {
+      setCommunityUsernameError(err.message || "Couldn't update your profile photo.");
+    } finally {
+      setCommunityAvatarUploading(false);
+    }
+  };
+
+  const handleCommunityAvatarChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (file) uploadCommunityAvatar(file);
+  };
+
+  // Change the account password.
+  // NOTE: this calls a backend route (POST /auth/change-password) that does not
+  // exist yet — see the note in chat for the exact contract the Worker needs to support.
+  const submitChangePassword = async () => {
+    setChangePasswordError("");
+    setChangePasswordMsg("");
+    if (!currentPasswordInput || !newPasswordInput) {
+      setChangePasswordError("Enter your current and new password.");
+      return;
+    }
+    if (newPasswordInput.length < 8) {
+      setChangePasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (!session?.token) {
+      setChangePasswordError("You need to be signed in.");
+      return;
+    }
+    setChangePasswordBusy(true);
+    try {
+      await communityApi("/auth/change-password", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ currentPassword: currentPasswordInput, newPassword: newPasswordInput }),
+      });
+      setChangePasswordMsg("Password updated.");
+      setCommunityPassword(newPasswordInput);
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setShowChangePassword(false);
+    } catch (err) {
+      setChangePasswordError(err.message || "Couldn't update your password.");
+    } finally {
+      setChangePasswordBusy(false);
+    }
+  };
+
   // Claim a unique username on the signed-in account. The backend rejects it if
   // another account already has it (case-insensitively) — this is what makes
   // usernames one-per-person instead of just a local display name.
@@ -5645,6 +5725,11 @@ useEffect(() => {
       // guessing one from the email — guessed names were never checked for
       // uniqueness against other accounts.
       await persistCommunityUsername(data.username || "");
+      setCommunityPassword(data.password || authPassword);
+      if (data.avatar) {
+        setCommunityAvatar(data.avatar);
+        try { await window.storage.set(COMMUNITY_AVATAR_KEY, data.avatar, false); } catch (err) {}
+      }
       setAuthPassword("");
     } catch (err) {
       setAuthError(err.message);
@@ -5652,6 +5737,32 @@ useEffect(() => {
       setAuthBusy(false);
     }
   };
+
+  // Refresh email / username / avatar / password from the server — the source
+  // of truth for the Profile screen, since none of that (besides email) lives
+  // in the locally-cached session.
+  const fetchAccountProfile = async (token) => {
+    if (!token) return;
+    try {
+      const data = await communityApi("/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (data.username) await persistCommunityUsername(data.username);
+      if (data.avatar) {
+        setCommunityAvatar(data.avatar);
+        try { await window.storage.set(COMMUNITY_AVATAR_KEY, data.avatar, false); } catch (err) {}
+      }
+      if (data.password) setCommunityPassword(data.password);
+    } catch (err) {
+      // non-critical — Profile just falls back to whatever's cached locally
+    }
+  };
+
+  useEffect(() => {
+    if (session?.token) fetchAccountProfile(session.token);
+    else { setCommunityPassword(""); setShowPasswordPlain(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
 
   const logout = async () => {
     try {
@@ -15837,28 +15948,7 @@ const renderSidebar = () => (
         background: palette.surface,
       }}
     >
-      <div className="flex items-center gap-3 p-5" style={{ borderBottom: `1px solid ${palette.border}` }}>
-        <Avatar name={communityUsername} size={44} ring />
-        <div className="flex-1 min-w-0">
-          <div style={{ color: palette.text, fontSize: "14.5px", fontWeight: 700 }} className="truncate">
-            {communityUsername}
-          </div>
-          <div style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
-            {myGroups.length} group{myGroups.length === 1 ? "" : "s"}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => { setCommunityUsernameDraft(communityUsername); setCommunityUsernameError(""); persistCommunityUsername(""); }}
-          className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
-          style={{ width: "30px", height: "30px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
-          aria-label="Edit profile"
-        >
-          <Pencil size={13} />
-        </button>
-      </div>
-
-      <div className="flex gap-2 px-3.5 pt-3.5 pb-2">
+      <div className="flex gap-2 px-3.5 pt-3.5 pb-2" style={{ paddingTop: "14px" }}>
         {[{ id: "mine", label: "Groups" }, { id: "discover", label: "Discover" }].map((t) => (
           <button
             key={t.id}
@@ -16257,37 +16347,6 @@ const renderSidebar = () => (
     const joined = myGroups;
     body = (
       <>
-        <div
-          className="rounded-3xl p-5 mb-5 relative overflow-hidden"
-          style={{
-            background: `linear-gradient(135deg, ${palette.gold}20, ${palette.surface} 65%)`,
-            border: `1px solid ${palette.gold}3A`,
-            boxShadow: palette.shadow,
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Avatar name={communityUsername} size={46} ring />
-              <div>
-                <div style={{ fontFamily: display, fontSize: "16px", fontWeight: 800, color: palette.text }}>
-                  {communityUsername}
-                </div>
-                <div style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
-                  {joined.length} group{joined.length === 1 ? "" : "s"} joined
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setCommunityUsernameDraft(communityUsername); setCommunityUsernameError(""); persistCommunityUsername(""); }}
-              className={`px-2.5 py-1.5 rounded-lg ${TAP}`}
-              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "10.5px", fontFamily: mono }}
-            >
-              Edit
-            </button>
-          </div>
-        </div>
-
         <div className="flex gap-2 mb-4">
           {[{ id: "mine", label: "My Groups" }, { id: "discover", label: "Discover" }].map((t) => {
             const active = communityLobbyTab === t.id;
@@ -17328,6 +17387,175 @@ const renderSidebar = () => (
       </div>
 
       <div className="p-5">
+        {/* PROFILE */}
+        {communityUsername && (
+          <SettingsSection icon={Users} title="Profile" defaultOpen>
+            <div
+              className="flex items-center gap-3 rounded-xl px-3 py-3 mb-3"
+              style={{ background: palette.field, border: `1px solid ${palette.border}` }}
+            >
+              <div className="relative flex-shrink-0">
+                <Avatar name={communityUsername} size={52} ring src={communityAvatar} />
+                <label
+                  htmlFor="profile-avatar-input"
+                  className={`absolute flex items-center justify-center rounded-full ${TAP}`}
+                  style={{
+                    width: "22px",
+                    height: "22px",
+                    bottom: "-2px",
+                    right: "-2px",
+                    background: palette.gold,
+                    color: palette.letterbox,
+                    border: `2px solid ${palette.field}`,
+                    cursor: communityAvatarUploading ? "default" : "pointer",
+                    opacity: communityAvatarUploading ? 0.6 : 1,
+                  }}
+                  aria-label="Change profile picture"
+                >
+                  <Camera size={11} />
+                </label>
+                <input
+                  id="profile-avatar-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCommunityAvatarChange}
+                  disabled={communityAvatarUploading}
+                  style={{ display: "none" }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <div className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>
+                    {communityUsername}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommunityUsernameDraft(communityUsername);
+                      setCommunityUsernameError("");
+                      persistCommunityUsername("");
+                      setActiveTab("community");
+                      setSettingsOpen(false);
+                    }}
+                    className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
+                    style={{ width: "22px", height: "22px", background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+                    aria-label="Edit name"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                </div>
+                <div style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
+                  {myGroups.length} group{myGroups.length === 1 ? "" : "s"}
+                  {communityAvatarUploading ? " · uploading photo…" : ""}
+                </div>
+              </div>
+            </div>
+
+            {session?.email && (
+              <>
+                <SettingsSubLabel>Email</SettingsSubLabel>
+                <div
+                  className="rounded-lg px-3 py-2.5 mb-3"
+                  style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "12px" }}
+                >
+                  {session.email}
+                </div>
+              </>
+            )}
+
+            <SettingsSubLabel>Password</SettingsSubLabel>
+            <div
+              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowPasswordPlain((v) => !v)}
+                className={`flex-1 text-left ${TAP}`}
+                style={{ color: palette.text, fontFamily: mono, fontSize: "13px", letterSpacing: showPasswordPlain ? "normal" : "0.1em" }}
+                aria-label={showPasswordPlain ? "Hide password" : "Show password"}
+              >
+                {communityPassword
+                  ? (showPasswordPlain ? communityPassword : "•".repeat(Math.max(8, communityPassword.length)))
+                  : "••••••••"}
+              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {communityPassword && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordPlain((v) => !v)}
+                    className={TAP}
+                    style={{ color: palette.textFaint, fontFamily: mono, fontSize: "11px" }}
+                  >
+                    {showPasswordPlain ? "Hide" : "Show"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setShowChangePassword((v) => !v); setChangePasswordError(""); setChangePasswordMsg(""); }}
+                  className={TAP}
+                  style={{ color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}
+                >
+                  {showChangePassword ? "Cancel" : "Change"}
+                </button>
+              </div>
+            </div>
+            {!communityPassword && (
+              <p className="text-xs mt-1.5" style={{ color: palette.textFaint }}>
+                Loading…
+              </p>
+            )}
+
+            {showChangePassword && (
+              <div className="rounded-xl p-3 mt-2" style={{ background: palette.field, border: `1px solid ${palette.gold}55` }}>
+                <input
+                  type="password"
+                  value={currentPasswordInput}
+                  onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                  placeholder="Current password"
+                  className="w-full rounded-lg px-2.5 py-2 mb-1.5 bg-transparent outline-none"
+                  style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
+                />
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="New password (8+ characters)"
+                  className="w-full rounded-lg px-2.5 py-2 mb-1.5 bg-transparent outline-none"
+                  style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
+                />
+                {changePasswordError && <p className="text-xs mb-1.5" style={{ color: palette.red }}>{changePasswordError}</p>}
+                {changePasswordMsg && <p className="text-xs mb-1.5" style={{ color: palette.green }}>{changePasswordMsg}</p>}
+                <button
+                  type="button"
+                  onClick={submitChangePassword}
+                  disabled={changePasswordBusy || !currentPasswordInput || !newPasswordInput}
+                  className={`w-full rounded-lg py-2 ${TAP}`}
+                  style={{
+                    background: currentPasswordInput && newPasswordInput ? palette.gold : palette.border,
+                    color: currentPasswordInput && newPasswordInput ? palette.letterbox : palette.textFaint,
+                    fontFamily: mono, fontSize: "12.5px", fontWeight: 700,
+                  }}
+                >
+                  {changePasswordBusy ? "Updating…" : "Update Password"}
+                </button>
+              </div>
+            )}
+
+            {session && (
+              <button
+                type="button"
+                onClick={() => { logout(); setSettingsOpen(false); }}
+                className={`w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-3 ${TAP}`}
+                style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "12.5px", fontWeight: 600 }}
+              >
+                <LogOut size={13} />
+                Log Out
+              </button>
+            )}
+          </SettingsSection>
+        )}
+
         {/* ACCOUNTS */}
         <SettingsSection icon={Building2} title="Accounts" defaultOpen>
           <SettingsSubLabel>Active Account</SettingsSubLabel>
@@ -18305,25 +18533,15 @@ const renderSidebar = () => (
           )}
         </SettingsSection>
 
-        {/* COMMUNITY */}
-        {session && (
+        {/* If signed in but no community username set yet, still offer sign-out here */}
+        {session && !communityUsername && (
           <SettingsSection icon={Users} title="Community">
             <SettingsSubLabel>Signed In As</SettingsSubLabel>
             <div
-              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 mb-3"
-              style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+              className="rounded-lg px-3 py-2.5 mb-3"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "12px" }}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <Avatar name={communityUsername || session.email} size={26} />
-                <div className="min-w-0">
-                  <div className="truncate" style={{ color: palette.text, fontSize: "12px", fontWeight: 600 }}>
-                    {communityUsername || session.email}
-                  </div>
-                  <div className="truncate" style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
-                    {session.email}
-                  </div>
-                </div>
-              </div>
+              {session.email}
             </div>
             <button
               type="button"

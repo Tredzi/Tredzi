@@ -3376,7 +3376,7 @@ function drawShareCard(canvas, {
   // ---- header ----
   drawLogoMark(80, 96, 26, c.gold);
   ctx.fillStyle = c.gold;
-  ctx.font = "600 26px monospace";
+  ctx.font = "600 26px 'IBM Plex Mono', monospace";
   ctx.textAlign = "left";
   ctx.fillText("TREDZI · WEEKLY RECAP", 130, 118);
 
@@ -3406,7 +3406,7 @@ function drawShareCard(canvas, {
     ctx.strokeStyle = gradeColor;
     ctx.stroke();
     ctx.fillStyle = gradeColor;
-    ctx.font = "700 44px monospace";
+    ctx.font = "700 44px 'IBM Plex Mono', monospace";
     ctx.textAlign = "center";
     ctx.fillText(grade, badgeCx, badgeCy + 16);
     ctx.fillStyle = c.textFaint;
@@ -3422,7 +3422,7 @@ function drawShareCard(canvas, {
   }
 
   ctx.fillStyle = c.text;
-  ctx.font = "700 58px monospace";
+  ctx.font = "700 58px 'IBM Plex Mono', monospace";
   ctx.fillText("MY TRADING WEEK", 80, traderAlias ? 226 : 196);
 
   ctx.fillStyle = c.textMuted;
@@ -3434,7 +3434,7 @@ function drawShareCard(canvas, {
   ctx.fillText("NET RETURN", 80, traderAlias ? 320 : 300);
 
   const numText = fmtPct(netPct);
-  ctx.font = "700 96px monospace";
+  ctx.font = "700 96px 'IBM Plex Mono', monospace";
   const numWidth = ctx.measureText(numText).width;
   const numGrad = ctx.createLinearGradient(80, 0, 80 + numWidth, 0);
   numGrad.addColorStop(0, lineColor);
@@ -3479,7 +3479,7 @@ function drawShareCard(canvas, {
 
   if (showDollarAmount && Number.isFinite(netDollar)) {
     ctx.fillStyle = c.textMuted;
-    ctx.font = "500 24px monospace";
+    ctx.font = "500 24px 'IBM Plex Mono', monospace";
     ctx.textAlign = "left";
     ctx.fillText(`${netDollar >= 0 ? "+" : "-"}$${fmtMoney(netDollar)}`, 80, 428);
   }
@@ -3621,7 +3621,7 @@ function drawShareCard(canvas, {
       ctx.fillText(s.label, x + chipW / 2, y + 34);
 
       ctx.fillStyle = s.color;
-      ctx.font = `700 ${s.small ? 26 : 32}px monospace`;
+      ctx.font = `700 ${s.small ? 26 : 32}px 'IBM Plex Mono', monospace`;
       ctx.fillText(s.value, x + chipW / 2, y + (s.small ? 74 : 76));
 
       if (s.sub) {
@@ -3717,7 +3717,7 @@ function drawShareCard(canvas, {
   roundRect(chartX, deeperTitleY - 20, 5, 26, 3);
   ctx.fill();
   ctx.fillStyle = c.textMuted;
-  ctx.font = "600 22px monospace";
+  ctx.font = "600 22px 'IBM Plex Mono', monospace";
   ctx.textAlign = "left";
   ctx.fillText("DEEPER STATS", chartX + 18, deeperTitleY);
 
@@ -3761,7 +3761,7 @@ function drawShareCard(canvas, {
   );
 
   ctx.fillStyle = c.textFaint;
-  ctx.font = "400 20px monospace";
+  ctx.font = "400 20px 'IBM Plex Mono', monospace";
   ctx.textAlign = "left";
   ctx.fillText(
     showDollarAmount ? "Process metrics, with the numbers to back it up." : "No dollar amounts \u2014 just the process.",
@@ -3771,7 +3771,7 @@ function drawShareCard(canvas, {
 
   ctx.textAlign = "right";
   ctx.fillStyle = c.goldBright;
-  ctx.font = "600 22px monospace";
+  ctx.font = "600 22px 'IBM Plex Mono', monospace";
   ctx.fillText("TREDZI", W - 80, H - 70);
   ctx.textAlign = "left";
 
@@ -7255,8 +7255,16 @@ if (lastTrade.pnl < 0 && Date.now() - lastTrade.ts <= RUNTIME.REVENGE_WINDOW_MS)
     setPs({ ...ps, preset, valuePerPip: defaults[preset] });
   };
 
-  const generateWeeklyShare = () => {
+  const generateWeeklyShare = async () => {
     setShareError("");
+    try {
+      if (document.fonts && document.fonts.load) {
+        await Promise.all([
+          document.fonts.load("700 96px 'IBM Plex Mono'"),
+          document.fonts.load("600 26px 'IBM Plex Mono'"),
+        ]);
+      }
+    } catch (e) {}
     const now = Date.now();
     const weekTrades = trades.filter((t) => now - t.ts <= WEEK_MS).sort((a, b) => a.ts - b.ts);
 
@@ -16616,6 +16624,8 @@ const renderSidebar = () => (
     >
 <style>{`
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  html, body, * { font-variant-numeric: normal; font-feature-settings: "zero" 0, "ss01" 0, "ss02" 0, "salt" 0; }
 
   * { -webkit-tap-highlight-color: transparent; }
   html, body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overscroll-behavior-y: none; scroll-behavior: smooth; }

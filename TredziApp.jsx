@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -4438,6 +4438,14 @@ const groupAvatarInputRef = useRef(null);
 const [groupAvatarMap, setGroupAvatarMap] = useState({});
 const [groupMembersList, setGroupMembersList] = useState([]);
 const [groupMembersLoaded, setGroupMembersLoaded] = useState(false);
+const [groupIdeasByGroup, setGroupIdeasByGroup] = useState({});
+const [newIdeaPair, setNewIdeaPair] = useState("");
+const [newIdeaDirection, setNewIdeaDirection] = useState("buy");
+const [newIdeaText, setNewIdeaText] = useState("");
+const [groupQuestionsByGroup, setGroupQuestionsByGroup] = useState({});
+const [newQuestionText, setNewQuestionText] = useState("");
+const [qaReplyDrafts, setQaReplyDrafts] = useState({});
+const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
 const [groupPosts, setGroupPosts] = useState([]);
 const [groupPostsLoaded, setGroupPostsLoaded] = useState(false);
@@ -4785,6 +4793,55 @@ const deleteCommunityPost = async (postId) => {
   } catch (err) {
     setCommunityApiError(err.message || "Couldn't delete that post.");
   }
+};
+
+// ---------- Trade Ideas (client-side, per-group; not yet backed by the Worker) ----------
+const createGroupIdea = () => {
+  if (!activeGroupId || (!newIdeaPair.trim() && !newIdeaText.trim())) return;
+  const idea = {
+    id: `idea_${Date.now()}`,
+    author: communityUsername,
+    pair: newIdeaPair.trim().toUpperCase(),
+    direction: newIdeaDirection,
+    text: newIdeaText.trim(),
+    ts: Date.now(),
+  };
+  setGroupIdeasByGroup((cur) => ({ ...cur, [activeGroupId]: [idea, ...(cur[activeGroupId] || [])] }));
+  setNewIdeaPair("");
+  setNewIdeaText("");
+  setNewIdeaDirection("buy");
+};
+
+const deleteGroupIdea = (ideaId) => {
+  if (!activeGroupId) return;
+  setGroupIdeasByGroup((cur) => ({ ...cur, [activeGroupId]: (cur[activeGroupId] || []).filter((i) => i.id !== ideaId) }));
+};
+
+// ---------- Q&A (client-side, per-group; not yet backed by the Worker) ----------
+const askGroupQuestion = () => {
+  if (!activeGroupId || !newQuestionText.trim()) return;
+  const q = { id: `q_${Date.now()}`, author: communityUsername, text: newQuestionText.trim(), ts: Date.now(), answers: [] };
+  setGroupQuestionsByGroup((cur) => ({ ...cur, [activeGroupId]: [q, ...(cur[activeGroupId] || [])] }));
+  setNewQuestionText("");
+  setQaOpenId(q.id);
+};
+
+const answerGroupQuestion = (questionId) => {
+  if (!activeGroupId) return;
+  const draft = (qaReplyDrafts[questionId] || "").trim();
+  if (!draft) return;
+  setGroupQuestionsByGroup((cur) => ({
+    ...cur,
+    [activeGroupId]: (cur[activeGroupId] || []).map((q) =>
+      q.id === questionId ? { ...q, answers: [...q.answers, { author: communityUsername, text: draft, ts: Date.now() }] } : q
+    ),
+  }));
+  setQaReplyDrafts((cur) => ({ ...cur, [questionId]: "" }));
+};
+
+const deleteGroupQuestion = (questionId) => {
+  if (!activeGroupId) return;
+  setGroupQuestionsByGroup((cur) => ({ ...cur, [activeGroupId]: (cur[activeGroupId] || []).filter((q) => q.id !== questionId) }));
 };
 
 
@@ -15277,6 +15334,28 @@ if (activeTab === "community") {
   const canPostSignal = isGroupOwner || isGroupAdmin || !!myMember?.isSignalProvider;
   const chatMessages = groupMessages.filter((m) => m.type !== "signal");
   const signalMessages = groupMessages.filter((m) => m.type === "signal");
+  const groupIdeas = groupIdeasByGroup[activeGroupId] || [];
+  const groupQuestions = groupQuestionsByGroup[activeGroupId] || [];
+  const signalProviderStats = (() => {
+    const map = {};
+    signalMessages.forEach((m) => {
+      const key = m.author || "unknown";
+      if (!map[key]) map[key] = { author: key, count: 0, buys: 0, sells: 0, rrSum: 0, rrCount: 0 };
+      map[key].count += 1;
+      if (m.direction === "sell") map[key].sells += 1; else map[key].buys += 1;
+      const entryNum = num(m.entry), slNum = num(m.sl), tpNum = num(m.tp);
+      if (entryNum && slNum && tpNum && entryNum !== slNum) {
+        map[key].rrSum += Math.abs(tpNum - entryNum) / Math.abs(entryNum - slNum);
+        map[key].rrCount += 1;
+      }
+    });
+    return Object.values(map).sort((a, b) => b.count - a.count);
+  })();
+  const groupAvgRR = (() => {
+    const withRR = signalProviderStats.filter((p) => p.rrCount > 0);
+    if (!withRR.length) return null;
+    return withRR.reduce((s, p) => s + p.rrSum / p.rrCount, 0) / withRR.length;
+  })();
     return (
       <div className="flex flex-col h-full" style={heightStyle}>
         {/* Header */}
@@ -15375,10 +15454,10 @@ if (activeTab === "community") {
             }}
             className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
             style={{ width: "34px", height: "34px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
-            aria-label="Manage group"
-            title="Manage group"
+            aria-label="Group menu"
+            title="Group info and members"
           >
-            <Users size={15} />
+            <Menu size={16} />
           </button>
         </div>
 
@@ -15408,8 +15487,8 @@ if (activeTab === "community") {
           );
         })()}
 
-<div className="flex gap-2 px-4 pt-4 pb-3 flex-shrink-0">
-  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "posts", label: "Announcements" }].map((t) => {
+<div className="flex gap-2 px-4 pt-4 pb-3 flex-shrink-0" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "posts", label: "Announcements" }].map((t) => {
             const active = communityPanelTab === t.id;
             return (
               <button
@@ -15418,6 +15497,8 @@ if (activeTab === "community") {
                 onClick={() => setCommunityPanelTab(t.id)}
                 className={`px-4 py-2 rounded-full transition-colors ${TAP}`}
                 style={{
+                  flexShrink: 0,
+                  whiteSpace: "nowrap",
                   background: active ? palette.gold : palette.field,
                   color: active ? palette.letterbox : palette.textMuted,
                   border: `1px solid ${active ? palette.gold : palette.border}`,
@@ -15519,6 +15600,38 @@ if (activeTab === "community") {
          ) : communityPanelTab === "signal" ? (
   <>
     <div className="flex-1 px-4 py-4" style={{ background: `radial-gradient(ellipse 800px 400px at 50% 0%, ${palette.gold}08, transparent), ${palette.bg}`, overflowY: "auto", minHeight: 0 }}>
+      {signalMessages.length > 0 && (
+        <div className="mb-4">
+          <div className="grid grid-cols-3 gap-2 mb-2.5">
+            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+              <div style={{ color: palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{signalMessages.length}</div>
+              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Signals</div>
+            </div>
+            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+              <div style={{ color: palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{signalProviderStats.length}</div>
+              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Providers</div>
+            </div>
+            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+              <div style={{ color: palette.gold, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{groupAvgRR !== null ? `1:${fmt(groupAvgRR, 1)}` : "—"}</div>
+              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Avg R:R</div>
+            </div>
+          </div>
+          {signalProviderStats.length > 0 && (
+            <div className="flex gap-2" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {signalProviderStats.map((p) => (
+                <div key={p.author} className="flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5" style={{ flexShrink: 0, background: palette.field, border: `1px solid ${palette.border}` }}>
+                  <Avatar name={p.author} size={20} src={avatarForAuthor(p.author)} />
+                  <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700, fontFamily: sans }}>{p.author}</span>
+                  <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>{p.count}</span>
+                  {p.rrCount > 0 && (
+                    <span style={{ color: palette.gold, fontSize: "10px", fontFamily: mono }}>1:{fmt(p.rrSum / p.rrCount, 1)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {!groupMessagesLoaded ? (
         <p className="text-xs" style={{ color: palette.textFaint, fontFamily: sans }}>Loading signals…</p>
       ) : signalMessages.length === 0 ? (
@@ -15735,6 +15848,178 @@ if (activeTab === "community") {
     )}
   </>
 
+        ) : communityPanelTab === "ideas" ? (
+          <>
+            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input type="text" value={newIdeaPair} onChange={(e) => setNewIdeaPair(e.target.value.toUpperCase())} placeholder="Pair (e.g. XAUUSD)"
+                    className="flex-1 rounded-xl px-3 py-2 bg-transparent outline-none"
+                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
+                  <div className="flex gap-1 flex-shrink-0">
+                    {["buy", "sell"].map((d) => (
+                      <button key={d} type="button" onClick={() => setNewIdeaDirection(d)} className={`px-3 py-2 rounded-xl ${TAP}`}
+                        style={{
+                          background: newIdeaDirection === d ? (d === "sell" ? palette.red : palette.green) : palette.field,
+                          color: newIdeaDirection === d ? "#FFFFFF" : palette.textMuted,
+                          border: `1px solid ${newIdeaDirection === d ? "transparent" : palette.border}`,
+                          fontFamily: sans, fontSize: "11px", textTransform: "uppercase", fontWeight: 700,
+                        }}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea value={newIdeaText} onChange={(e) => setNewIdeaText(e.target.value)}
+                  placeholder="What's the setup? Bias, key levels, invalidation…" rows={2}
+                  className="w-full bg-transparent outline-none mb-2"
+                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
+                <div className="flex justify-end">
+                  <button type="button" onClick={createGroupIdea}
+                    disabled={!newIdeaPair.trim() && !newIdeaText.trim()}
+                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
+                    style={{
+                      background: (newIdeaPair.trim() || newIdeaText.trim()) ? palette.gold : palette.border,
+                      color: (newIdeaPair.trim() || newIdeaText.trim()) ? palette.letterbox : palette.textFaint,
+                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                    }}>
+                    Share idea
+                  </button>
+                </div>
+              </div>
+
+              {groupIdeas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                    <Lightbulb size={20} style={{ color: palette.gold }} />
+                  </span>
+                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                    No trade ideas yet. Share your analysis above — separate from live Signal calls, this is for reasoning and discussion.
+                  </p>
+                </div>
+              ) : (
+                groupIdeas.map((idea) => {
+                  const isSell = idea.direction === "sell";
+                  const dirColor = isSell ? palette.red : palette.green;
+                  const canDelete = idea.author === communityUsername || isGroupOwner;
+                  return (
+                    <div key={idea.id} className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar name={idea.author} size={22} src={avatarForAuthor(idea.author)} />
+                          <span style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 700, fontFamily: sans }}>{idea.author}</span>
+                          <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
+                            {new Date(idea.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        {canDelete && (
+                          <button type="button" onClick={() => deleteGroupIdea(idea.id)} className={TAP} style={{ color: palette.textFaint, flexShrink: 0 }} aria-label="Delete idea">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                      {idea.pair && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <span style={{ fontFamily: display, fontSize: "15px", fontWeight: 800, color: palette.text }}>{idea.pair}</span>
+                          <span style={{ fontSize: "10px", fontFamily: sans, fontWeight: 800, color: dirColor, background: `${dirColor}1A`, borderRadius: "6px", padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            {isSell ? "↓ Short" : "↑ Long"}
+                          </span>
+                        </div>
+                      )}
+                      {idea.text && <p className="text-sm" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{idea.text}</p>}
+                    </div>
+                  );
+                })
+              )}
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Ideas are shared with this group only, for this session.</p>
+            </div>
+          </>
+
+        ) : communityPanelTab === "qa" ? (
+          <>
+            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                <textarea value={newQuestionText} onChange={(e) => setNewQuestionText(e.target.value)}
+                  placeholder="Ask the group something…" rows={2}
+                  className="w-full bg-transparent outline-none mb-2"
+                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
+                <div className="flex justify-end">
+                  <button type="button" onClick={askGroupQuestion} disabled={!newQuestionText.trim()}
+                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
+                    style={{
+                      background: newQuestionText.trim() ? palette.gold : palette.border,
+                      color: newQuestionText.trim() ? palette.letterbox : palette.textFaint,
+                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                    }}>
+                    Ask
+                  </button>
+                </div>
+              </div>
+
+              {groupQuestions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                    <HelpCircle size={20} style={{ color: palette.gold }} />
+                  </span>
+                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                    No questions yet. Ask something above — keeps troubleshooting out of the main chat.
+                  </p>
+                </div>
+              ) : (
+                groupQuestions.map((q) => {
+                  const isOpen = qaOpenId === q.id;
+                  const canDelete = q.author === communityUsername || isGroupOwner;
+                  return (
+                    <div key={q.id} className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <button type="button" onClick={() => setQaOpenId(isOpen ? null : q.id)} className={`flex-1 min-w-0 text-left ${TAP}`}>
+                          <p className="text-sm" style={{ color: palette.text, fontWeight: 600, lineHeight: 1.4 }}>{q.text}</p>
+                        </button>
+                        {canDelete && (
+                          <button type="button" onClick={() => deleteGroupQuestion(q.id)} className={TAP} style={{ color: palette.textFaint, flexShrink: 0 }} aria-label="Delete question">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>asked by {q.author}</span>
+                        <button type="button" onClick={() => setQaOpenId(isOpen ? null : q.id)} className={TAP} style={{ color: palette.gold, fontSize: "10.5px", fontFamily: mono, fontWeight: 700 }}>
+                          {q.answers.length} answer{q.answers.length === 1 ? "" : "s"}
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div style={{ borderTop: `1px solid ${palette.border}`, paddingTop: "10px" }}>
+                          {q.answers.map((a, i) => (
+                            <div key={i} className="flex items-start gap-2 mb-2">
+                              <Avatar name={a.author} size={18} src={avatarForAuthor(a.author)} />
+                              <div className="min-w-0">
+                                <span style={{ color: palette.textMuted, fontSize: "11px", fontWeight: 700, marginRight: "6px" }}>{a.author}</span>
+                                <span style={{ color: palette.text, fontSize: "12.5px" }}>{a.text}</span>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-2 mt-2">
+                            <input type="text" value={qaReplyDrafts[q.id] || ""} onChange={(e) => setQaReplyDrafts((cur) => ({ ...cur, [q.id]: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); answerGroupQuestion(q.id); } }}
+                              placeholder="Write an answer…"
+                              className="flex-1 rounded-lg px-3 py-2 bg-transparent outline-none"
+                              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12.5px" }} />
+                            <button type="button" onClick={() => answerGroupQuestion(q.id)} disabled={!(qaReplyDrafts[q.id] || "").trim()}
+                              className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+                              style={{ width: "32px", height: "32px", background: palette.gold, color: palette.letterbox, opacity: (qaReplyDrafts[q.id] || "").trim() ? 1 : 0.5 }}
+                              aria-label="Send answer">
+                              <Send size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Questions are shared with this group only, for this session.</p>
+            </div>
+          </>
 
         ) : (
           <>
@@ -19159,6 +19444,27 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
 
           {groupManageTab === "members" ? (
             <>
+              <div className="rounded-xl p-3.5 mb-4" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <Avatar name={membership?.name || "?"} size={40} src={groupAvatarMap[activeGroupId]} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{membership?.name || "Group"}</div>
+                    {membership?.description && (
+                      <div className="truncate" style={{ color: palette.textMuted, fontSize: "11.5px" }}>{membership.description}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg py-2 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+                    <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupMembersList.length || 0}</div>
+                    <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Members</div>
+                  </div>
+                  <div className="rounded-lg py-2 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+                    <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupMessages.length || 0}</div>
+                    <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Messages</div>
+                  </div>
+                </div>
+              </div>
               {!groupMembersLoaded ? (
                 <p className="text-xs" style={{ color: palette.textFaint }}>Loading members…</p>
               ) : (

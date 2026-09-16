@@ -4389,6 +4389,7 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [changePasswordBusy, setChangePasswordBusy] = useState(false);
   const [communityPassword, setCommunityPassword] = useState("");
   const [showPasswordPlain, setShowPasswordPlain] = useState(false);
+  const [accountProfileError, setAccountProfileError] = useState("");
 
   // --- Onboarding carousel state ---
   const [onboardingSeen, setOnboardingSeen] = useState(false);
@@ -4651,6 +4652,20 @@ useEffect(() => {
   return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeGroupId]);
+
+// Username -> profile photo, for showing everyone's real avatar in chat
+// (not just group members you happen to have loaded avatars for locally).
+// Own username always prefers the live communityAvatar so a just-uploaded
+// photo shows immediately without waiting on a member-list refetch.
+const memberAvatarByUsername = useMemo(() => {
+  const map = {};
+  for (const m of groupMembersList) {
+    if (m.avatar) map[m.username] = m.avatar;
+  }
+  if (communityUsername && communityAvatar) map[communityUsername] = communityAvatar;
+  return map;
+}, [groupMembersList, communityUsername, communityAvatar]);
+const avatarForAuthor = (author) => memberAvatarByUsername[author] || undefined;
 
 useEffect(() => {
   if (!activeGroupId || communityPanelTab !== "posts") return;
@@ -5743,6 +5758,7 @@ useEffect(() => {
   // in the locally-cached session.
   const fetchAccountProfile = async (token) => {
     if (!token) return;
+    setAccountProfileError("");
     try {
       const data = await communityApi("/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
@@ -5754,7 +5770,9 @@ useEffect(() => {
       }
       if (data.password) setCommunityPassword(data.password);
     } catch (err) {
-      // non-critical — Profile just falls back to whatever's cached locally
+      // Most likely cause: the backend hasn't been redeployed with the
+      // /auth/me route (and migration_profile.sql) yet.
+      setAccountProfileError(err.message || "Couldn't load your account details.");
     }
   };
 
@@ -15313,7 +15331,7 @@ if (activeTab === "community") {
                         zIndex: 4 - i,
                       }}
                     >
-                      <Avatar name={mem.username} size={18} />
+                      <Avatar name={mem.username} size={18} src={mem.avatar} />
                     </span>
                   ))}
                   {groupMembersList.length > 4 && (
@@ -15532,7 +15550,7 @@ if (activeTab === "community") {
                 <div style={{ width: "4px", flexShrink: 0, background: dirColor }} />
                 <div className="flex-1 min-w-0" style={{ padding: "12px 14px" }}>
                   <div className="flex items-center gap-2 mb-2.5">
-                    <Avatar name={m.author} size={22} />
+                    <Avatar name={m.author} size={22} src={avatarForAuthor(m.author)} />
                     <span style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 600, fontFamily: sans }}>{m.author}</span>
                     <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
                       {new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -15783,7 +15801,7 @@ if (activeTab === "community") {
                     )}
                     {!isMe && (
                       <span style={{ width: "28px", flexShrink: 0 }}>
-                        {!grouped && <Avatar name={m.author} size={28} />}
+                        {!grouped && <Avatar name={m.author} size={28} src={avatarForAuthor(m.author)} />}
                       </span>
                     )}
                     <div style={{ maxWidth: isDesktop ? "62%" : "78%" }}>
@@ -17501,8 +17519,22 @@ const renderSidebar = () => (
               </div>
             </div>
             {!communityPassword && (
-              <p className="text-xs mt-1.5" style={{ color: palette.textFaint }}>
-                Loading…
+              <p className="text-xs mt-1.5" style={{ color: accountProfileError ? palette.red : palette.textFaint }}>
+                {accountProfileError ? (
+                  <>
+                    {accountProfileError}{" "}
+                    <button
+                      type="button"
+                      onClick={() => fetchAccountProfile(session?.token)}
+                      className={TAP}
+                      style={{ color: palette.gold, fontFamily: mono, fontWeight: 700, textDecoration: "underline" }}
+                    >
+                      Retry
+                    </button>
+                  </>
+                ) : (
+                  "Loading…"
+                )}
               </p>
             )}
 
@@ -19141,7 +19173,7 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
         border: `1px solid ${mem.isOwner ? palette.gold + "55" : (memberIsAdmin || memberIsSignal) ? palette.green + "55" : palette.border}`,
       }}>
       <div className="flex items-center gap-2">
-        <Avatar name={mem.username} size={26} />
+        <Avatar name={mem.username} size={26} src={mem.avatar} />
         <div>
           <div style={{ color: palette.text, fontSize: "13px", fontWeight: mem.isOwner || memberIsAdmin ? 600 : 400 }}>
             {mem.username}

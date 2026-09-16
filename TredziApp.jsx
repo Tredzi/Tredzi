@@ -4461,6 +4461,24 @@ const [newPostText, setNewPostText] = useState("");
 const [newPostImage, setNewPostImage] = useState(null);
 const [postImageUploading, setPostImageUploading] = useState(false);
 const postImageInputRef = useRef(null);
+const [groupVault, setGroupVault] = useState([]);
+const [groupVaultLoaded, setGroupVaultLoaded] = useState(false);
+const [newVaultTitle, setNewVaultTitle] = useState("");
+const [newVaultUrl, setNewVaultUrl] = useState("");
+const [newVaultText, setNewVaultText] = useState("");
+const [groupWall, setGroupWall] = useState([]);
+const [groupWallLoaded, setGroupWallLoaded] = useState(false);
+const [newWallText, setNewWallText] = useState("");
+const [myWallIds, setMyWallIds] = useState([]);
+const [relatedWallIds, setRelatedWallIds] = useState([]);
+const [groupFeed, setGroupFeed] = useState([]);
+const [groupFeedLoaded, setGroupFeedLoaded] = useState(false);
+const [newFeedText, setNewFeedText] = useState("");
+const [newFeedPnl, setNewFeedPnl] = useState("");
+const [newFeedImage, setNewFeedImage] = useState(null);
+const [feedImageUploading, setFeedImageUploading] = useState(false);
+const feedImageInputRef = useRef(null);
+const [likedFeedIds, setLikedFeedIds] = useState([]);
 const [pinnedMessageId, setPinnedMessageId] = useState(null);
 const [replyingTo, setReplyingTo] = useState(null); // { id, author, preview }
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
@@ -4732,35 +4750,6 @@ const getCommunityMemberStats = (member) => {
   };
 };
 
-// Push my own computed stats up to the active group so other members' "Member profile"
-// cards can show them (server has no way to compute these itself — it only stores
-// whatever the client sends). Debounced slightly so rapid trade edits don't spam the API.
-useEffect(() => {
-  if (!activeGroupId || !communityUsername) return;
-  const membership = myGroups.find((g) => g.id === activeGroupId);
-  if (!membership) return;
-  const stats = getCommunityMemberStats({ username: communityUsername });
-  // Don't publish a zero-trade row — the server treats any synced row as "shared",
-  // so wait until there's something real to show.
-  if (!stats.trades) return;
-  const timer = setTimeout(() => {
-    communityApi(`/groups/${activeGroupId}/members/me/stats`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${membership.token}` },
-      body: JSON.stringify({
-        winRate: stats.winRate,
-        pnlPct: stats.pnlPct,
-        streak: stats.streak,
-        trades: stats.trades,
-        avgR: stats.avgR,
-        equityCurve: stats.equityCurve,
-      }),
-    }).catch(() => {});
-  }, 1200);
-  return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeGroupId, communityUsername, trades, startingBalance, myGroups]);
-
 useEffect(() => {
   if (!activeGroupId || communityPanelTab !== "posts") return;
   const membership = myGroups.find((g) => g.id === activeGroupId);
@@ -4821,6 +4810,72 @@ useEffect(() => {
       if (!cancelled) setCommunityApiError(err.message);
     } finally {
       if (!cancelled) setGroupQuestionsLoaded(true);
+    }
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "vault") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupVaultLoaded(false);
+  (async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/vault`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setGroupVault(data.items || []);
+    } catch (err) {
+      if (!cancelled) setCommunityApiError(err.message);
+    } finally {
+      if (!cancelled) setGroupVaultLoaded(true);
+    }
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "wall") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupWallLoaded(false);
+  (async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/wall`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setGroupWall(data.entries || []);
+    } catch (err) {
+      if (!cancelled) setCommunityApiError(err.message);
+    } finally {
+      if (!cancelled) setGroupWallLoaded(true);
+    }
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "feed") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupFeedLoaded(false);
+  (async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/feed`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setGroupFeed(data.posts || []);
+    } catch (err) {
+      if (!cancelled) setCommunityApiError(err.message);
+    } finally {
+      if (!cancelled) setGroupFeedLoaded(true);
     }
   })();
   return () => { cancelled = true; };
@@ -5034,6 +5089,164 @@ const deleteGroupQuestion = async (questionId) => {
     setGroupQuestions((cur) => cur.filter((q) => q.id !== questionId));
   } catch (err) {
     setCommunityApiError(err.message || "Couldn't delete that question.");
+  }
+};
+
+// ---------- Resource vault (real, backed by the Worker + D1) ----------
+const createVaultItem = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  if (!newVaultTitle.trim()) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/vault`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ title: newVaultTitle.trim(), url: newVaultUrl.trim(), text: newVaultText.trim() }),
+    });
+    setNewVaultTitle("");
+    setNewVaultUrl("");
+    setNewVaultText("");
+    const data = await communityApi(`/groups/${activeGroupId}/vault`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupVault(data.items || []);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't save that to the vault.");
+  }
+};
+
+const deleteVaultItem = async (itemId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/vault/${itemId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupVault((cur) => cur.filter((i) => i.id !== itemId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't remove that item.");
+  }
+};
+
+// ---------- Anonymous mistake wall (real, backed by the Worker + D1) ----------
+const postWallEntry = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership || !newWallText.trim()) return;
+  try {
+    const res = await communityApi(`/groups/${activeGroupId}/wall`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ text: newWallText.trim() }),
+    });
+    setNewWallText("");
+    if (res && res.id) setMyWallIds((cur) => [...cur, res.id]);
+    const data = await communityApi(`/groups/${activeGroupId}/wall`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupWall(data.entries || []);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't post that.");
+  }
+};
+
+const relateWallEntry = async (entryId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership || relatedWallIds.includes(entryId)) return;
+  setRelatedWallIds((cur) => [...cur, entryId]);
+  setGroupWall((cur) => cur.map((e) => (e.id === entryId ? { ...e, relateCount: (e.relateCount || 0) + 1 } : e)));
+  try {
+    await communityApi(`/groups/${activeGroupId}/wall/${entryId}/relate`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+  } catch (err) {
+    // silent — a failed relate tap isn't worth surfacing an error banner for
+  }
+};
+
+const deleteWallEntry = async (entryId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/wall/${entryId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupWall((cur) => cur.filter((e) => e.id !== entryId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't remove that entry.");
+  }
+};
+
+// ---------- Activity feed (real, backed by the Worker + D1) ----------
+const uploadFeedImage = async (file) => {
+  if (!file) return;
+  setFeedImageUploading(true);
+  try {
+    const dataUrl = await resizeImageFile(file, 800);
+    setNewFeedImage(dataUrl);
+  } catch (err) {
+    setCommunityApiError("Couldn't attach that image.");
+  } finally {
+    setFeedImageUploading(false);
+  }
+};
+
+const handleFeedImageChange = (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (file) uploadFeedImage(file);
+};
+
+const createFeedPost = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  if (!newFeedText.trim() && !newFeedImage) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/feed`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ text: newFeedText.trim(), pnl: newFeedPnl.trim(), image: newFeedImage }),
+    });
+    setNewFeedText("");
+    setNewFeedPnl("");
+    setNewFeedImage(null);
+    const data = await communityApi(`/groups/${activeGroupId}/feed`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupFeed(data.posts || []);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't share that.");
+  }
+};
+
+const likeFeedPost = async (postId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership || likedFeedIds.includes(postId)) return;
+  setLikedFeedIds((cur) => [...cur, postId]);
+  setGroupFeed((cur) => cur.map((p) => (p.id === postId ? { ...p, likeCount: (p.likeCount || 0) + 1 } : p)));
+  try {
+    await communityApi(`/groups/${activeGroupId}/feed/${postId}/like`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+  } catch (err) {
+    // silent — a failed like tap isn't worth surfacing an error banner for
+  }
+};
+
+const deleteFeedPost = async (postId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/feed/${postId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupFeed((cur) => cur.filter((p) => p.id !== postId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't delete that post.");
   }
 };
 
@@ -15639,7 +15852,7 @@ if (activeTab === "community") {
         })()}
 
 <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "posts", label: "Announcements" }, { id: "leaderboard", label: "Leaderboard" }].map((t) => {
+  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "vault", label: "Vault" }, { id: "wall", label: "Wall" }, { id: "posts", label: "Announcements" }, { id: "leaderboard", label: "Leaderboard" }].map((t) => {
             const active = communityPanelTab === t.id;
             return (
               <button
@@ -16264,6 +16477,245 @@ if (activeTab === "community") {
                 })
               )}
               <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Questions are shared with this group.</p>
+            </div>
+          </>
+
+        ) : communityPanelTab === "vault" ? (
+          <>
+            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                <input type="text" value={newVaultTitle} onChange={(e) => setNewVaultTitle(e.target.value)} placeholder="Title (e.g. Pre-trade checklist)"
+                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none mb-2.5"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px" }} />
+                <input type="text" value={newVaultUrl} onChange={(e) => setNewVaultUrl(e.target.value)} placeholder="Link (optional)"
+                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none mb-2.5"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
+                <textarea value={newVaultText} onChange={(e) => setNewVaultText(e.target.value)}
+                  placeholder="What is this and when should the group use it?" rows={2}
+                  className="w-full bg-transparent outline-none mb-2"
+                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
+                <div className="flex justify-end">
+                  <button type="button" onClick={createVaultItem} disabled={!newVaultTitle.trim()}
+                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
+                    style={{
+                      background: newVaultTitle.trim() ? palette.gold : palette.border,
+                      color: newVaultTitle.trim() ? palette.letterbox : palette.textFaint,
+                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                    }}>
+                    Add to vault
+                  </button>
+                </div>
+              </div>
+
+              {!groupVaultLoaded ? (
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading vault…</p>
+              ) : groupVault.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                    <BookOpen size={20} style={{ color: palette.gold }} />
+                  </span>
+                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                    No resources yet. Add a checklist, strategy doc, or reference link above — it stays pinned here, separate from the chatter in Chat and Feed.
+                  </p>
+                </div>
+              ) : (
+                groupVault.map((item) => {
+                  const canDelete = item.author === communityUsername || isGroupOwner;
+                  return (
+                    <div key={item.id} className="rounded-2xl p-3.5 mb-3 flex items-start gap-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <span className="flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: "34px", height: "34px", background: palette.field, color: palette.gold }}>
+                        <BookOpen size={16} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          {item.url ? (
+                            <a href={item.url} target="_blank" rel="noreferrer" style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700, textDecoration: "none" }}>
+                              {item.title}
+                            </a>
+                          ) : (
+                            <span style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{item.title}</span>
+                          )}
+                          {canDelete && (
+                            <button type="button" onClick={() => deleteVaultItem(item.id)} className={TAP} style={{ color: palette.textFaint, flexShrink: 0 }} aria-label="Remove from vault">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                        {item.text && <p className="text-sm mt-1" style={{ color: palette.textMuted, lineHeight: 1.5 }}>{item.text}</p>}
+                        <div className="mt-1.5" style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
+                          Added by {item.author}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>The vault is shared with this group.</p>
+            </div>
+          </>
+
+        ) : communityPanelTab === "wall" ? (
+          <>
+            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                <textarea value={newWallText} onChange={(e) => setNewWallText(e.target.value)}
+                  placeholder="Admit a mistake — oversized, moved a stop, revenge trade…" rows={2}
+                  className="w-full bg-transparent outline-none mb-2"
+                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5" style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
+                    <ShieldAlert size={12} /> Posted anonymously
+                  </span>
+                  <button type="button" onClick={postWallEntry} disabled={!newWallText.trim()}
+                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
+                    style={{
+                      background: newWallText.trim() ? palette.gold : palette.border,
+                      color: newWallText.trim() ? palette.letterbox : palette.textFaint,
+                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                    }}>
+                    Post anonymously
+                  </button>
+                </div>
+              </div>
+
+              {!groupWallLoaded ? (
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading the wall…</p>
+              ) : groupWall.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                    <AlertTriangle size={20} style={{ color: palette.gold }} />
+                  </span>
+                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                    Nothing here yet. Nobody sees who posts what — it's a place to admit a mistake without the status cost.
+                  </p>
+                </div>
+              ) : (
+                groupWall.map((entry) => {
+                  const canDelete = isGroupOwner || myWallIds.includes(entry.id);
+                  const related = relatedWallIds.includes(entry.id);
+                  return (
+                    <div key={entry.id} className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <p className="text-sm mb-2.5" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{entry.text}</p>
+                      <div className="flex items-center justify-between">
+                        <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
+                          {new Date(entry.ts).toLocaleDateString([], { month: "short", day: "numeric" })}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <button type="button" onClick={() => relateWallEntry(entry.id)} disabled={related} className={TAP}
+                            style={{ color: related ? palette.gold : palette.textFaint, fontSize: "11px", fontFamily: mono, background: "none", border: "none", padding: 0 }}>
+                            🤝 {entry.relateCount || 0} relate
+                          </button>
+                          {canDelete && (
+                            <button type="button" onClick={() => deleteWallEntry(entry.id)} className={TAP} style={{ color: palette.textFaint }} aria-label="Remove entry">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Entries are anonymous to other members — only you and the group owner can remove your own.</p>
+            </div>
+          </>
+
+        ) : communityPanelTab === "feed" ? (
+          <>
+            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                <textarea value={newFeedText} onChange={(e) => setNewFeedText(e.target.value)}
+                  placeholder="Share a trade with the group…" rows={2}
+                  className="w-full bg-transparent outline-none mb-2"
+                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
+                <input type="text" value={newFeedPnl} onChange={(e) => setNewFeedPnl(e.target.value)} placeholder="Result (optional, e.g. +2.4R)"
+                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none mb-2"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
+                {newFeedImage && (
+                  <div className="relative inline-block mb-2">
+                    <img src={newFeedImage} alt="Feed attachment" className="rounded-lg" style={{ width: "96px", height: "96px", objectFit: "cover", border: `1px solid ${palette.border}` }} />
+                    <button type="button" onClick={() => setNewFeedImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "18px", height: "18px", background: palette.red, color: "#FFFFFF" }} aria-label="Remove image">
+                      <X size={11} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => feedImageInputRef.current && feedImageInputRef.current.click()}
+                    disabled={feedImageUploading}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${TAP}`}
+                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "11.5px", fontFamily: mono }}
+                  >
+                    <Camera size={13} />
+                    {feedImageUploading ? "Uploading…" : "Add screenshot"}
+                  </button>
+                  <button type="button" onClick={createFeedPost}
+                    disabled={!newFeedText.trim() && !newFeedImage}
+                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
+                    style={{
+                      background: (newFeedText.trim() || newFeedImage) ? palette.gold : palette.border,
+                      color: (newFeedText.trim() || newFeedImage) ? palette.letterbox : palette.textFaint,
+                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                    }}>
+                    Share
+                  </button>
+                </div>
+                <input ref={feedImageInputRef} type="file" accept="image/*" onChange={handleFeedImageChange} style={{ display: "none" }} />
+              </div>
+
+              {!groupFeedLoaded ? (
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading feed…</p>
+              ) : groupFeed.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                    <Newspaper size={20} style={{ color: palette.gold }} />
+                  </span>
+                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                    No activity yet. Share a trade you closed — a quick note is enough, the result tag is optional.
+                  </p>
+                </div>
+              ) : (
+                groupFeed.map((p) => {
+                  const canDelete = p.author === communityUsername || isGroupOwner;
+                  const liked = likedFeedIds.includes(p.id);
+                  const pnlPositive = p.pnl && !p.pnl.trim().startsWith("-");
+                  return (
+                    <div key={p.id} className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar name={p.author} size={26} src={avatarForAuthor(p.author)} />
+                          <button type="button" onClick={() => openCommunityMemberProfile(p.author)} className={TAP} style={{ color: palette.gold, fontSize: "12px", fontWeight: 700, background: "none", border: "none", padding: 0 }}>{p.author}</button>
+                          <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
+                            {new Date(p.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {p.pnl && (
+                            <span style={{
+                              background: pnlPositive ? `${palette.green}22` : `${palette.red}22`,
+                              color: pnlPositive ? palette.green : palette.red,
+                              fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", fontFamily: mono,
+                            }}>{p.pnl}</span>
+                          )}
+                          {canDelete && (
+                            <button type="button" onClick={() => deleteFeedPost(p.id)} className={TAP} style={{ color: palette.textFaint }} aria-label="Delete post">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {p.text && <p className="text-sm mb-2" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.text}</p>}
+                      {p.image && <img src={p.image} alt="Feed attachment" className="rounded-xl w-full mb-2" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
+                      <button type="button" onClick={() => likeFeedPost(p.id)} disabled={liked} className={TAP}
+                        style={{ color: liked ? palette.gold : palette.textFaint, fontSize: "11px", fontFamily: mono, background: "none", border: "none", padding: 0 }}>
+                        ♥ {p.likeCount || 0}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Feed posts are shared with this group.</p>
             </div>
           </>
 

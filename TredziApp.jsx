@@ -4438,11 +4438,16 @@ const groupAvatarInputRef = useRef(null);
 const [groupAvatarMap, setGroupAvatarMap] = useState({});
 const [groupMembersList, setGroupMembersList] = useState([]);
 const [groupMembersLoaded, setGroupMembersLoaded] = useState(false);
-const [groupIdeasByGroup, setGroupIdeasByGroup] = useState({});
+const [groupInfo, setGroupInfo] = useState(null);
+const [groupIdeas, setGroupIdeas] = useState([]);
+const [groupIdeasLoaded, setGroupIdeasLoaded] = useState(false);
 const [newIdeaPair, setNewIdeaPair] = useState("");
-const [newIdeaDirection, setNewIdeaDirection] = useState("buy");
 const [newIdeaText, setNewIdeaText] = useState("");
-const [groupQuestionsByGroup, setGroupQuestionsByGroup] = useState({});
+const [newIdeaImage, setNewIdeaImage] = useState(null);
+const [ideaImageUploading, setIdeaImageUploading] = useState(false);
+const ideaImageInputRef = useRef(null);
+const [groupQuestions, setGroupQuestions] = useState([]);
+const [groupQuestionsLoaded, setGroupQuestionsLoaded] = useState(false);
 const [newQuestionText, setNewQuestionText] = useState("");
 const [qaReplyDrafts, setQaReplyDrafts] = useState({});
 const [qaOpenId, setQaOpenId] = useState(null);
@@ -4479,6 +4484,7 @@ const renameCommunityGroup = async () => {
       body: JSON.stringify({ name, description: manageDescDraft.trim() }),
     });
     await persistMyGroups(myGroups.map((g) => g.id === activeGroupId ? { ...g, name, description: manageDescDraft.trim() } : g));
+    setGroupInfo((cur) => cur ? { ...cur, name, description: manageDescDraft.trim() } : cur);
     setManageMsg("Group updated.");
   } catch (err) {
     setManageMsg(err.message || "Couldn't update the group.");
@@ -4631,6 +4637,7 @@ useEffect(() => {
     setGroupMembersList([]);
     setGroupMembersLoaded(false);
     setPinnedMessageId(null);
+    setGroupInfo(null);
     return;
   }
 
@@ -4644,6 +4651,7 @@ useEffect(() => {
       });
       if (!cancelled) {
         setPinnedMessageId(data.pinned_message_id || null);
+        setGroupInfo(data);
         if (data.avatar) setGroupAvatarMap((cur) => ({ ...cur, [activeGroupId]: data.avatar }));
       }
     } catch (err) {}
@@ -4691,6 +4699,50 @@ useEffect(() => {
       if (!cancelled) setCommunityApiError(err.message);
     } finally {
       if (!cancelled) setGroupPostsLoaded(true);
+    }
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "ideas") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupIdeasLoaded(false);
+  (async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/ideas`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setGroupIdeas(data.ideas || []);
+    } catch (err) {
+      if (!cancelled) setCommunityApiError(err.message);
+    } finally {
+      if (!cancelled) setGroupIdeasLoaded(true);
+    }
+  })();
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "qa") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupQuestionsLoaded(false);
+  (async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/questions`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setGroupQuestions(data.questions || []);
+    } catch (err) {
+      if (!cancelled) setCommunityApiError(err.message);
+    } finally {
+      if (!cancelled) setGroupQuestionsLoaded(true);
     }
   })();
   return () => { cancelled = true; };
@@ -4795,53 +4847,116 @@ const deleteCommunityPost = async (postId) => {
   }
 };
 
-// ---------- Trade Ideas (client-side, per-group; not yet backed by the Worker) ----------
-const createGroupIdea = () => {
-  if (!activeGroupId || (!newIdeaPair.trim() && !newIdeaText.trim())) return;
-  const idea = {
-    id: `idea_${Date.now()}`,
-    author: communityUsername,
-    pair: newIdeaPair.trim().toUpperCase(),
-    direction: newIdeaDirection,
-    text: newIdeaText.trim(),
-    ts: Date.now(),
-  };
-  setGroupIdeasByGroup((cur) => ({ ...cur, [activeGroupId]: [idea, ...(cur[activeGroupId] || [])] }));
-  setNewIdeaPair("");
-  setNewIdeaText("");
-  setNewIdeaDirection("buy");
+// ---------- Trade Ideas (real, backed by the Worker + D1) ----------
+const uploadIdeaImage = async (file) => {
+  if (!file) return;
+  setIdeaImageUploading(true);
+  try {
+    const dataUrl = await resizeImageFile(file, 800);
+    setNewIdeaImage(dataUrl);
+  } catch (err) {
+    setCommunityApiError("Couldn't attach that image.");
+  } finally {
+    setIdeaImageUploading(false);
+  }
 };
 
-const deleteGroupIdea = (ideaId) => {
-  if (!activeGroupId) return;
-  setGroupIdeasByGroup((cur) => ({ ...cur, [activeGroupId]: (cur[activeGroupId] || []).filter((i) => i.id !== ideaId) }));
+const handleIdeaImageChange = (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (file) uploadIdeaImage(file);
 };
 
-// ---------- Q&A (client-side, per-group; not yet backed by the Worker) ----------
-const askGroupQuestion = () => {
-  if (!activeGroupId || !newQuestionText.trim()) return;
-  const q = { id: `q_${Date.now()}`, author: communityUsername, text: newQuestionText.trim(), ts: Date.now(), answers: [] };
-  setGroupQuestionsByGroup((cur) => ({ ...cur, [activeGroupId]: [q, ...(cur[activeGroupId] || [])] }));
-  setNewQuestionText("");
-  setQaOpenId(q.id);
+const createGroupIdea = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  if (!newIdeaPair.trim() && !newIdeaText.trim() && !newIdeaImage) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/ideas`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ pair: newIdeaPair.trim(), text: newIdeaText.trim(), image: newIdeaImage }),
+    });
+    setNewIdeaPair("");
+    setNewIdeaText("");
+    setNewIdeaImage(null);
+    const data = await communityApi(`/groups/${activeGroupId}/ideas`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupIdeas(data.ideas || []);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't share that idea.");
+  }
 };
 
-const answerGroupQuestion = (questionId) => {
-  if (!activeGroupId) return;
+const deleteGroupIdea = async (ideaId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/ideas/${ideaId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupIdeas((cur) => cur.filter((i) => i.id !== ideaId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't delete that idea.");
+  }
+};
+
+// ---------- Q&A (real, backed by the Worker + D1) ----------
+const askGroupQuestion = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership || !newQuestionText.trim()) return;
+  try {
+    const res = await communityApi(`/groups/${activeGroupId}/questions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ text: newQuestionText.trim() }),
+    });
+    setNewQuestionText("");
+    const data = await communityApi(`/groups/${activeGroupId}/questions`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupQuestions(data.questions || []);
+    setQaOpenId(res.id);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't post that question.");
+  }
+};
+
+const answerGroupQuestion = async (questionId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
   const draft = (qaReplyDrafts[questionId] || "").trim();
   if (!draft) return;
-  setGroupQuestionsByGroup((cur) => ({
-    ...cur,
-    [activeGroupId]: (cur[activeGroupId] || []).map((q) =>
-      q.id === questionId ? { ...q, answers: [...q.answers, { author: communityUsername, text: draft, ts: Date.now() }] } : q
-    ),
-  }));
-  setQaReplyDrafts((cur) => ({ ...cur, [questionId]: "" }));
+  try {
+    await communityApi(`/groups/${activeGroupId}/questions/${questionId}/answers`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ text: draft }),
+    });
+    setQaReplyDrafts((cur) => ({ ...cur, [questionId]: "" }));
+    const data = await communityApi(`/groups/${activeGroupId}/questions`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupQuestions(data.questions || []);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't post that answer.");
+  }
 };
 
-const deleteGroupQuestion = (questionId) => {
-  if (!activeGroupId) return;
-  setGroupQuestionsByGroup((cur) => ({ ...cur, [activeGroupId]: (cur[activeGroupId] || []).filter((q) => q.id !== questionId) }));
+const deleteGroupQuestion = async (questionId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/questions/${questionId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupQuestions((cur) => cur.filter((q) => q.id !== questionId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't delete that question.");
+  }
 };
 
 
@@ -15334,8 +15449,6 @@ if (activeTab === "community") {
   const canPostSignal = isGroupOwner || isGroupAdmin || !!myMember?.isSignalProvider;
   const chatMessages = groupMessages.filter((m) => m.type !== "signal");
   const signalMessages = groupMessages.filter((m) => m.type === "signal");
-  const groupIdeas = groupIdeasByGroup[activeGroupId] || [];
-  const groupQuestions = groupQuestionsByGroup[activeGroupId] || [];
   const signalProviderStats = (() => {
     const map = {};
     signalMessages.forEach((m) => {
@@ -15390,12 +15503,12 @@ if (activeTab === "community") {
                 setManageNameDraft(group?.name || "");
                 setManageDescDraft(group?.description || "");
                 setManageMsg("");
-                setGroupManageTab("members");
+                setGroupManageTab("info");
                 setGroupManageOpen(true);
               }}
               className={TAP}
               style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: 0, marginTop: "2px" }}
-              aria-label="View members"
+              aria-label="View group info"
             >
               {groupMembersLoaded && groupMembersList.length > 0 && (
                 <span className="flex items-center" style={{ marginLeft: "2px" }}>
@@ -15439,7 +15552,7 @@ if (activeTab === "community") {
                 </span>
               )}
               <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
-                {groupMembersList.length || "…"} member{groupMembersList.length === 1 ? "" : "s"} · {groupMessages.length} message{groupMessages.length === 1 ? "" : "s"}
+                Group Info
               </span>
             </button>
           </div>
@@ -15449,7 +15562,7 @@ if (activeTab === "community") {
               setManageNameDraft(group?.name || "");
               setManageDescDraft(group?.description || "");
               setManageMsg("");
-              setGroupManageTab("members");
+              setGroupManageTab("info");
               setGroupManageOpen(true);
             }}
             className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
@@ -15478,7 +15591,7 @@ if (activeTab === "community") {
                   {pinned.type === "signal" ? `${pinned.pair} ${pinned.direction === "sell" ? "Sell" : "Buy"} signal` : pinned.text}
                 </div>
               </div>
-              {group?.role === "owner" && (
+              {isGroupOwner && (
                 <button type="button" onClick={unpinCommunityMessage} className={TAP} style={{ color: palette.textFaint, flexShrink: 0 }} aria-label="Unpin">
                   <X size={13} />
                 </button>
@@ -15514,7 +15627,7 @@ if (activeTab === "community") {
         {communityPanelTab === "posts" ? (
           <>
             <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
-              {group?.role === "owner" && (
+              {isGroupOwner && (
                 <div className="rounded-2xl p-3 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
                   <textarea
                     value={newPostText}
@@ -15569,7 +15682,7 @@ if (activeTab === "community") {
                     <FileText size={20} style={{ color: palette.gold }} />
                   </span>
                   <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
-                    {group?.role === "owner" ? "Post an update for the group above." : "No announcements yet."}
+                    {isGroupOwner ? "Post an update for the group above." : "No announcements yet."}
                   </p>
                 </div>
               ) : (
@@ -15583,7 +15696,7 @@ if (activeTab === "community") {
                           {new Date(p.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
-                      {group?.role === "owner" && (
+                      {isGroupOwner && (
                         <button type="button" onClick={() => deleteCommunityPost(p.id)} className={TAP} style={{ color: palette.textFaint }} aria-label="Delete post">
                           <Trash2 size={13} />
                         </button>
@@ -15852,43 +15965,49 @@ if (activeTab === "community") {
           <>
             <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
               <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                <div className="flex items-center gap-2 mb-2.5">
-                  <input type="text" value={newIdeaPair} onChange={(e) => setNewIdeaPair(e.target.value.toUpperCase())} placeholder="Pair (e.g. XAUUSD)"
-                    className="flex-1 rounded-xl px-3 py-2 bg-transparent outline-none"
-                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
-                  <div className="flex gap-1 flex-shrink-0">
-                    {["buy", "sell"].map((d) => (
-                      <button key={d} type="button" onClick={() => setNewIdeaDirection(d)} className={`px-3 py-2 rounded-xl ${TAP}`}
-                        style={{
-                          background: newIdeaDirection === d ? (d === "sell" ? palette.red : palette.green) : palette.field,
-                          color: newIdeaDirection === d ? "#FFFFFF" : palette.textMuted,
-                          border: `1px solid ${newIdeaDirection === d ? "transparent" : palette.border}`,
-                          fontFamily: sans, fontSize: "11px", textTransform: "uppercase", fontWeight: 700,
-                        }}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <input type="text" value={newIdeaPair} onChange={(e) => setNewIdeaPair(e.target.value.toUpperCase())} placeholder="Pair (e.g. XAUUSD)"
+                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none mb-2.5"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
                 <textarea value={newIdeaText} onChange={(e) => setNewIdeaText(e.target.value)}
                   placeholder="What's the setup? Bias, key levels, invalidation…" rows={2}
                   className="w-full bg-transparent outline-none mb-2"
                   style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
-                <div className="flex justify-end">
+                {newIdeaImage && (
+                  <div className="relative inline-block mb-2">
+                    <img src={newIdeaImage} alt="Idea attachment" className="rounded-lg" style={{ width: "96px", height: "96px", objectFit: "cover", border: `1px solid ${palette.border}` }} />
+                    <button type="button" onClick={() => setNewIdeaImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "18px", height: "18px", background: palette.red, color: "#FFFFFF" }} aria-label="Remove image">
+                      <X size={11} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => ideaImageInputRef.current && ideaImageInputRef.current.click()}
+                    disabled={ideaImageUploading}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${TAP}`}
+                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "11.5px", fontFamily: mono }}
+                  >
+                    <Camera size={13} />
+                    {ideaImageUploading ? "Uploading…" : "Add photo"}
+                  </button>
                   <button type="button" onClick={createGroupIdea}
-                    disabled={!newIdeaPair.trim() && !newIdeaText.trim()}
+                    disabled={!newIdeaPair.trim() && !newIdeaText.trim() && !newIdeaImage}
                     className={`px-4 py-1.5 rounded-lg ${TAP}`}
                     style={{
-                      background: (newIdeaPair.trim() || newIdeaText.trim()) ? palette.gold : palette.border,
-                      color: (newIdeaPair.trim() || newIdeaText.trim()) ? palette.letterbox : palette.textFaint,
+                      background: (newIdeaPair.trim() || newIdeaText.trim() || newIdeaImage) ? palette.gold : palette.border,
+                      color: (newIdeaPair.trim() || newIdeaText.trim() || newIdeaImage) ? palette.letterbox : palette.textFaint,
                       fontFamily: mono, fontSize: "12px", fontWeight: 700,
                     }}>
                     Share idea
                   </button>
                 </div>
+                <input ref={ideaImageInputRef} type="file" accept="image/*" onChange={handleIdeaImageChange} style={{ display: "none" }} />
               </div>
 
-              {groupIdeas.length === 0 ? (
+              {!groupIdeasLoaded ? (
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading ideas…</p>
+              ) : groupIdeas.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10">
                   <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
                     <Lightbulb size={20} style={{ color: palette.gold }} />
@@ -15899,8 +16018,6 @@ if (activeTab === "community") {
                 </div>
               ) : (
                 groupIdeas.map((idea) => {
-                  const isSell = idea.direction === "sell";
-                  const dirColor = isSell ? palette.red : palette.green;
                   const canDelete = idea.author === communityUsername || isGroupOwner;
                   return (
                     <div key={idea.id} className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
@@ -15919,19 +16036,17 @@ if (activeTab === "community") {
                         )}
                       </div>
                       {idea.pair && (
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="mb-2">
                           <span style={{ fontFamily: display, fontSize: "15px", fontWeight: 800, color: palette.text }}>{idea.pair}</span>
-                          <span style={{ fontSize: "10px", fontFamily: sans, fontWeight: 800, color: dirColor, background: `${dirColor}1A`, borderRadius: "6px", padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                            {isSell ? "↓ Short" : "↑ Long"}
-                          </span>
                         </div>
                       )}
-                      {idea.text && <p className="text-sm" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{idea.text}</p>}
+                      {idea.text && <p className="text-sm mb-2" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{idea.text}</p>}
+                      {idea.image && <img src={idea.image} alt="Idea attachment" className="rounded-xl w-full" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
                     </div>
                   );
                 })
               )}
-              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Ideas are shared with this group only, for this session.</p>
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Ideas are shared with this group.</p>
             </div>
           </>
 
@@ -15956,7 +16071,9 @@ if (activeTab === "community") {
                 </div>
               </div>
 
-              {groupQuestions.length === 0 ? (
+              {!groupQuestionsLoaded ? (
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading questions…</p>
+              ) : groupQuestions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10">
                   <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
                     <HelpCircle size={20} style={{ color: palette.gold }} />
@@ -16017,7 +16134,7 @@ if (activeTab === "community") {
                   );
                 })
               )}
-              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Questions are shared with this group only, for this session.</p>
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Questions are shared with this group.</p>
             </div>
           </>
 
@@ -16059,8 +16176,7 @@ if (activeTab === "community") {
                   ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`
                   : palette.surface;
                 const textColor = isMe ? palette.letterbox : palette.text;
-                const membership = myGroups.find((g) => g.id === activeGroupId);
-                const canDelete = isMe || membership?.role === "owner";
+                const canDelete = isMe || isGroupOwner;
                 return (
                   <div
                     key={m.id}
@@ -16136,7 +16252,7 @@ if (activeTab === "community") {
                           Reply
                         </button>
                       </div>
-                      {group?.role === "owner" && (
+                      {isGroupOwner && (
                         <button
                           type="button"
                           onClick={() => pinCommunityMessage(pinnedMessageId === m.id ? null : m.id)}
@@ -19397,7 +19513,7 @@ const membership = myGroups.find((g) => g.id === activeGroupId);
 const myMember = groupMembersList.find((m) => m.username === communityUsername);
 const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
   const authors = Array.from(new Set(groupMessages.map((m) => m.author))).filter(Boolean);
-  const tabs = ["members", ...(isOwner ? ["requests", "settings", "danger"] : [])];
+  const tabs = ["info", "members", ...(isOwner ? ["requests", "settings", "danger"] : [])];
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
@@ -19442,29 +19558,64 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
 
 
 
-          {groupManageTab === "members" ? (
+          {groupManageTab === "info" ? (
             <>
-              <div className="rounded-xl p-3.5 mb-4" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
-                <div className="flex items-center gap-3 mb-3">
-                  <Avatar name={membership?.name || "?"} size={40} src={groupAvatarMap[activeGroupId]} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{membership?.name || "Group"}</div>
-                    {membership?.description && (
-                      <div className="truncate" style={{ color: palette.textMuted, fontSize: "11.5px" }}>{membership.description}</div>
-                    )}
-                  </div>
+              <div className="flex flex-col items-center text-center mb-4">
+                <Avatar name={membership?.name || "?"} size={64} src={groupAvatarMap[activeGroupId]} />
+                <div style={{ color: palette.text, fontSize: "16px", fontWeight: 700, marginTop: "10px" }}>
+                  {membership?.name || "Group"}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg py-2 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-                    <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupMembersList.length || 0}</div>
-                    <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Members</div>
-                  </div>
-                  <div className="rounded-lg py-2 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-                    <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupMessages.length || 0}</div>
-                    <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Messages</div>
-                  </div>
+                {groupInfo?.description && (
+                  <p className="text-xs mt-1" style={{ color: palette.textMuted, maxWidth: "300px" }}>{groupInfo.description}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="rounded-lg py-2 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                  <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupInfo?.memberCount ?? groupMembersList.length ?? 0}</div>
+                  <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Members</div>
+                </div>
+                <div className="rounded-lg py-2 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                  <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700, fontFamily: mono }}>{groupMessages.length || 0}</div>
+                  <div style={{ color: palette.textFaint, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Messages</div>
                 </div>
               </div>
+
+              <div className="rounded-xl p-3.5 mb-2" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                <div className="flex items-center justify-between py-1.5" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <span style={{ color: palette.textFaint, fontSize: "11.5px" }}>Owner</span>
+                  <span style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>{groupInfo?.createdBy || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <span style={{ color: palette.textFaint, fontSize: "11.5px" }}>Visibility</span>
+                  <span style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>{groupInfo?.isPublic ? "Public" : "Private"}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span style={{ color: palette.textFaint, fontSize: "11.5px" }}>Created</span>
+                  <span style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>
+                    {groupInfo?.createdAt ? new Date(groupInfo.createdAt).toLocaleDateString() : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {groupInfo?.tags && groupInfo.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {groupInfo.tags.map((tag) => (
+                    <span key={tag} style={{ fontSize: "10px", fontFamily: mono, color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "3px 9px" }}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {isOwner && (
+                <p className="text-xs mt-3" style={{ color: palette.textFaint }}>
+                  You own this group — edit the name, photo, or invite code under Settings.
+                </p>
+              )}
+            </>
+          ) : groupManageTab === "members" ? (
+            <>
               {!groupMembersLoaded ? (
                 <p className="text-xs" style={{ color: palette.textFaint }}>Loading members…</p>
               ) : (

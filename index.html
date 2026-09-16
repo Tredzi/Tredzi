@@ -9,42 +9,41 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Tredzi — Trade Math Calculator</title>
 
-    <!--
-      No Google Fonts / webfont <link> tags on purpose.
-      Tredzi now renders every number using each platform's own native
-      system font (SF Pro on iOS/Mac, Roboto on Android, Segoe UI on
-      Windows) — the same approach Telegram, WhatsApp and Facebook use.
-      This means: no network request for fonts, nothing that can be
-      blocked by an ad-blocker/privacy shield, and no risk of a
-      dotted/slashed "0" ever showing up, on any device, ever again.
-    -->
-
     <style>
       html, body { margin: 0; padding: 0; background: #0b0f16; }
       #root { min-height: 100dvh; }
     </style>
+
+    <!--
+      GitHub Pages friendly setup: no npm install, no build step.
+      This import map tells the browser where to fetch "react",
+      "react-dom/client", "lucide-react" and "recharts" from (a CDN),
+      so TredziApp.jsx's normal `import ... from "react"` lines work
+      as-is with zero changes.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.3.1",
+          "react-dom": "https://esm.sh/react-dom@18.3.1",
+          "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.383.0?deps=react@18.3.1",
+          "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.3.1,react-dom@18.3.1"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
 
     <!--
-      This directly mounts TredziApp.jsx — no separate main.jsx needed.
-      Adjust the import path below only if TredziApp.jsx lives in a
-      different folder relative to this index.html.
+      Babel Standalone transpiles TredziApp.jsx's JSX right in the
+      browser (no build tool needed). data-type="module" makes it run
+      as a real ES module, so the import map above applies to it.
+      TredziApp.jsx already mounts itself into #root at the bottom of
+      the file — nothing else is needed here.
     -->
-    <script type="module">
-      import { createRoot } from "react-dom/client";
-      import TredziApp from "./TredziApp.jsx";
-      createRoot(document.getElementById("root")).render(<TredziApp />);
-    </script>
-    <!--
-      Note: the JSX syntax above (<TredziApp />) needs a build tool that
-      compiles JSX (Vite, CRA, Next, etc) — browsers can't parse it as-is.
-      If you're not using a bundler, replace the block above with:
-        import { createRoot } from "react-dom/client";
-        import { createElement } from "react";
-        import TredziApp from "./TredziApp.jsx";
-        createRoot(document.getElementById("root")).render(createElement(TredziApp));
-    -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="text/babel" data-type="module" data-presets="react" src="./TredziApp.jsx"></script>
   </body>
 </html>

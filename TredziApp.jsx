@@ -4732,6 +4732,35 @@ const getCommunityMemberStats = (member) => {
   };
 };
 
+// Push my own computed stats up to the active group so other members' "Member profile"
+// cards can show them (server has no way to compute these itself — it only stores
+// whatever the client sends). Debounced slightly so rapid trade edits don't spam the API.
+useEffect(() => {
+  if (!activeGroupId || !communityUsername) return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  const stats = getCommunityMemberStats({ username: communityUsername });
+  // Don't publish a zero-trade row — the server treats any synced row as "shared",
+  // so wait until there's something real to show.
+  if (!stats.trades) return;
+  const timer = setTimeout(() => {
+    communityApi(`/groups/${activeGroupId}/members/me/stats`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({
+        winRate: stats.winRate,
+        pnlPct: stats.pnlPct,
+        streak: stats.streak,
+        trades: stats.trades,
+        avgR: stats.avgR,
+        equityCurve: stats.equityCurve,
+      }),
+    }).catch(() => {});
+  }, 1200);
+  return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityUsername, trades, startingBalance, myGroups]);
+
 useEffect(() => {
   if (!activeGroupId || communityPanelTab !== "posts") return;
   const membership = myGroups.find((g) => g.id === activeGroupId);

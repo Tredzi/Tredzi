@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
+import { createRoot } from "react-dom/client";
 import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -19659,4 +19660,13 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
       )}
     </div>
   );
+}
+
+// --- Self-mount (no separate entry file needed for GitHub Pages / no-bundler setup) ---
+if (typeof document !== "undefined") {
+  const __rootEl = document.getElementById("root");
+  if (__rootEl && !__rootEl.__tredziMounted) {
+    __rootEl.__tredziMounted = true;
+    createRoot(__rootEl).render(<TredziApp />);
+  }
 }

@@ -4452,6 +4452,7 @@ const [newQuestionText, setNewQuestionText] = useState("");
 const [qaReplyDrafts, setQaReplyDrafts] = useState({});
 const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
+const [signalStatsOpen, setSignalStatsOpen] = useState(false);
 const [groupPosts, setGroupPosts] = useState([]);
 const [groupPostsLoaded, setGroupPostsLoaded] = useState(false);
 const [newPostText, setNewPostText] = useState("");
@@ -15678,7 +15679,14 @@ if (activeTab === "community") {
           className="rounded-2xl mb-4 overflow-hidden"
           style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
         >
-          <div className="flex items-center gap-2 px-4 pt-3.5 pb-3">
+          <button
+            type="button"
+            onClick={() => setSignalStatsOpen((v) => !v)}
+            className={`w-full flex items-center gap-2 px-4 py-3 ${TAP}`}
+            style={{ background: "none", border: "none" }}
+            aria-expanded={signalStatsOpen}
+            aria-label={signalStatsOpen ? "Collapse signal performance" : "Expand signal performance"}
+          >
             <span
               className="flex items-center justify-center rounded-lg flex-shrink-0"
               style={{ width: "26px", height: "26px", background: `${palette.gold}17` }}
@@ -15688,57 +15696,76 @@ if (activeTab === "community") {
             <span style={{ fontFamily: display, fontSize: "13.5px", fontWeight: 700, color: palette.text }}>
               Signal Performance
             </span>
-          </div>
+            {!signalStatsOpen && (
+              <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono, marginLeft: "2px" }}>
+                · {signalMessages.length} signal{signalMessages.length === 1 ? "" : "s"}
+              </span>
+            )}
+            <span className="flex-1" />
+            <ChevronDown
+              size={15}
+              style={{
+                color: palette.textFaint,
+                transform: signalStatsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s ease",
+                flexShrink: 0,
+              }}
+            />
+          </button>
 
-          <div className="grid grid-cols-3" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
-            {[
-              { icon: TrendingUp, value: signalMessages.length, label: "Signals" },
-              { icon: Users, value: signalProviderStats.length, label: "Providers" },
-              { icon: Target, value: groupAvgRR !== null ? `1:${fmt(groupAvgRR, 1)}` : "—", label: "Avg R:R", gold: true },
-            ].map(({ icon: Icon, value, label, gold }, i) => (
-              <div
-                key={label}
-                className="flex flex-col items-center justify-center py-3"
-                style={{ borderLeft: i > 0 ? `1px solid ${palette.border}` : "none" }}
-              >
-                <Icon size={13} style={{ color: gold ? palette.gold : palette.textFaint, marginBottom: "4px" }} />
-                <div style={{ color: gold ? palette.gold : palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono, lineHeight: 1 }}>
-                  {value}
-                </div>
-                <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "3px" }}>
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {signalProviderStats.length > 0 && (
-            <div className="flex gap-2 px-4 py-3" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-              {signalProviderStats.map((p, i) => {
-                const rankColor = i === 0 ? palette.gold : i === 1 ? palette.textMuted : i === 2 ? "#B87333" : palette.textFaint;
-                return (
+          {signalStatsOpen && (
+            <>
+              <div className="grid grid-cols-3" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
+                {[
+                  { icon: TrendingUp, value: signalMessages.length, label: "Signals" },
+                  { icon: Users, value: signalProviderStats.length, label: "Providers" },
+                  { icon: Target, value: groupAvgRR !== null ? `1:${fmt(groupAvgRR, 1)}` : "—", label: "Avg R:R", gold: true },
+                ].map(({ icon: Icon, value, label, gold }, i) => (
                   <div
-                    key={p.author}
-                    className="flex items-center gap-2 rounded-xl pl-1.5 pr-3 py-1.5"
-                    style={{ flexShrink: 0, background: palette.field, border: `1px solid ${i === 0 ? palette.gold + "44" : palette.border}` }}
+                    key={label}
+                    className="flex flex-col items-center justify-center py-3"
+                    style={{ borderLeft: i > 0 ? `1px solid ${palette.border}` : "none" }}
                   >
-                    <span
-                      className="flex items-center justify-center rounded-full flex-shrink-0"
-                      style={{ width: "15px", height: "15px", fontSize: "8.5px", fontWeight: 800, fontFamily: mono, color: i < 3 ? palette.letterbox : palette.textFaint, background: i < 3 ? rankColor : "transparent", border: i < 3 ? "none" : `1px solid ${palette.border}` }}
-                    >
-                      {i + 1}
-                    </span>
-                    <Avatar name={p.author} size={20} src={avatarForAuthor(p.author)} />
-                    <div className="flex flex-col leading-none">
-                      <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700, fontFamily: sans }}>{p.author}</span>
-                      <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, marginTop: "2px" }}>
-                        {p.count} signal{p.count === 1 ? "" : "s"}{p.rrCount > 0 ? ` · 1:${fmt(p.rrSum / p.rrCount, 1)}` : ""}
-                      </span>
+                    <Icon size={13} style={{ color: gold ? palette.gold : palette.textFaint, marginBottom: "4px" }} />
+                    <div style={{ color: gold ? palette.gold : palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono, lineHeight: 1 }}>
+                      {value}
+                    </div>
+                    <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "3px" }}>
+                      {label}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+
+              {signalProviderStats.length > 0 && (
+                <div className="flex gap-2 px-4 py-3" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                  {signalProviderStats.map((p, i) => {
+                    const rankColor = i === 0 ? palette.gold : i === 1 ? palette.textMuted : i === 2 ? "#B87333" : palette.textFaint;
+                    return (
+                      <div
+                        key={p.author}
+                        className="flex items-center gap-2 rounded-xl pl-1.5 pr-3 py-1.5"
+                        style={{ flexShrink: 0, background: palette.field, border: `1px solid ${i === 0 ? palette.gold + "44" : palette.border}` }}
+                      >
+                        <span
+                          className="flex items-center justify-center rounded-full flex-shrink-0"
+                          style={{ width: "15px", height: "15px", fontSize: "8.5px", fontWeight: 800, fontFamily: mono, color: i < 3 ? palette.letterbox : palette.textFaint, background: i < 3 ? rankColor : "transparent", border: i < 3 ? "none" : `1px solid ${palette.border}` }}
+                        >
+                          {i + 1}
+                        </span>
+                        <Avatar name={p.author} size={20} src={avatarForAuthor(p.author)} />
+                        <div className="flex flex-col leading-none">
+                          <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700, fontFamily: sans }}>{p.author}</span>
+                          <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, marginTop: "2px" }}>
+                            {p.count} signal{p.count === 1 ? "" : "s"}{p.rrCount > 0 ? ` · 1:${fmt(p.rrSum / p.rrCount, 1)}` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

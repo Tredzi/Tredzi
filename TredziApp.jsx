@@ -6187,7 +6187,7 @@ const isSignal = communityPanelTab === "signal";
 if (isSignal) {
   const membershipForCheck = myGroups.find((g) => g.id === activeGroupId);
   const myMemberForCheck = groupMembersList.find((m) => m.username === communityUsername);
-  const allowed = membershipForCheck?.role === "owner" || !!myMemberForCheck?.isOwner || !!myMemberForCheck?.isAdmin;
+  const allowed = membershipForCheck?.role === "owner" || !!myMemberForCheck?.isOwner || !!myMemberForCheck?.isAdmin || !!myMemberForCheck?.isSignalProvider;
   if (!allowed) return;
 }
 if (isSignal && !signalPair.trim()) return;
@@ -15472,8 +15472,19 @@ if (activeTab === "community") {
     return (
       <div className="flex flex-col h-full" style={heightStyle}>
         {/* Header */}
+        {(() => {
+          const headerMemberCount = groupInfo?.memberCount ?? groupMembersList.length ?? 0;
+          const headerMessageCount = groupMessages.length || 0;
+          const openGroupInfo = () => {
+            setManageNameDraft(group?.name || "");
+            setManageDescDraft(group?.description || "");
+            setManageMsg("");
+            setGroupManageTab("info");
+            setGroupManageOpen(true);
+          };
+          return (
         <div
-          className="flex items-center gap-3.5 px-5 py-4 flex-shrink-0"
+          className={isDesktop ? "flex items-center gap-3 px-5 py-3.5 flex-shrink-0" : "flex items-center gap-2.5 px-3.5 py-2.5 flex-shrink-0"}
           style={{
             borderBottom: `1px solid ${palette.border}`,
             background: `linear-gradient(180deg, ${palette.surface}, ${palette.surface}CC)`,
@@ -15486,93 +15497,42 @@ if (activeTab === "community") {
               type="button"
               onClick={() => setActiveGroupId(null)}
               className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
-              style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+              style={{ width: "30px", height: "30px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
               aria-label="Back to groups"
             >
               <ChevronLeft size={16} />
             </button>
           )}
-          <Avatar name={group ? group.name : "?"} size={48} online src={groupAvatarMap[activeGroupId]} />
-          <div className="flex-1 min-w-0">
-            <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text }} className="truncate">
-              {group ? group.name : "Group"}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setManageNameDraft(group?.name || "");
-                setManageDescDraft(group?.description || "");
-                setManageMsg("");
-                setGroupManageTab("info");
-                setGroupManageOpen(true);
-              }}
-              className={TAP}
-              style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", padding: 0, marginTop: "2px" }}
-              aria-label="View group info"
-            >
-              {groupMembersLoaded && groupMembersList.length > 0 && (
-                <span className="flex items-center" style={{ marginLeft: "2px" }}>
-                  {groupMembersList.slice(0, 4).map((mem, i) => (
-                    <span
-                      key={mem.username}
-                      style={{
-                        marginLeft: i === 0 ? 0 : "-7px",
-                        borderRadius: "999px",
-                        boxShadow: `0 0 0 2px ${palette.surface}`,
-                        position: "relative",
-                        zIndex: 4 - i,
-                      }}
-                    >
-                      <Avatar name={mem.username} size={18} src={mem.avatar} />
-                    </span>
-                  ))}
-                  {groupMembersList.length > 4 && (
-                    <span
-                      style={{
-                        marginLeft: "-7px",
-                        width: "18px",
-                        height: "18px",
-                        borderRadius: "999px",
-                        background: palette.field,
-                        border: `2px solid ${palette.surface}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "8px",
-                        fontFamily: mono,
-                        fontWeight: 700,
-                        color: palette.textMuted,
-                        position: "relative",
-                        zIndex: 0,
-                      }}
-                    >
-                      +{groupMembersList.length - 4}
-                    </span>
-                  )}
-                </span>
-              )}
-              <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
-                Group Info
-              </span>
-            </button>
-          </div>
           <button
             type="button"
-            onClick={() => {
-              setManageNameDraft(group?.name || "");
-              setManageDescDraft(group?.description || "");
-              setManageMsg("");
-              setGroupManageTab("info");
-              setGroupManageOpen(true);
-            }}
+            onClick={openGroupInfo}
+            className={`flex items-center gap-2.5 flex-1 min-w-0 ${TAP}`}
+            style={{ background: "none", border: "none", padding: 0, textAlign: "left" }}
+            aria-label="View group info"
+          >
+            <Avatar name={group ? group.name : "?"} size={isDesktop ? 44 : 38} online src={groupAvatarMap[activeGroupId]} />
+            <div className="flex-1 min-w-0">
+              <div style={{ fontFamily: display, fontSize: isDesktop ? "16px" : "14.5px", fontWeight: 700, color: palette.text, lineHeight: 1.25 }} className="truncate">
+                {group ? group.name : "Group"}
+              </div>
+              <div style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono, marginTop: "1px" }}>
+                {headerMemberCount} member{headerMemberCount === 1 ? "" : "s"} · {headerMessageCount} message{headerMessageCount === 1 ? "" : "s"}
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={openGroupInfo}
             className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
-            style={{ width: "34px", height: "34px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+            style={{ width: isDesktop ? "34px" : "30px", height: isDesktop ? "34px" : "30px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
             aria-label="Group menu"
             title="Group info and members"
           >
-            <Menu size={16} />
+            <Menu size={15} />
           </button>
         </div>
+          );
+        })()}
 
              {pinnedMessageId && (() => {
           const pinned = groupMessages.find((m) => m.id === pinnedMessageId);
@@ -15600,7 +15560,7 @@ if (activeTab === "community") {
           );
         })()}
 
-<div className="flex gap-2 px-4 pt-4 pb-3 flex-shrink-0" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+<div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
   {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "posts", label: "Announcements" }].map((t) => {
             const active = communityPanelTab === t.id;
             return (
@@ -15608,14 +15568,14 @@ if (activeTab === "community") {
                 key={t.id}
                 type="button"
                 onClick={() => setCommunityPanelTab(t.id)}
-                className={`px-4 py-2 rounded-full transition-colors ${TAP}`}
+                className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
                 style={{
                   flexShrink: 0,
                   whiteSpace: "nowrap",
                   background: active ? palette.gold : palette.field,
                   color: active ? palette.letterbox : palette.textMuted,
                   border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                  fontFamily: mono, fontSize: isDesktop ? "12px" : "11.5px", fontWeight: 700,
                 }}
               >
                 {t.label}
@@ -15714,33 +15674,70 @@ if (activeTab === "community") {
   <>
     <div className="flex-1 px-4 py-4" style={{ background: `radial-gradient(ellipse 800px 400px at 50% 0%, ${palette.gold}08, transparent), ${palette.bg}`, overflowY: "auto", minHeight: 0 }}>
       {signalMessages.length > 0 && (
-        <div className="mb-4">
-          <div className="grid grid-cols-3 gap-2 mb-2.5">
-            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-              <div style={{ color: palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{signalMessages.length}</div>
-              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Signals</div>
-            </div>
-            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-              <div style={{ color: palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{signalProviderStats.length}</div>
-              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Providers</div>
-            </div>
-            <div className="rounded-xl py-2.5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-              <div style={{ color: palette.gold, fontSize: "16px", fontWeight: 800, fontFamily: mono }}>{groupAvgRR !== null ? `1:${fmt(groupAvgRR, 1)}` : "—"}</div>
-              <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em" }}>Avg R:R</div>
-            </div>
+        <div
+          className="rounded-2xl mb-4 overflow-hidden"
+          style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+        >
+          <div className="flex items-center gap-2 px-4 pt-3.5 pb-3">
+            <span
+              className="flex items-center justify-center rounded-lg flex-shrink-0"
+              style={{ width: "26px", height: "26px", background: `${palette.gold}17` }}
+            >
+              <TrendingUp size={13} style={{ color: palette.gold }} />
+            </span>
+            <span style={{ fontFamily: display, fontSize: "13.5px", fontWeight: 700, color: palette.text }}>
+              Signal Performance
+            </span>
           </div>
-          {signalProviderStats.length > 0 && (
-            <div className="flex gap-2" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-              {signalProviderStats.map((p) => (
-                <div key={p.author} className="flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5" style={{ flexShrink: 0, background: palette.field, border: `1px solid ${palette.border}` }}>
-                  <Avatar name={p.author} size={20} src={avatarForAuthor(p.author)} />
-                  <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700, fontFamily: sans }}>{p.author}</span>
-                  <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>{p.count}</span>
-                  {p.rrCount > 0 && (
-                    <span style={{ color: palette.gold, fontSize: "10px", fontFamily: mono }}>1:{fmt(p.rrSum / p.rrCount, 1)}</span>
-                  )}
+
+          <div className="grid grid-cols-3" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
+            {[
+              { icon: TrendingUp, value: signalMessages.length, label: "Signals" },
+              { icon: Users, value: signalProviderStats.length, label: "Providers" },
+              { icon: Target, value: groupAvgRR !== null ? `1:${fmt(groupAvgRR, 1)}` : "—", label: "Avg R:R", gold: true },
+            ].map(({ icon: Icon, value, label, gold }, i) => (
+              <div
+                key={label}
+                className="flex flex-col items-center justify-center py-3"
+                style={{ borderLeft: i > 0 ? `1px solid ${palette.border}` : "none" }}
+              >
+                <Icon size={13} style={{ color: gold ? palette.gold : palette.textFaint, marginBottom: "4px" }} />
+                <div style={{ color: gold ? palette.gold : palette.text, fontSize: "16px", fontWeight: 800, fontFamily: mono, lineHeight: 1 }}>
+                  {value}
                 </div>
-              ))}
+                <div style={{ color: palette.textFaint, fontSize: "9px", fontFamily: sans, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "3px" }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {signalProviderStats.length > 0 && (
+            <div className="flex gap-2 px-4 py-3" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {signalProviderStats.map((p, i) => {
+                const rankColor = i === 0 ? palette.gold : i === 1 ? palette.textMuted : i === 2 ? "#B87333" : palette.textFaint;
+                return (
+                  <div
+                    key={p.author}
+                    className="flex items-center gap-2 rounded-xl pl-1.5 pr-3 py-1.5"
+                    style={{ flexShrink: 0, background: palette.field, border: `1px solid ${i === 0 ? palette.gold + "44" : palette.border}` }}
+                  >
+                    <span
+                      className="flex items-center justify-center rounded-full flex-shrink-0"
+                      style={{ width: "15px", height: "15px", fontSize: "8.5px", fontWeight: 800, fontFamily: mono, color: i < 3 ? palette.letterbox : palette.textFaint, background: i < 3 ? rankColor : "transparent", border: i < 3 ? "none" : `1px solid ${palette.border}` }}
+                    >
+                      {i + 1}
+                    </span>
+                    <Avatar name={p.author} size={20} src={avatarForAuthor(p.author)} />
+                    <div className="flex flex-col leading-none">
+                      <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700, fontFamily: sans }}>{p.author}</span>
+                      <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, marginTop: "2px" }}>
+                        {p.count} signal{p.count === 1 ? "" : "s"}{p.rrCount > 0 ? ` · 1:${fmt(p.rrSum / p.rrCount, 1)}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -15754,7 +15751,7 @@ if (activeTab === "community") {
           </span>
           <p style={{ color: palette.text, fontSize: "14px", fontWeight: 600, marginBottom: "3px", fontFamily: sans }}>No signals yet</p>
           <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px", fontFamily: sans }}>
-            {canPostSignal ? "Post the first trade signal below." : "Only the owner and admins can post signals here."}
+            {canPostSignal ? "Post the first trade signal below." : "Only the owner, admins, and signal providers can post signals here."}
           </p>
         </div>
       ) : (
@@ -15767,52 +15764,80 @@ if (activeTab === "community") {
             const entryNum = num(m.entry), slNum = num(m.sl), tpNum = num(m.tp);
             const hasRR = entryNum && slNum && tpNum && entryNum !== slNum;
             const rr = hasRR ? Math.abs(tpNum - entryNum) / Math.abs(entryNum - slNum) : null;
+            const authorEntry = groupMembersList.find((mem) => mem.username === m.author);
+            const authorRole = authorEntry?.isOwner ? "Owner" : authorEntry?.isAdmin ? "Admin" : authorEntry?.isSignalProvider ? "Signal" : null;
+            const isPinned = pinnedMessageId === m.id;
             return (
               <div
                 key={m.id}
-                className="rounded-lg overflow-hidden flex"
-                style={{ background: palette.surface, boxShadow: palette.shadow }}
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: palette.surface,
+                  border: `1px solid ${isPinned ? palette.gold + "55" : palette.border}`,
+                  boxShadow: palette.shadow,
+                }}
               >
-                <div style={{ width: "4px", flexShrink: 0, background: dirColor }} />
-                <div className="flex-1 min-w-0" style={{ padding: "12px 14px" }}>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Avatar name={m.author} size={22} src={avatarForAuthor(m.author)} />
-                    <span style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 600, fontFamily: sans }}>{m.author}</span>
-                    <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
-                      {new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <span className="flex-1" />
-                    {isGroupOwner && (
-                      <button type="button" onClick={() => pinCommunityMessage(pinnedMessageId === m.id ? null : m.id)} className={`flex items-center justify-center rounded-full ${TAP}`}
-                        style={{ width: "22px", height: "22px", color: pinnedMessageId === m.id ? palette.gold : palette.textFaint }} aria-label="Pin signal">
-                        <Bell size={12} />
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button type="button" onClick={() => setPendingDeleteMsg(m.id)} className={`flex items-center justify-center rounded-full ${TAP}`}
-                        style={{ width: "22px", height: "22px", color: palette.textFaint }} aria-label="Delete signal">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-3">
-                    <span style={{ fontFamily: display, fontSize: "17px", fontWeight: 800, color: palette.text, letterSpacing: "0.01em" }}>{m.pair}</span>
-                    <span style={{ fontSize: "10px", fontFamily: sans, fontWeight: 800, color: dirColor, background: `${dirColor}1A`, borderRadius: "6px", padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      {isSell ? "↓ Sell" : "↑ Buy"}
-                    </span>
-                    {rr !== null && (
-                      <span style={{ fontSize: "10px", fontFamily: mono, fontWeight: 700, color: palette.textMuted, border: `1px solid ${palette.border}`, borderRadius: "6px", padding: "3px 8px" }}>
-                        R:R 1:{fmt(rr, 1)}
+                <div
+                  className="flex items-center gap-2.5 px-3.5 py-2.5"
+                  style={{ background: `${dirColor}0D`, borderBottom: `1px solid ${palette.border}` }}
+                >
+                  <span
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{ width: "26px", height: "26px", background: `${dirColor}1F`, color: dirColor }}
+                  >
+                    {isSell ? <ChevronDown size={15} strokeWidth={3} /> : <ChevronRight size={15} strokeWidth={3} style={{ transform: "rotate(-90deg)" }} />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span style={{ fontFamily: display, fontSize: "15.5px", fontWeight: 800, color: palette.text, letterSpacing: "0.01em" }}>{m.pair}</span>
+                      <span style={{ fontSize: "9.5px", fontFamily: sans, fontWeight: 800, color: dirColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        {isSell ? "Sell" : "Buy"}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-1.5" style={{ marginTop: "1px" }}>
+                      <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} />
+                      <span style={{ color: palette.textMuted, fontSize: "10.5px", fontWeight: 600, fontFamily: sans }}>{m.author}</span>
+                      {authorRole && (
+                        <span style={{ color: palette.textFaint, fontSize: "9px", fontFamily: mono, border: `1px solid ${palette.border}`, borderRadius: "4px", padding: "0 4px" }}>
+                          {authorRole}
+                        </span>
+                      )}
+                      <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>
+                        · {new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
                   </div>
+                  {rr !== null && (
+                    <span
+                      className="flex-shrink-0"
+                      style={{ fontSize: "10px", fontFamily: mono, fontWeight: 800, color: palette.gold, background: `${palette.gold}17`, borderRadius: "7px", padding: "4px 8px" }}
+                    >
+                      1:{fmt(rr, 1)}
+                    </span>
+                  )}
+                  {isGroupOwner && (
+                    <button type="button" onClick={() => pinCommunityMessage(isPinned ? null : m.id)} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+                      style={{ width: "22px", height: "22px", color: isPinned ? palette.gold : palette.textFaint }} aria-label="Pin signal">
+                      <Bell size={12} />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button type="button" onClick={() => setPendingDeleteMsg(m.id)} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+                      style={{ width: "22px", height: "22px", color: palette.textFaint }} aria-label="Delete signal">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
 
-                  <div className="grid grid-cols-3" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
-                    {[["Entry", m.entry, palette.text], ["Stop Loss", m.sl, palette.red], ["Take Profit", m.tp, palette.green]].map(([lbl, val, color], i) => (
-                      <div key={lbl} style={{ padding: "8px 4px", textAlign: "center", borderLeft: i > 0 ? `1px solid ${palette.border}` : "none" }}>
-                        <div style={{ fontSize: "9px", color: palette.textFaint, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: sans, marginBottom: "2px" }}>{lbl}</div>
-                        <div style={{ fontFamily: mono, fontSize: "13px", color, fontWeight: 700 }}>{val || "—"}</div>
+                <div className="px-3.5 pt-3 pb-3.5">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[["Entry", m.entry, palette.text, Target], ["Stop Loss", m.sl, palette.red, ShieldAlert], ["Take Profit", m.tp, palette.green, Flame]].map(([lbl, val, color, Icon]) => (
+                      <div key={lbl} className="rounded-xl text-center" style={{ padding: "8px 4px", background: palette.field, border: `1px solid ${palette.border}` }}>
+                        <div className="flex items-center justify-center gap-1" style={{ marginBottom: "3px" }}>
+                          <Icon size={9} style={{ color: palette.textFaint }} />
+                          <span style={{ fontSize: "8.5px", color: palette.textFaint, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: sans }}>{lbl}</span>
+                        </div>
+                        <div style={{ fontFamily: mono, fontSize: "12.5px", color, fontWeight: 700 }}>{val || "—"}</div>
                       </div>
                     ))}
                   </div>
@@ -15822,10 +15847,10 @@ if (activeTab === "community") {
                   <button
                     type="button"
                     onClick={() => shadowSignalToTrade(m)}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg w-full ${TAP}`}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl w-full ${TAP}`}
                     style={{
                       marginTop: "10px",
-                      padding: "7px",
+                      padding: "8px",
                       background: palette.field,
                       border: `1px solid ${palette.border}`,
                       color: palette.textMuted,
@@ -15859,7 +15884,7 @@ if (activeTab === "community") {
         </button>
       ) : (
         <p className="text-xs text-center" style={{ color: palette.textFaint, fontFamily: sans }}>
-          Only the owner and admins can post signals in this group.
+          Only the owner, admins, and signal providers can post signals in this group.
         </p>
       )}
       {communityApiError && <p className="text-xs mt-2 text-center" style={{ color: palette.red, fontFamily: sans }}>{communityApiError}</p>}
@@ -17269,8 +17294,9 @@ const renderSidebar = () => (
       >
         <div className="flex flex-col flex-1" style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
+        {!(!isDesktop && activeTab === "community" && !!activeGroupId) && (
         <header
-          className={isDesktop ? "px-8 flex-shrink-0 flex items-center justify-between" : "px-5 pt-6 pb-4 flex-shrink-0 flex items-center justify-between"}
+          className={isDesktop ? "px-8 flex-shrink-0 flex items-center justify-between" : "px-5 pt-4 pb-3 flex-shrink-0 flex items-center justify-between"}
           style={{ height: isDesktop ? "76px" : "auto", borderBottom: isDesktop ? "none" : `1px solid ${palette.border}`, transition: THEME_TRANSITION }}
         >
           <div style={{ marginLeft: isDesktop ? "8px" : 0 }}>
@@ -17378,6 +17404,7 @@ const renderSidebar = () => (
             </button>
           </div>
         </header>
+        )}
 
         {(() => {
           const communityFullBleed = activeTab === "community" && (isDesktop || !!activeGroupId);

@@ -4454,7 +4454,7 @@ const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
 const [communityChatSubView, setCommunityChatSubView] = useState("chat"); // "chat" | "signal"
 const [communityFeedSubView, setCommunityFeedSubView] = useState("feed"); // "feed" | "ideas" | "wall"
-const [communityFeedDropdownOpen, setCommunityFeedDropdownOpen] = useState(false);
+const [communityOpenTabDropdown, setCommunityOpenTabDropdown] = useState(null); // group id currently showing its dropdown, or null
 const [signalStatsOpen, setSignalStatsOpen] = useState(false);
 const [selectedCommunityMember, setSelectedCommunityMember] = useState(null);
 const [leaderboardMetric, setLeaderboardMetric] = useState("winRate");
@@ -15865,108 +15865,76 @@ if (activeTab === "community") {
           ];
           const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
           return (
-            <>
-              <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                {COMMUNITY_TAB_GROUPS.map((g) => {
-                  const active = g.id === activeGroup.id;
-                  return (
+            <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {COMMUNITY_TAB_GROUPS.map((g) => {
+                const active = g.id === activeGroup.id;
+                const hasDropdown = g.members.length > 1;
+                const dropdownOpen = communityOpenTabDropdown === g.id;
+                const currentLabel = hasDropdown ? (g.members.find((m) => m.id === communityPanelTab)?.label || g.label) : g.label;
+                return (
+                  <div key={g.id} style={{ position: "relative", flexShrink: 0 }}>
                     <button
-                      key={g.id}
                       type="button"
                       onClick={() => {
-                        const target = g.members.length > 1 ? (g.subState || g.members[0].id) : g.members[0].id;
-                        setCommunityPanelTab(target);
-                        if (g.id !== "feed") setCommunityFeedDropdownOpen(false);
+                        if (hasDropdown) {
+                          setCommunityOpenTabDropdown((cur) => (cur === g.id ? null : g.id));
+                          const target = g.subState || g.members[0].id;
+                          setCommunityPanelTab(target);
+                        } else {
+                          setCommunityPanelTab(g.members[0].id);
+                          setCommunityOpenTabDropdown(null);
+                        }
                       }}
                       className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
                       style={{
                         flexShrink: 0,
                         whiteSpace: "nowrap",
+                        display: "flex", alignItems: "center", gap: "5px",
                         background: active ? palette.gold : palette.field,
                         color: active ? palette.letterbox : palette.textMuted,
                         border: `1px solid ${active ? palette.gold : palette.border}`,
                         fontFamily: mono, fontSize: isDesktop ? "12px" : "11.5px", fontWeight: 700,
                       }}
                     >
-                      {g.label}
+                      {active && hasDropdown ? currentLabel : g.label}
+                      {hasDropdown && (
+                        <ChevronDown size={12} style={{ transform: dropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                      )}
                     </button>
-                  );
-                })}
-              </div>
-              {activeGroup.members.length > 1 && activeGroup.id === "feed" && (
-                <div className={isDesktop ? "px-4 pb-2.5 flex-shrink-0" : "px-3.5 pb-2 flex-shrink-0"} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    onClick={() => setCommunityFeedDropdownOpen((o) => !o)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg ${TAP}`}
-                    style={{
-                      background: palette.field,
-                      color: palette.text,
-                      border: `1px solid ${palette.border}`,
-                      fontFamily: sans, fontSize: "11.5px", fontWeight: 700,
-                    }}
-                  >
-                    {activeGroup.members.find((m) => m.id === communityPanelTab)?.label || activeGroup.members[0].label}
-                    <ChevronDown size={13} style={{ transform: communityFeedDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-                  </button>
-                  {communityFeedDropdownOpen && (
-                    <div
-                      className="rounded-lg overflow-hidden"
-                      style={{ position: "absolute", top: "calc(100% + 4px)", left: isDesktop ? "16px" : "14px", zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "140px" }}
-                    >
-                      {activeGroup.members.map((m) => {
-                        const subActive = communityPanelTab === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              activeGroup.setSubState(m.id);
-                              setCommunityPanelTab(m.id);
-                              setCommunityFeedDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 ${TAP}`}
-                            style={{
-                              background: subActive ? `${palette.gold}18` : "transparent",
-                              color: subActive ? palette.gold : palette.text,
-                              fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
-                              borderBottom: m.id !== activeGroup.members[activeGroup.members.length - 1].id ? `1px solid ${palette.border}` : "none",
-                            }}
-                          >
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeGroup.members.length > 1 && activeGroup.id !== "feed" && (
-                <div className={isDesktop ? "flex gap-1.5 px-4 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                  {activeGroup.members.map((m) => {
-                    const subActive = communityPanelTab === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => { activeGroup.setSubState(m.id); setCommunityPanelTab(m.id); }}
-                        className={`px-3 py-1 rounded-full transition-colors ${TAP}`}
-                        style={{
-                          flexShrink: 0,
-                          whiteSpace: "nowrap",
-                          background: subActive ? `${palette.gold}22` : "transparent",
-                          color: subActive ? palette.gold : palette.textFaint,
-                          border: `1px solid ${subActive ? palette.gold + "55" : palette.border}`,
-                          fontFamily: sans, fontSize: "10.5px", fontWeight: 700,
-                        }}
+                    {hasDropdown && dropdownOpen && (
+                      <div
+                        className="rounded-lg overflow-hidden"
+                        style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "140px" }}
                       >
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+                        {g.members.map((m) => {
+                          const subActive = communityPanelTab === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                g.setSubState(m.id);
+                                setCommunityPanelTab(m.id);
+                                setCommunityOpenTabDropdown(null);
+                              }}
+                              className={`w-full text-left px-3 py-2 ${TAP}`}
+                              style={{
+                                background: subActive ? `${palette.gold}18` : "transparent",
+                                color: subActive ? palette.gold : palette.text,
+                                fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
+                                borderBottom: m.id !== g.members[g.members.length - 1].id ? `1px solid ${palette.border}` : "none",
+                              }}
+                            >
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           );
         })()}
 

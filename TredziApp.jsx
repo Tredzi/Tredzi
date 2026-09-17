@@ -15865,7 +15865,7 @@ if (activeTab === "community") {
           ];
           const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
           return (
-            <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+            <div className={isDesktop ? "flex flex-wrap gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex flex-wrap gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"}>
               {COMMUNITY_TAB_GROUPS.map((g) => {
                 const active = g.id === activeGroup.id;
                 const hasDropdown = g.members.length > 1;

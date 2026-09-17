@@ -5370,6 +5370,15 @@ const deleteFeedPost = async (postId) => {
     return () => { cancelled = true; clearInterval(id); };
   }, [activeGroupId, myGroups]);
 
+  // Land on the newest message whenever the chat opens — on first load, on
+  // switching groups, and on coming back to the chat sub-tab from another one
+  // (Members, Wall, Feed, etc). The bottom sentinel div was already in the
+  // JSX (communityMessagesEndRef) but nothing ever scrolled it into view, so
+  // the list defaulted to showing the top instead of the latest messages.
+  useEffect(() => {
+    if (!activeGroupId || communityPanelTab !== "chat") return;
+    communityMessagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [activeGroupId, communityPanelTab, groupMessagesLoaded]);
 
 
   useEffect(() => {

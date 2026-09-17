@@ -15936,7 +15936,7 @@ if (activeTab === "community") {
                     {moreTabsDropdownOpen && (
                       <div
                         className="rounded-lg overflow-hidden"
-                        style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "150px" }}
+                        style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "150px" }}
                       >
                         {overflowGroups.map((g) => {
                           const subActive = g.id === activeGroup.id;

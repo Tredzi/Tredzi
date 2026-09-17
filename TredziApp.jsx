@@ -15873,17 +15873,25 @@ if (activeTab === "community") {
           const COMMUNITY_TAB_GROUPS = [
             { id: "chat", label: "Chat", members: [{ id: "chat", label: "Messages" }, { id: "signal", label: "Signals" }], subState: communityChatSubView, setSubState: setCommunityChatSubView },
             { id: "feed", label: "Feed", members: [{ id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "wall", label: "Wall" }], subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
+            { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
             { id: "qa", label: "Q&A", members: [{ id: "qa", label: "Q&A" }] },
             { id: "vault", label: "Resources", members: [{ id: "vault", label: "Resources" }] },
-            { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
             { id: "leaderboard", label: "Leaderboard", members: [{ id: "leaderboard", label: "Leaderboard" }] },
           ];
+          // Mobile pins Chat/Feed/Announcements directly and tucks the rest behind
+          // "More" so the bar doesn't turn into a wall of buttons; desktop has the
+          // room to just show every group, so it skips the split entirely.
+          const PINNED_GROUP_IDS = ["chat", "feed", "posts"];
+          const visibleGroups = isDesktop ? COMMUNITY_TAB_GROUPS : COMMUNITY_TAB_GROUPS.filter((g) => PINNED_GROUP_IDS.includes(g.id));
+          const overflowGroups = isDesktop ? [] : COMMUNITY_TAB_GROUPS.filter((g) => !PINNED_GROUP_IDS.includes(g.id));
           const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
+          const isOverflowActive = overflowGroups.some((g) => g.id === activeGroup.id);
           const feedDropdownOpen = communityOpenTabDropdown === "feed";
+          const moreTabsDropdownOpen = communityOpenTabDropdown === "more";
           return (
             <>
               <div className={isDesktop ? "flex flex-wrap gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex flex-wrap gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"}>
-                {COMMUNITY_TAB_GROUPS.map((g) => {
+                {visibleGroups.map((g) => {
                   const active = g.id === activeGroup.id;
                   return (
                     <button
@@ -15908,6 +15916,54 @@ if (activeTab === "community") {
                     </button>
                   );
                 })}
+                {overflowGroups.length > 0 && (
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => setCommunityOpenTabDropdown((cur) => (cur === "more" ? null : "more"))}
+                      className={`px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${TAP}`}
+                      style={{
+                        whiteSpace: "nowrap",
+                        background: isOverflowActive ? palette.gold : palette.field,
+                        color: isOverflowActive ? palette.letterbox : palette.textMuted,
+                        border: `1px solid ${isOverflowActive ? palette.gold : palette.border}`,
+                        fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
+                      }}
+                    >
+                      {isOverflowActive ? activeGroup.label : "More"}
+                      <ChevronDown size={12} style={{ transform: moreTabsDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                    </button>
+                    {moreTabsDropdownOpen && (
+                      <div
+                        className="rounded-lg overflow-hidden"
+                        style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "150px" }}
+                      >
+                        {overflowGroups.map((g) => {
+                          const subActive = g.id === activeGroup.id;
+                          return (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => {
+                                setCommunityPanelTab(g.members[0].id);
+                                setCommunityOpenTabDropdown(null);
+                              }}
+                              className={`w-full text-left px-3 py-2 ${TAP}`}
+                              style={{
+                                background: subActive ? `${palette.gold}18` : "transparent",
+                                color: subActive ? palette.gold : palette.text,
+                                fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
+                                borderBottom: g.id !== overflowGroups[overflowGroups.length - 1].id ? `1px solid ${palette.border}` : "none",
+                              }}
+                            >
+                              {g.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {activeGroup.id === "chat" && (

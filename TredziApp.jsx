@@ -16858,17 +16858,18 @@ if (activeTab === "community") {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-end justify-center gap-3 mb-7" style={{ minHeight: "190px" }}>
+                      <div className="flex items-end justify-center gap-2 mb-7" style={{ minHeight: isDesktop ? "190px" : "160px" }}>
                         {podium.map((row) => {
                           const rank = rows.indexOf(row) + 1;
                           const isMe = row.member.username === communityUsername;
-                          const h = rank === 1 ? 106 : rank === 2 ? 82 : 68;
+                          const h = isDesktop ? (rank === 1 ? 106 : rank === 2 ? 82 : 68) : (rank === 1 ? 84 : rank === 2 ? 64 : 54);
+                          const colW = isDesktop ? 88 : 74;
                           return (
-                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`flex flex-col items-center ${TAP}`} style={{ width: "88px", alignSelf: "flex-end" }}>
-                              <Avatar name={row.member.username} size={rank === 1 ? 58 : 48} src={avatarForAuthor(row.member.username)} ring />
-                              <span className="truncate" style={{ width: "100%", marginTop: "7px", color: palette.text, fontSize: "11.5px", fontWeight: 700 }}>{row.member.username}</span>
-                              <span style={{ color: rank === 1 ? palette.green : palette.textMuted, fontSize: "12px", fontWeight: 800, marginTop: "2px" }}>{metricText(row.stats)}</span>
-                              <div style={{ width: "84px", height: `${h}px`, marginTop: "6px", background: isMe ? `${palette.blue}12` : palette.surface, border: `1px solid ${rank === 1 ? palette.gold : isMe ? palette.blue : palette.border}`, borderBottom: "none", borderRadius: "10px 10px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: rank === 1 ? palette.gold : palette.textMuted, fontFamily: mono, fontSize: "16px", fontWeight: 800 }}>{rank}</span></div>
+                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`flex flex-col items-center ${TAP}`} style={{ width: `${colW}px`, alignSelf: "flex-end", minWidth: 0 }}>
+                              <Avatar name={row.member.username} size={isDesktop ? (rank === 1 ? 58 : 48) : (rank === 1 ? 46 : 38)} src={avatarForAuthor(row.member.username)} ring />
+                              <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.text, fontSize: isDesktop ? "11.5px" : "10px", fontWeight: 700, textAlign: "center" }}>{row.member.username}</span>
+                              <span style={{ color: rank === 1 ? palette.green : palette.textMuted, fontSize: isDesktop ? "12px" : "10.5px", fontWeight: 800, marginTop: "2px" }}>{metricText(row.stats)}</span>
+                              <div style={{ width: `${colW - 4}px`, height: `${h}px`, marginTop: "6px", background: isMe ? `${palette.blue}12` : palette.surface, border: `1px solid ${rank === 1 ? palette.gold : isMe ? palette.blue : palette.border}`, borderBottom: "none", borderRadius: "10px 10px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: rank === 1 ? palette.gold : palette.textMuted, fontFamily: mono, fontSize: isDesktop ? "16px" : "13px", fontWeight: 800 }}>{rank}</span></div>
                             </button>
                           );
                         })}
@@ -16878,12 +16879,12 @@ if (activeTab === "community") {
                           const rank = idx + 4;
                           const isMe = row.member.username === communityUsername;
                           return (
-                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left ${TAP}`} style={{ background: isMe ? `${palette.blue}10` : palette.surface, border: `1px solid ${isMe ? palette.blue + "66" : palette.border}` }}>
-                              <span style={{ width: "22px", textAlign: "center", color: palette.textFaint, fontFamily: mono, fontSize: "11px" }}>{rank}</span>
-                              <Avatar name={row.member.username} size={30} src={avatarForAuthor(row.member.username)} />
-                              <span className="flex-1 min-w-0 truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{row.member.username}</span>
-                              {isMe && <span style={{ color: palette.blue, background: `${palette.blue}18`, border: `1px solid ${palette.blue}44`, borderRadius: "999px", padding: "3px 7px", fontSize: "9px", fontFamily: mono, fontWeight: 700 }}>YOU</span>}
-                              <span style={{ color: palette.text, fontSize: "12.5px", fontWeight: 800 }}>{metricText(row.stats)}</span>
+                            <button key={row.member.username} type="button" onClick={() => openCommunityMemberProfile(row.member.username)} className={`w-full flex items-center gap-2 rounded-xl px-2.5 py-2 text-left ${TAP}`} style={{ background: isMe ? `${palette.blue}10` : palette.surface, border: `1px solid ${isMe ? palette.blue + "66" : palette.border}` }}>
+                              <span style={{ width: "18px", flexShrink: 0, textAlign: "center", color: palette.textFaint, fontFamily: mono, fontSize: "10.5px" }}>{rank}</span>
+                              <Avatar name={row.member.username} size={isDesktop ? 30 : 26} src={avatarForAuthor(row.member.username)} />
+                              <span className="flex-1 min-w-0 truncate" style={{ color: palette.text, fontSize: isDesktop ? "12.5px" : "11.5px", fontWeight: 700 }}>{row.member.username}</span>
+                              {isMe && <span style={{ flexShrink: 0, color: palette.blue, background: `${palette.blue}18`, border: `1px solid ${palette.blue}44`, borderRadius: "999px", padding: "3px 6px", fontSize: "8.5px", fontFamily: mono, fontWeight: 700 }}>YOU</span>}
+                              <span style={{ flexShrink: 0, color: palette.text, fontSize: isDesktop ? "12.5px" : "11.5px", fontWeight: 800 }}>{metricText(row.stats)}</span>
                             </button>
                           );
                         })}

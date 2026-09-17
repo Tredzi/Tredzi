@@ -4454,6 +4454,7 @@ const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
 const [communityChatSubView, setCommunityChatSubView] = useState("chat"); // "chat" | "signal"
 const [communityFeedSubView, setCommunityFeedSubView] = useState("feed"); // "feed" | "ideas" | "wall"
+const [communityFeedDropdownOpen, setCommunityFeedDropdownOpen] = useState(false);
 const [signalStatsOpen, setSignalStatsOpen] = useState(false);
 const [selectedCommunityMember, setSelectedCommunityMember] = useState(null);
 const [leaderboardMetric, setLeaderboardMetric] = useState("winRate");
@@ -5113,7 +5114,7 @@ const createVaultItem = async () => {
     });
     setGroupVault(data.items || []);
   } catch (err) {
-    setCommunityApiError(err.message || "Couldn't save that to the vault.");
+    setCommunityApiError(err.message || "Couldn't save that to resources.");
   }
 };
 
@@ -15858,7 +15859,7 @@ if (activeTab === "community") {
             { id: "chat", label: "Chat", members: [{ id: "chat", label: "Messages" }, { id: "signal", label: "Signals" }], subState: communityChatSubView, setSubState: setCommunityChatSubView },
             { id: "feed", label: "Feed", members: [{ id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "wall", label: "Wall" }], subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
             { id: "qa", label: "Q&A", members: [{ id: "qa", label: "Q&A" }] },
-            { id: "vault", label: "Vault", members: [{ id: "vault", label: "Vault" }] },
+            { id: "vault", label: "Resources", members: [{ id: "vault", label: "Resources" }] },
             { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
             { id: "leaderboard", label: "Leaderboard", members: [{ id: "leaderboard", label: "Leaderboard" }] },
           ];
@@ -15875,6 +15876,7 @@ if (activeTab === "community") {
                       onClick={() => {
                         const target = g.members.length > 1 ? (g.subState || g.members[0].id) : g.members[0].id;
                         setCommunityPanelTab(target);
+                        if (g.id !== "feed") setCommunityFeedDropdownOpen(false);
                       }}
                       className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
                       style={{
@@ -15891,7 +15893,55 @@ if (activeTab === "community") {
                   );
                 })}
               </div>
-              {activeGroup.members.length > 1 && (
+              {activeGroup.members.length > 1 && activeGroup.id === "feed" && (
+                <div className={isDesktop ? "px-4 pb-2.5 flex-shrink-0" : "px-3.5 pb-2 flex-shrink-0"} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setCommunityFeedDropdownOpen((o) => !o)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg ${TAP}`}
+                    style={{
+                      background: palette.field,
+                      color: palette.text,
+                      border: `1px solid ${palette.border}`,
+                      fontFamily: sans, fontSize: "11.5px", fontWeight: 700,
+                    }}
+                  >
+                    {activeGroup.members.find((m) => m.id === communityPanelTab)?.label || activeGroup.members[0].label}
+                    <ChevronDown size={13} style={{ transform: communityFeedDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                  </button>
+                  {communityFeedDropdownOpen && (
+                    <div
+                      className="rounded-lg overflow-hidden"
+                      style={{ position: "absolute", top: "calc(100% + 4px)", left: isDesktop ? "16px" : "14px", zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "140px" }}
+                    >
+                      {activeGroup.members.map((m) => {
+                        const subActive = communityPanelTab === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              activeGroup.setSubState(m.id);
+                              setCommunityPanelTab(m.id);
+                              setCommunityFeedDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 ${TAP}`}
+                            style={{
+                              background: subActive ? `${palette.gold}18` : "transparent",
+                              color: subActive ? palette.gold : palette.text,
+                              fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
+                              borderBottom: m.id !== activeGroup.members[activeGroup.members.length - 1].id ? `1px solid ${palette.border}` : "none",
+                            }}
+                          >
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {activeGroup.members.length > 1 && activeGroup.id !== "feed" && (
                 <div className={isDesktop ? "flex gap-1.5 px-4 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                   {activeGroup.members.map((m) => {
                     const subActive = communityPanelTab === m.id;
@@ -16547,13 +16597,13 @@ if (activeTab === "community") {
                       color: newVaultTitle.trim() ? palette.letterbox : palette.textFaint,
                       fontFamily: mono, fontSize: "12px", fontWeight: 700,
                     }}>
-                    Add to vault
+                    Add to resources
                   </button>
                 </div>
               </div>
 
               {!groupVaultLoaded ? (
-                <p className="text-xs" style={{ color: palette.textFaint }}>Loading vault…</p>
+                <p className="text-xs" style={{ color: palette.textFaint }}>Loading resources…</p>
               ) : groupVault.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-10">
                   <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
@@ -16595,7 +16645,7 @@ if (activeTab === "community") {
                   );
                 })
               )}
-              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>The vault is shared with this group.</p>
+              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Resources are shared with this group.</p>
             </div>
           </>
 

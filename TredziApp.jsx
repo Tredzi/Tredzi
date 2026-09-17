@@ -4668,7 +4668,8 @@ useEffect(() => {
   const membership = myGroups.find((g) => g.id === activeGroupId);
   if (!membership) return;
   let cancelled = false;
-  (async () => {
+
+  const loadGroupAndMembers = async () => {
     try {
       const data = await communityApi(`/groups/${activeGroupId}`, {
         headers: { Authorization: `Bearer ${membership.token}` },
@@ -4688,8 +4689,13 @@ useEffect(() => {
     } finally {
       if (!cancelled) setGroupMembersLoaded(true);
     }
-  })();
-  return () => { cancelled = true; };
+  };
+
+  loadGroupAndMembers();
+  // Same cadence as message polling, so new joins/leaves and role changes
+  // show up without the person having to leave and reopen the group.
+  const id = setInterval(loadGroupAndMembers, COMMUNITY_MESSAGE_POLL_MS);
+  return () => { cancelled = true; clearInterval(id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeGroupId]);
 
@@ -7658,7 +7664,7 @@ const updateSyncedJournalRow = (trade) => {
     if (m.tp) parts.push(`TP ${m.tp}`);
     if (m.text) parts.push(`"${m.text}"`);
     setTradeNote(parts.join(" \u00b7 "));
-    setActiveTab("risk");
+    setActiveTab("curve");
     setTimeout(() => {
       if (logFormRef.current) {
         logFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -15863,18 +15869,12 @@ if (activeTab === "community") {
             { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
             { id: "leaderboard", label: "Leaderboard", members: [{ id: "leaderboard", label: "Leaderboard" }] },
           ];
-          const PINNED_GROUP_IDS = ["chat", "feed", "posts"];
-          const pinnedGroups = COMMUNITY_TAB_GROUPS.filter((g) => PINNED_GROUP_IDS.includes(g.id));
-          const moreGroups = COMMUNITY_TAB_GROUPS.filter((g) => !PINNED_GROUP_IDS.includes(g.id));
-          const topGroups = isDesktop ? COMMUNITY_TAB_GROUPS : pinnedGroups;
           const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
           const feedDropdownOpen = communityOpenTabDropdown === "feed";
-          const moreDropdownOpen = communityOpenTabDropdown === "more";
-          const isMoreActive = !isDesktop && moreGroups.some((g) => g.id === activeGroup.id);
           return (
             <>
               <div className={isDesktop ? "flex flex-wrap gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex flex-wrap gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"}>
-                {topGroups.map((g) => {
+                {COMMUNITY_TAB_GROUPS.map((g) => {
                   const active = g.id === activeGroup.id;
                   return (
                     <button
@@ -15899,59 +15899,6 @@ if (activeTab === "community") {
                     </button>
                   );
                 })}
-                {!isDesktop && (
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => setCommunityOpenTabDropdown((cur) => (cur === "more" ? null : "more"))}
-                      className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                      style={{
-                        flexShrink: 0,
-                        whiteSpace: "nowrap",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "3px",
-                        background: isMoreActive ? palette.gold : palette.field,
-                        color: isMoreActive ? palette.letterbox : palette.textMuted,
-                        border: `1px solid ${isMoreActive ? palette.gold : palette.border}`,
-                        fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
-                      }}
-                    >
-                      {isMoreActive ? activeGroup.label : "More"}
-                      <ChevronDown size={12} style={{ transform: moreDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-                    </button>
-                    {moreDropdownOpen && (
-                      <div
-                        className="rounded-lg overflow-hidden"
-                        style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "160px" }}
-                      >
-                        {moreGroups.map((g) => {
-                          const active = g.id === activeGroup.id;
-                          return (
-                            <button
-                              key={g.id}
-                              type="button"
-                              onClick={() => {
-                                const target = g.members.length > 1 ? (g.subState || g.members[0].id) : g.members[0].id;
-                                setCommunityPanelTab(target);
-                                setCommunityOpenTabDropdown(null);
-                              }}
-                              className={`w-full text-left px-3 py-2 ${TAP}`}
-                              style={{
-                                background: active ? `${palette.gold}18` : "transparent",
-                                color: active ? palette.gold : palette.text,
-                                fontFamily: sans, fontSize: "12px", fontWeight: active ? 700 : 500,
-                                borderBottom: g.id !== moreGroups[moreGroups.length - 1].id ? `1px solid ${palette.border}` : "none",
-                              }}
-                            >
-                              {g.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               {activeGroup.id === "chat" && (
@@ -17099,6 +17046,11 @@ if (activeTab === "community") {
                       >
                         <Trash2 size={11} />
                       </button>
+                    )}
+                    {isMe && (
+                      <span style={{ width: "28px", flexShrink: 0 }}>
+                        {!grouped && <Avatar name={m.author} size={28} src={communityAvatar} />}
+                      </span>
                     )}
                   </div>
                 );

@@ -4452,6 +4452,8 @@ const [newQuestionText, setNewQuestionText] = useState("");
 const [qaReplyDrafts, setQaReplyDrafts] = useState({});
 const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
+const [communityChatSubView, setCommunityChatSubView] = useState("chat"); // "chat" | "signal"
+const [communityFeedSubView, setCommunityFeedSubView] = useState("feed"); // "feed" | "ideas" | "wall"
 const [signalStatsOpen, setSignalStatsOpen] = useState(false);
 const [selectedCommunityMember, setSelectedCommunityMember] = useState(null);
 const [leaderboardMetric, setLeaderboardMetric] = useState("winRate");
@@ -15851,29 +15853,72 @@ if (activeTab === "community") {
           );
         })()}
 
-<div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-  {[{ id: "chat", label: "Chat" }, { id: "signal", label: "Signal" }, { id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "qa", label: "Q&A" }, { id: "vault", label: "Vault" }, { id: "wall", label: "Wall" }, { id: "posts", label: "Announcements" }, { id: "leaderboard", label: "Leaderboard" }].map((t) => {
-            const active = communityPanelTab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setCommunityPanelTab(t.id)}
-                className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
-                style={{
-                  flexShrink: 0,
-                  whiteSpace: "nowrap",
-                  background: active ? palette.gold : palette.field,
-                  color: active ? palette.letterbox : palette.textMuted,
-                  border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontFamily: mono, fontSize: isDesktop ? "12px" : "11.5px", fontWeight: 700,
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+{(() => {
+          const COMMUNITY_TAB_GROUPS = [
+            { id: "chat", label: "Chat", members: [{ id: "chat", label: "Messages" }, { id: "signal", label: "Signals" }], subState: communityChatSubView, setSubState: setCommunityChatSubView },
+            { id: "feed", label: "Feed", members: [{ id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "wall", label: "Wall" }], subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
+            { id: "qa", label: "Q&A", members: [{ id: "qa", label: "Q&A" }] },
+            { id: "vault", label: "Vault", members: [{ id: "vault", label: "Vault" }] },
+            { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
+            { id: "leaderboard", label: "Leaderboard", members: [{ id: "leaderboard", label: "Leaderboard" }] },
+          ];
+          const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
+          return (
+            <>
+              <div className={isDesktop ? "flex gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                {COMMUNITY_TAB_GROUPS.map((g) => {
+                  const active = g.id === activeGroup.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        const target = g.members.length > 1 ? (g.subState || g.members[0].id) : g.members[0].id;
+                        setCommunityPanelTab(target);
+                      }}
+                      className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
+                      style={{
+                        flexShrink: 0,
+                        whiteSpace: "nowrap",
+                        background: active ? palette.gold : palette.field,
+                        color: active ? palette.letterbox : palette.textMuted,
+                        border: `1px solid ${active ? palette.gold : palette.border}`,
+                        fontFamily: mono, fontSize: isDesktop ? "12px" : "11.5px", fontWeight: 700,
+                      }}
+                    >
+                      {g.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {activeGroup.members.length > 1 && (
+                <div className={isDesktop ? "flex gap-1.5 px-4 pb-2.5 flex-shrink-0" : "flex gap-1.5 px-3.5 pb-2 flex-shrink-0"} style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                  {activeGroup.members.map((m) => {
+                    const subActive = communityPanelTab === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => { activeGroup.setSubState(m.id); setCommunityPanelTab(m.id); }}
+                        className={`px-3 py-1 rounded-full transition-colors ${TAP}`}
+                        style={{
+                          flexShrink: 0,
+                          whiteSpace: "nowrap",
+                          background: subActive ? `${palette.gold}22` : "transparent",
+                          color: subActive ? palette.gold : palette.textFaint,
+                          border: `1px solid ${subActive ? palette.gold + "55" : palette.border}`,
+                          fontFamily: sans, fontSize: "10.5px", fontWeight: 700,
+                        }}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {communityPanelTab === "posts" ? (
           <>

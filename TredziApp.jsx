@@ -658,6 +658,8 @@ const FEED_REACTIONS = [
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const isWithinStoryWindow = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) < STORY_WINDOW_MS;
 const STORY_SLIDE_MS = 5000;
+// Telegram-style unread-story ring (blue → violet gradient); seen stories fall back to a plain gray ring.
+const STORY_RING_GRADIENT = "linear-gradient(135deg, #4FC3F7 0%, #2AABEE 45%, #7C6BFF 100%)";
 
 const avatarStyleFor = (seed) => {
   let h = 0;
@@ -4514,6 +4516,9 @@ const [commentDrafts, setCommentDrafts] = useState({});
 const [storyViewer, setStoryViewer] = useState(null); // { authorIdx, slideIdx }
 const [storyPaused, setStoryPaused] = useState(false);
 const [storyProgressPct, setStoryProgressPct] = useState(0);
+const [seenStoryAuthors, setSeenStoryAuthors] = useState({}); // { [username]: true } — dims the ring once viewed, like Telegram
+const [storyDragY, setStoryDragY] = useState(0);
+const storyDragStartRef = useRef(null);
 const [pinnedMessageId, setPinnedMessageId] = useState(null);
 const [replyingTo, setReplyingTo] = useState(null); // { id, author, preview }
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
@@ -4769,10 +4774,19 @@ const openStoryViewerFor = (username) => {
   const idx = storyAuthorOrder.indexOf(username);
   if (idx === -1) { openCommunityMemberProfile(username); return; }
   setStoryPaused(false);
+  setStoryDragY(0);
   setStoryViewer({ authorIdx: idx, slideIdx: 0 });
 };
 
-const closeStoryViewer = () => setStoryViewer(null);
+const closeStoryViewer = () => { setStoryViewer(null); setStoryDragY(0); };
+
+// Mark the currently-open author's story as seen — rings turn gray, like Telegram
+useEffect(() => {
+  if (!storyViewer) return;
+  const author = storyAuthorOrder[storyViewer.authorIdx];
+  if (!author) return;
+  setSeenStoryAuthors((cur) => (cur[author] ? cur : { ...cur, [author]: true }));
+}, [storyViewer?.authorIdx, storyAuthorOrder]);
 
 const advanceStory = (dir) => {
   setStoryViewer((cur) => {
@@ -4793,6 +4807,29 @@ const advanceStory = (dir) => {
     }
     return { ...cur, slideIdx: nextSlide };
   });
+};
+
+// Swipe-down-to-dismiss, like Telegram's story viewer
+const handleStoryDragStart = (e) => {
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
+  storyDragStartRef.current = y;
+  setStoryPaused(true);
+};
+const handleStoryDragMove = (e) => {
+  if (storyDragStartRef.current == null) return;
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
+  const delta = y - storyDragStartRef.current;
+  setStoryDragY(Math.max(0, delta));
+};
+const handleStoryDragEnd = () => {
+  if (storyDragStartRef.current == null) return;
+  storyDragStartRef.current = null;
+  setStoryPaused(false);
+  if (storyDragY > 100) {
+    closeStoryViewer();
+  } else {
+    setStoryDragY(0);
+  }
 };
 
 // Auto-advance progress bar for the open story slide
@@ -16992,6 +17029,8 @@ if (activeTab === "community") {
                 {(() => {
                   const myStory = storiesByAuthor[communityUsername] || [];
                   const hasOwnStory = myStory.length > 0;
+                  const seen = !!seenStoryAuthors[communityUsername];
+                  const ringSize = isDesktop ? "54px" : "46px";
                   return (
                     <div className="relative flex-shrink-0" style={{ width: isDesktop ? "68px" : "60px" }}>
                       <button
@@ -17002,16 +17041,23 @@ if (activeTab === "community") {
                         <span
                           className="flex items-center justify-center rounded-full"
                           style={{
-                            width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px",
-                            border: hasOwnStory ? `2px solid ${palette.gold}` : `1.5px dashed ${palette.textFaint}`,
-                            padding: hasOwnStory ? "2px" : 0, color: palette.textFaint,
+                            width: ringSize, height: ringSize,
+                            padding: "2px",
+                            background: hasOwnStory ? (seen ? palette.border : STORY_RING_GRADIENT) : "transparent",
+                            border: hasOwnStory ? "none" : `1.5px dashed ${palette.textFaint}`,
+                            color: palette.textFaint,
                           }}
                         >
-                          {hasOwnStory ? (
-                            <Avatar name={communityUsername} size={isDesktop ? 46 : 38} src={avatarForAuthor(communityUsername)} />
-                          ) : (
-                            <Plus size={isDesktop ? 20 : 17} />
-                          )}
+                          <span
+                            className="flex items-center justify-center rounded-full w-full h-full"
+                            style={{ background: hasOwnStory ? palette.bg : "transparent", padding: hasOwnStory ? "2px" : 0 }}
+                          >
+                            {hasOwnStory ? (
+                              <Avatar name={communityUsername} size={isDesktop ? 46 : 38} src={avatarForAuthor(communityUsername)} />
+                            ) : (
+                              <Plus size={isDesktop ? 20 : 17} />
+                            )}
+                          </span>
                         </span>
                         <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
                           Your story
@@ -17022,7 +17068,7 @@ if (activeTab === "community") {
                           type="button"
                           onClick={(e) => { e.stopPropagation(); feedImageInputRef.current && feedImageInputRef.current.click(); }}
                           className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                          style={{ width: "18px", height: "18px", right: isDesktop ? "6px" : "4px", top: isDesktop ? "34px" : "28px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}` }}
+                          style={{ width: "18px", height: "18px", right: isDesktop ? "6px" : "4px", top: isDesktop ? "34px" : "28px", background: "#2AABEE", color: "#FFFFFF", border: `2px solid ${palette.bg}` }}
                           aria-label="Add to your story"
                         >
                           <Plus size={11} />
@@ -17035,6 +17081,8 @@ if (activeTab === "community") {
                   .filter((m) => m.username !== communityUsername)
                   .map((m) => {
                     const hasRecentPost = !!storiesByAuthor[m.username]?.length;
+                    const seen = !!seenStoryAuthors[m.username];
+                    const ringSize = isDesktop ? "54px" : "46px";
                     return (
                       <button
                         key={m.username}
@@ -17045,9 +17093,14 @@ if (activeTab === "community") {
                       >
                         <span
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `2px solid ${hasRecentPost ? palette.gold : palette.border}`, padding: "2px" }}
+                          style={{
+                            width: ringSize, height: ringSize, padding: "2px",
+                            background: hasRecentPost ? (seen ? palette.border : STORY_RING_GRADIENT) : palette.border,
+                          }}
                         >
-                          <Avatar name={m.username} size={isDesktop ? 46 : 38} src={avatarForAuthor(m.username)} />
+                          <span className="flex items-center justify-center rounded-full w-full h-full" style={{ background: palette.bg, padding: "2px" }}>
+                            <Avatar name={m.username} size={isDesktop ? 46 : 38} src={avatarForAuthor(m.username)} />
+                          </span>
                         </span>
                         <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.text, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
                           {m.username}
@@ -17586,33 +17639,51 @@ if (activeTab === "community") {
           const isMine = author === communityUsername;
           const pnlPositive = slide.pnl && !slide.pnl.trim().startsWith("-");
 
-          const handlePress = () => setStoryPaused(true);
-          const handleRelease = () => setStoryPaused(false);
           const handleTapZone = (dir) => (e) => {
             e.stopPropagation();
+            if (storyDragY > 4) return; // don't advance if this tap was actually a drag
             advanceStory(dir);
+          };
+          const replyDraft = commentDrafts[slide.id] || "";
+          const sendStoryReply = () => {
+            if (!replyDraft.trim()) return;
+            postFeedComment(slide.id);
           };
 
           return (
             <div
               className="fixed inset-0 flex items-center justify-center"
-              style={{ background: "#000000", zIndex: 130 }}
-              onMouseDown={handlePress}
-              onMouseUp={handleRelease}
-              onMouseLeave={handleRelease}
-              onTouchStart={handlePress}
-              onTouchEnd={handleRelease}
+              style={{ background: `rgba(0,0,0,${Math.max(0.35, 1 - storyDragY / 300)})`, zIndex: 130, touchAction: "none" }}
+              onMouseDown={handleStoryDragStart}
+              onMouseMove={handleStoryDragMove}
+              onMouseUp={handleStoryDragEnd}
+              onMouseLeave={handleStoryDragEnd}
+              onTouchStart={handleStoryDragStart}
+              onTouchMove={handleStoryDragMove}
+              onTouchEnd={handleStoryDragEnd}
             >
-              <div className="relative w-full h-full flex flex-col" style={{ maxWidth: isDesktop ? "420px" : "100%", margin: "0 auto" }}>
-                {/* progress segments */}
-                <div className="flex gap-1 px-2.5 pt-2.5 flex-shrink-0" style={{ zIndex: 2 }}>
+              <div
+                className="relative w-full h-full flex flex-col"
+                style={{
+                  maxWidth: isDesktop ? "420px" : "100%",
+                  margin: "0 auto",
+                  background: "#000000",
+                  borderRadius: storyDragY > 0 ? "18px" : 0,
+                  overflow: "hidden",
+                  transform: `translateY(${storyDragY}px) scale(${Math.max(0.9, 1 - storyDragY / 1600)})`,
+                  transition: storyDragY === 0 ? "transform 0.2s ease, border-radius 0.2s ease" : "none",
+                }}
+              >
+                {/* progress segments — thin rounded pills, tight gap, Telegram-style */}
+                <div className="flex gap-[3px] px-2 pt-2 flex-shrink-0" style={{ zIndex: 2 }}>
                   {slides.map((s, i) => (
-                    <div key={s.id || i} className="flex-1 rounded-full overflow-hidden" style={{ height: "2.5px", background: "rgba(255,255,255,0.28)" }}>
+                    <div key={s.id || i} className="flex-1 rounded-full overflow-hidden" style={{ height: "2px", background: "rgba(255,255,255,0.25)" }}>
                       <div
                         style={{
                           height: "100%",
                           width: i < storyViewer.slideIdx ? "100%" : i === storyViewer.slideIdx ? `${storyProgressPct}%` : "0%",
                           background: "#FFFFFF",
+                          borderRadius: "999px",
                           transition: i === storyViewer.slideIdx ? "none" : "width 0.15s linear",
                         }}
                       />
@@ -17621,22 +17692,22 @@ if (activeTab === "community") {
                 </div>
 
                 {/* header */}
-                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 flex-shrink-0" style={{ zIndex: 2 }}>
+                <div className="flex items-center justify-between px-3 pt-2 pb-2 flex-shrink-0" style={{ zIndex: 2 }}>
                   <div className="flex items-center gap-2 min-w-0">
                     <Avatar name={author} size={30} src={avatarForAuthor(author)} />
                     <div className="min-w-0">
-                      <div className="truncate" style={{ color: "#FFFFFF", fontSize: "13px", fontWeight: 700 }}>{isMine ? "Your story" : author}</div>
+                      <div className="truncate" style={{ color: "#FFFFFF", fontSize: "13.5px", fontWeight: 700 }}>{isMine ? "Your story" : author}</div>
                       <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "10.5px", fontFamily: mono }}>{feedTimeAgo(slide.ts)}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-3 flex-shrink-0">
                     {isMine && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteFeedPost(slide.id); advanceStory(1); }} className={TAP} style={{ color: "rgba(255,255,255,0.75)" }} aria-label="Delete story">
-                        <Trash2 size={16} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteFeedPost(slide.id); advanceStory(1); }} className={TAP} style={{ color: "rgba(255,255,255,0.85)" }} aria-label="Delete story">
+                        <Trash2 size={17} />
                       </button>
                     )}
-                    <button type="button" onClick={closeStoryViewer} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: "rgba(255,255,255,0.12)", color: "#FFFFFF" }} aria-label="Close story">
-                      <X size={15} />
+                    <button type="button" onClick={closeStoryViewer} className={TAP} style={{ color: "rgba(255,255,255,0.85)" }} aria-label="Close story">
+                      <X size={20} />
                     </button>
                   </div>
                 </div>
@@ -17668,8 +17739,8 @@ if (activeTab === "community") {
                   )}
                 </div>
 
-                {/* reactions on the story itself — tap to react, tap again to undo */}
-                <div className="flex items-center justify-center gap-2 px-3 pb-4 pt-2 flex-shrink-0" style={{ zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
+                {/* quick reactions — tap to react, tap again to undo */}
+                <div className="flex items-center justify-center gap-2 px-3 pt-1 pb-2 flex-shrink-0" style={{ zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
                   {FEED_REACTIONS.map((r) => {
                     const count = (slide.reactions && slide.reactions[r.key]) || 0;
                     const active = myFeedReactions[slide.id] === r.key;
@@ -17681,8 +17752,8 @@ if (activeTab === "community") {
                         className={`flex items-center gap-1 ${TAP}`}
                         style={{
                           color: "#FFFFFF", fontSize: "12px", fontFamily: mono, fontWeight: 700,
-                          background: active ? "rgba(224,172,95,0.25)" : "rgba(255,255,255,0.1)",
-                          border: `1px solid ${active ? palette.gold : "rgba(255,255,255,0.18)"}`,
+                          background: active ? "rgba(42,171,238,0.25)" : "rgba(255,255,255,0.1)",
+                          border: `1px solid ${active ? "#2AABEE" : "rgba(255,255,255,0.18)"}`,
                           borderRadius: "999px", padding: "5px 10px",
                         }}
                       >
@@ -17691,6 +17762,48 @@ if (activeTab === "community") {
                     );
                   })}
                 </div>
+
+                {/* Telegram-style reply bar — sends straight into the post's comments */}
+                {!isMine && (
+                  <div
+                    className="flex items-center gap-2 px-3 flex-shrink-0"
+                    style={{ zIndex: 2, paddingBottom: isDesktop ? "16px" : "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="text"
+                      value={replyDraft}
+                      onChange={(e) => setCommentDrafts((cur) => ({ ...cur, [slide.id]: e.target.value }))}
+                      onFocus={() => setStoryPaused(true)}
+                      onBlur={() => setStoryPaused(false)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendStoryReply(); } }}
+                      placeholder={`Reply to ${author}…`}
+                      className="flex-1 rounded-full outline-none"
+                      style={{
+                        background: "rgba(255,255,255,0.12)",
+                        border: "1px solid rgba(255,255,255,0.22)",
+                        color: "#FFFFFF", fontSize: "13.5px", padding: "9px 15px",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={sendStoryReply}
+                      disabled={!replyDraft.trim()}
+                      className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+                      style={{
+                        width: "36px", height: "36px",
+                        background: replyDraft.trim() ? "#2AABEE" : "rgba(255,255,255,0.12)",
+                        color: "#FFFFFF",
+                        opacity: replyDraft.trim() ? 1 : 0.6,
+                      }}
+                      aria-label="Send reply"
+                    >
+                      <Send size={15} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );

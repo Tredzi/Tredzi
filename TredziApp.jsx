@@ -16203,174 +16203,141 @@ if (activeTab === "community") {
         })()}
 
 {(() => {
-          const COMMUNITY_TAB_GROUPS = [
-            { id: "chat", label: "Chat", members: [{ id: "chat", label: "Messages" }, { id: "signal", label: "Signals" }], subState: communityChatSubView, setSubState: setCommunityChatSubView },
-            { id: "feed", label: "Feed", members: [{ id: "feed", label: "Feed" }, { id: "ideas", label: "Ideas" }, { id: "wall", label: "Wall" }], subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
-            { id: "posts", label: "Announcements", members: [{ id: "posts", label: "Announcements" }] },
-            { id: "qa", label: "Q&A", members: [{ id: "qa", label: "Q&A" }] },
-            { id: "vault", label: "Resources", members: [{ id: "vault", label: "Resources" }] },
-            { id: "leaderboard", label: "Leaderboard", members: [{ id: "leaderboard", label: "Leaderboard" }] },
+          // ── Group navigation ──────────────────────────────────────────
+          // Top level: Instagram-style underline tabs (one scrollable row, no wrapping).
+          // Second level: Discord-style channel switcher for tabs that have sub-views.
+          const ICONS = {
+            chat: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
+            image: (<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" /></>),
+            megaphone: (<><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>),
+            help: (<><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>),
+            folder: <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />,
+            trophy: (<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
+            hash: (<><path d="M4 9h16" /><path d="M4 15h16" /><path d="M10 3 8 21" /><path d="M16 3l-2 18" /></>),
+            zap: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />,
+            grid: (<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
+            bulb: (<><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></>),
+            note: (<><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" /><path d="M15 3v6h6" /></>),
+          };
+          const icon = (name, size, color) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+              {ICONS[name]}
+            </svg>
+          );
+
+          const TAB_GROUPS = [
+            { id: "chat", label: "Chat", icon: "chat",
+              subs: [{ id: "chat", label: "Messages", icon: "hash" }, { id: "signal", label: "Signals", icon: "zap" }],
+              subState: communityChatSubView, setSubState: setCommunityChatSubView },
+            { id: "feed", label: "Feed", icon: "image",
+              subs: [{ id: "feed", label: "Posts", icon: "grid" }, { id: "ideas", label: "Ideas", icon: "bulb" }, { id: "wall", label: "Wall", icon: "note" }],
+              subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
+            { id: "posts", label: "Announcements", icon: "megaphone" },
+            { id: "qa", label: "Q&A", icon: "help" },
+            { id: "vault", label: "Resources", icon: "folder" },
+            { id: "leaderboard", label: "Leaderboard", icon: "trophy" },
           ];
-          // Mobile pins Chat/Feed/Announcements directly and tucks the rest behind
-          // "More" so the bar doesn't turn into a wall of buttons; desktop has the
-          // room to just show every group, so it skips the split entirely.
-          const PINNED_GROUP_IDS = ["chat", "feed", "posts"];
-          const visibleGroups = isDesktop ? COMMUNITY_TAB_GROUPS : COMMUNITY_TAB_GROUPS.filter((g) => PINNED_GROUP_IDS.includes(g.id));
-          const overflowGroups = isDesktop ? [] : COMMUNITY_TAB_GROUPS.filter((g) => !PINNED_GROUP_IDS.includes(g.id));
-          const activeGroup = COMMUNITY_TAB_GROUPS.find((g) => g.members.some((m) => m.id === communityPanelTab)) || COMMUNITY_TAB_GROUPS[0];
-          const isOverflowActive = overflowGroups.some((g) => g.id === activeGroup.id);
-          const feedDropdownOpen = communityOpenTabDropdown === "feed";
-          const moreTabsDropdownOpen = communityOpenTabDropdown === "more";
+          const activeGroup = TAB_GROUPS.find((g) => g.id === communityPanelTab || (g.subs && g.subs.some((s) => s.id === communityPanelTab))) || TAB_GROUPS[0];
+
+          const openTab = (g, e) => {
+            setCommunityPanelTab(g.subs ? (g.subState || g.subs[0].id) : g.id);
+            setCommunityOpenTabDropdown(null);
+            if (e && e.currentTarget && e.currentTarget.scrollIntoView) {
+              e.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+            }
+          };
+          const padX = isDesktop ? "16px" : "8px";
+
           return (
             <>
-              <div className={isDesktop ? "flex flex-wrap gap-2 px-4 pt-3 pb-2.5 flex-shrink-0" : "flex flex-wrap gap-1.5 px-3.5 pt-2 pb-2 flex-shrink-0"}>
-                {visibleGroups.map((g) => {
+              <style>{`.comm-tabbar{scrollbar-width:none;-ms-overflow-style:none}.comm-tabbar::-webkit-scrollbar{display:none}`}</style>
+
+              {/* Level 1: underline tabs */}
+              <div
+                className="comm-tabbar flex flex-shrink-0"
+                role="tablist"
+                aria-label="Group sections"
+                style={{ overflowX: "auto", padding: `0 ${padX}`, borderBottom: `1px solid ${palette.border}` }}
+              >
+                {TAB_GROUPS.map((g) => {
                   const active = g.id === activeGroup.id;
                   return (
                     <button
                       key={g.id}
                       type="button"
-                      onClick={() => {
-                        const target = g.members.length > 1 ? (g.subState || g.members[0].id) : g.members[0].id;
-                        setCommunityPanelTab(target);
-                        setCommunityOpenTabDropdown(null);
-                      }}
-                      className={`${isDesktop ? "px-4 py-1.5" : "px-3 py-1.5"} rounded-full transition-colors ${TAP}`}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={(e) => openTab(g, e)}
+                      className={TAP}
                       style={{
+                        position: "relative",
                         flexShrink: 0,
                         whiteSpace: "nowrap",
-                        background: active ? palette.gold : palette.field,
-                        color: active ? palette.letterbox : palette.textMuted,
-                        border: `1px solid ${active ? palette.gold : palette.border}`,
-                        fontFamily: mono, fontSize: isDesktop ? "12px" : "11.5px", fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "7px",
+                        padding: isDesktop ? "13px 14px" : "12px 12px",
+                        background: "none",
+                        border: "none",
+                        color: active ? palette.text : palette.textMuted,
+                        fontFamily: sans,
+                        fontSize: isDesktop ? "13px" : "12.5px",
+                        fontWeight: active ? 700 : 600,
                       }}
                     >
+                      {icon(g.icon, 16, active ? palette.gold : palette.textFaint)}
                       {g.label}
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          position: "absolute", left: "10px", right: "10px", bottom: "-1px", height: "2px",
+                          borderRadius: "2px 2px 0 0",
+                          background: palette.gold,
+                          opacity: active ? 1 : 0,
+                          transform: active ? "scaleX(1)" : "scaleX(0.4)",
+                          transition: "opacity 0.15s, transform 0.15s",
+                        }}
+                      />
                     </button>
                   );
                 })}
-                {overflowGroups.length > 0 && (
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => setCommunityOpenTabDropdown((cur) => (cur === "more" ? null : "more"))}
-                      className={`px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${TAP}`}
-                      style={{
-                        whiteSpace: "nowrap",
-                        background: isOverflowActive ? palette.gold : palette.field,
-                        color: isOverflowActive ? palette.letterbox : palette.textMuted,
-                        border: `1px solid ${isOverflowActive ? palette.gold : palette.border}`,
-                        fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
-                      }}
-                    >
-                      {isOverflowActive ? activeGroup.label : "More"}
-                      <ChevronDown size={12} style={{ transform: moreTabsDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-                    </button>
-                    {moreTabsDropdownOpen && (
-                      <div
-                        className="rounded-lg overflow-hidden"
-                        style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "150px" }}
-                      >
-                        {overflowGroups.map((g) => {
-                          const subActive = g.id === activeGroup.id;
-                          return (
-                            <button
-                              key={g.id}
-                              type="button"
-                              onClick={() => {
-                                setCommunityPanelTab(g.members[0].id);
-                                setCommunityOpenTabDropdown(null);
-                              }}
-                              className={`w-full text-left px-3 py-2 ${TAP}`}
-                              style={{
-                                background: subActive ? `${palette.gold}18` : "transparent",
-                                color: subActive ? palette.gold : palette.text,
-                                fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
-                                borderBottom: g.id !== overflowGroups[overflowGroups.length - 1].id ? `1px solid ${palette.border}` : "none",
-                              }}
-                            >
-                              {g.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
-              {activeGroup.id === "chat" && (
-                <div className={isDesktop ? "flex flex-wrap gap-1.5 px-4 pb-2.5 flex-shrink-0" : "flex flex-wrap gap-1.5 px-3.5 pb-2 flex-shrink-0"}>
-                  {activeGroup.members.map((m) => {
-                    const subActive = communityPanelTab === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => { activeGroup.setSubState(m.id); setCommunityPanelTab(m.id); }}
-                        className={`px-3 py-1 rounded-full transition-colors ${TAP}`}
-                        style={{
-                          flexShrink: 0,
-                          whiteSpace: "nowrap",
-                          background: subActive ? `${palette.gold}22` : "transparent",
-                          color: subActive ? palette.gold : palette.textFaint,
-                          border: `1px solid ${subActive ? palette.gold + "55" : palette.border}`,
-                          fontFamily: sans, fontSize: "10.5px", fontWeight: 700,
-                        }}
-                      >
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {activeGroup.id === "feed" && (
-                <div className={isDesktop ? "px-4 pb-2.5 flex-shrink-0" : "px-3.5 pb-2 flex-shrink-0"} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    onClick={() => setCommunityOpenTabDropdown((cur) => (cur === "feed" ? null : "feed"))}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg ${TAP}`}
-                    style={{
-                      background: palette.field,
-                      color: palette.text,
-                      border: `1px solid ${palette.border}`,
-                      fontFamily: sans, fontSize: "11.5px", fontWeight: 700,
-                    }}
+              {/* Level 2: channel switcher (only for tabs with sub-views) */}
+              {activeGroup.subs && (
+                <div className="flex flex-shrink-0" style={{ padding: isDesktop ? "10px 16px 4px" : "8px 12px 2px" }}>
+                  <div
+                    role="tablist"
+                    aria-label={`${activeGroup.label} views`}
+                    style={{ display: "inline-flex", gap: "2px", padding: "3px", borderRadius: "12px", background: palette.letterbox, border: `1px solid ${palette.border}` }}
                   >
-                    {activeGroup.members.find((m) => m.id === communityPanelTab)?.label || activeGroup.members[0].label}
-                    <ChevronDown size={13} style={{ transform: feedDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-                  </button>
-                  {feedDropdownOpen && (
-                    <div
-                      className="rounded-lg overflow-hidden"
-                      style={{ position: "absolute", top: "calc(100% + 4px)", left: isDesktop ? "16px" : "14px", zIndex: 20, background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, minWidth: "140px" }}
-                    >
-                      {activeGroup.members.map((m) => {
-                        const subActive = communityPanelTab === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              activeGroup.setSubState(m.id);
-                              setCommunityPanelTab(m.id);
-                              setCommunityOpenTabDropdown(null);
-                            }}
-                            className={`w-full text-left px-3 py-2 ${TAP}`}
-                            style={{
-                              background: subActive ? `${palette.gold}18` : "transparent",
-                              color: subActive ? palette.gold : palette.text,
-                              fontFamily: sans, fontSize: "12px", fontWeight: subActive ? 700 : 500,
-                              borderBottom: m.id !== activeGroup.members[activeGroup.members.length - 1].id ? `1px solid ${palette.border}` : "none",
-                            }}
-                          >
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                    {activeGroup.subs.map((s) => {
+                      const on = communityPanelTab === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          onClick={() => { activeGroup.setSubState(s.id); setCommunityPanelTab(s.id); }}
+                          className={TAP}
+                          style={{
+                            display: "flex", alignItems: "center", gap: "6px",
+                            padding: "5px 12px", borderRadius: "9px", whiteSpace: "nowrap",
+                            border: "none",
+                            background: on ? palette.field : "transparent",
+                            boxShadow: on ? "0 1px 3px rgba(0,0,0,0.25)" : "none",
+                            color: on ? palette.text : palette.textMuted,
+                            fontFamily: sans, fontSize: "12px", fontWeight: on ? 700 : 600,
+                            transition: "background 0.15s, color 0.15s",
+                          }}
+                        >
+                          {icon(s.icon, 13, on ? palette.gold : palette.textFaint)}
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </>

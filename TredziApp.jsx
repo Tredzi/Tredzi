@@ -658,8 +658,6 @@ const FEED_REACTIONS = [
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const isWithinStoryWindow = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) < STORY_WINDOW_MS;
 const STORY_SLIDE_MS = 5000;
-// Telegram-style unread-story ring (blue → violet gradient); seen stories fall back to a plain gray ring.
-const STORY_RING_GRADIENT = "linear-gradient(135deg, #4FC3F7 0%, #2AABEE 45%, #7C6BFF 100%)";
 
 const avatarStyleFor = (seed) => {
   let h = 0;
@@ -4516,9 +4514,17 @@ const [commentDrafts, setCommentDrafts] = useState({});
 const [storyViewer, setStoryViewer] = useState(null); // { authorIdx, slideIdx }
 const [storyPaused, setStoryPaused] = useState(false);
 const [storyProgressPct, setStoryProgressPct] = useState(0);
-const [seenStoryAuthors, setSeenStoryAuthors] = useState({}); // { [username]: true } — dims the ring once viewed, like Telegram
-const [storyDragY, setStoryDragY] = useState(0);
-const storyDragStartRef = useRef(null);
+// Stories live in their own table/endpoints — they are NOT feed posts.
+const [groupStories, setGroupStories] = useState([]);
+const [groupStoriesLoaded, setGroupStoriesLoaded] = useState(false);
+const storyImageInputRef = useRef(null);
+const [storyDraft, setStoryDraft] = useState(null); // { image } while the story composer is open
+const [storyCaption, setStoryCaption] = useState("");
+const [storyPosting, setStoryPosting] = useState(false);
+const [myStoryReactions, setMyStoryReactions] = useState({}); // { [storyId]: reactionKey }
+const [seenStoryIds, setSeenStoryIds] = useState(() => {
+  try { return JSON.parse(localStorage.getItem("community:seen-stories") || "[]"); } catch (e) { return []; }
+});
 const [pinnedMessageId, setPinnedMessageId] = useState(null);
 const [replyingTo, setReplyingTo] = useState(null); // { id, author, preview }
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
@@ -4750,43 +4756,40 @@ const memberAvatarByUsername = useMemo(() => {
 }, [groupMembersList, communityUsername, communityAvatar]);
 const avatarForAuthor = (author) => memberAvatarByUsername[author] || undefined;
 
-// ---------- Stories (derived from the last 24h of feed posts) ----------
+// ---------- Stories (their own table — separate from feed posts) ----------
 const storiesByAuthor = useMemo(() => {
   const map = {};
-  groupFeed.forEach((p) => {
-    if (!isWithinStoryWindow(p.ts)) return;
-    if (!map[p.author]) map[p.author] = [];
-    map[p.author].push(p);
+  groupStories.forEach((st) => {
+    if (!isWithinStoryWindow(st.ts)) return;
+    (map[st.author] = map[st.author] || []).push(st);
   });
-  Object.values(map).forEach((arr) => arr.sort((a, b) => new Date(a.ts) - new Date(b.ts)));
+  Object.values(map).forEach((arr) => arr.sort((x, y) => new Date(x.ts) - new Date(y.ts)));
   return map;
-}, [groupFeed]);
+}, [groupStories]);
 
+// Me first, then everyone else with an active story (newest story first).
+// Order deliberately does NOT depend on "seen" so it can't reshuffle while the viewer is open.
 const storyAuthorOrder = useMemo(() => {
+  const latest = (u) => new Date(storiesByAuthor[u][storiesByAuthor[u].length - 1].ts).getTime();
   const mine = storiesByAuthor[communityUsername]?.length ? [communityUsername] : [];
-  const others = groupMembersList
-    .map((m) => m.username)
-    .filter((u) => u !== communityUsername && storiesByAuthor[u]?.length);
+  const others = Object.keys(storiesByAuthor)
+    .filter((u) => u !== communityUsername && storiesByAuthor[u]?.length)
+    .sort((x, y) => latest(y) - latest(x));
   return [...mine, ...others];
-}, [groupMembersList, storiesByAuthor, communityUsername]);
+}, [storiesByAuthor, communityUsername]);
+
+const authorHasUnseen = (u) => (storiesByAuthor[u] || []).some((st) => !seenStoryIds.includes(st.id));
 
 const openStoryViewerFor = (username) => {
   const idx = storyAuthorOrder.indexOf(username);
-  if (idx === -1) { openCommunityMemberProfile(username); return; }
+  if (idx === -1) return;
+  const slides = storiesByAuthor[username] || [];
+  const firstUnseen = slides.findIndex((st) => !seenStoryIds.includes(st.id));
   setStoryPaused(false);
-  setStoryDragY(0);
-  setStoryViewer({ authorIdx: idx, slideIdx: 0 });
+  setStoryViewer({ authorIdx: idx, slideIdx: firstUnseen === -1 ? 0 : firstUnseen });
 };
 
-const closeStoryViewer = () => { setStoryViewer(null); setStoryDragY(0); };
-
-// Mark the currently-open author's story as seen — rings turn gray, like Telegram
-useEffect(() => {
-  if (!storyViewer) return;
-  const author = storyAuthorOrder[storyViewer.authorIdx];
-  if (!author) return;
-  setSeenStoryAuthors((cur) => (cur[author] ? cur : { ...cur, [author]: true }));
-}, [storyViewer?.authorIdx, storyAuthorOrder]);
+const closeStoryViewer = () => setStoryViewer(null);
 
 const advanceStory = (dir) => {
   setStoryViewer((cur) => {
@@ -4807,29 +4810,6 @@ const advanceStory = (dir) => {
     }
     return { ...cur, slideIdx: nextSlide };
   });
-};
-
-// Swipe-down-to-dismiss, like Telegram's story viewer
-const handleStoryDragStart = (e) => {
-  const y = e.touches ? e.touches[0].clientY : e.clientY;
-  storyDragStartRef.current = y;
-  setStoryPaused(true);
-};
-const handleStoryDragMove = (e) => {
-  if (storyDragStartRef.current == null) return;
-  const y = e.touches ? e.touches[0].clientY : e.clientY;
-  const delta = y - storyDragStartRef.current;
-  setStoryDragY(Math.max(0, delta));
-};
-const handleStoryDragEnd = () => {
-  if (storyDragStartRef.current == null) return;
-  storyDragStartRef.current = null;
-  setStoryPaused(false);
-  if (storyDragY > 100) {
-    closeStoryViewer();
-  } else {
-    setStoryDragY(0);
-  }
 };
 
 // Auto-advance progress bar for the open story slide
@@ -5027,6 +5007,35 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeGroupId, communityPanelTab]);
 
+
+// Stories: load when the Feed tab opens (separate endpoint from the feed itself)
+useEffect(() => {
+  if (!activeGroupId || communityPanelTab !== "feed") return;
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  setGroupStoriesLoaded(false);
+  setGroupStories([]);
+  fetchStories(membership)
+    .then((list) => { if (!cancelled) applyStories(list); })
+    .catch(() => { /* silent — the story row just stays empty */ })
+    .finally(() => { if (!cancelled) setGroupStoriesLoaded(true); });
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeGroupId, communityPanelTab]);
+
+// Mark the slide on screen as seen (drives the gold → grey ring, like Telegram)
+useEffect(() => {
+  if (!storyViewer) return;
+  const author = storyAuthorOrder[storyViewer.authorIdx];
+  const st = (storiesByAuthor[author] || [])[storyViewer.slideIdx];
+  if (st && !seenStoryIds.includes(st.id)) setSeenStoryIds((cur) => [...cur, st.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [storyViewer?.authorIdx, storyViewer?.slideIdx]);
+
+useEffect(() => {
+  try { localStorage.setItem("community:seen-stories", JSON.stringify(seenStoryIds.slice(-500))); } catch (e) { /* ignore */ }
+}, [seenStoryIds]);
 
 const uploadGroupAvatar = async (file) => {
   const membership = myGroups.find((g) => g.id === activeGroupId);
@@ -5487,6 +5496,99 @@ const deleteFeedPost = async (postId) => {
     setGroupFeed((cur) => cur.filter((p) => p.id !== postId));
   } catch (err) {
     setCommunityApiError(err.message || "Couldn't delete that post.");
+  }
+};
+
+// ---------- Stories (real, backed by the Worker + D1 — separate from the feed) ----------
+const fetchStories = async (membership) => {
+  const data = await communityApi(`/groups/${membership.id}/stories`, {
+    headers: { Authorization: `Bearer ${membership.token}` },
+  });
+  return data.stories || [];
+};
+
+const applyStories = (list) => {
+  setGroupStories(list);
+  setMyStoryReactions(Object.fromEntries(list.filter((st) => st.myReaction).map((st) => [st.id, st.myReaction])));
+};
+
+const openStoryComposer = () => storyImageInputRef.current && storyImageInputRef.current.click();
+
+const handleStoryImageChange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const dataUrl = await resizeImageFile(file, 1080);
+    setStoryCaption("");
+    setStoryDraft({ image: dataUrl });
+  } catch (err) {
+    setCommunityApiError("Couldn't open that image.");
+  }
+};
+
+const cancelStoryDraft = () => { setStoryDraft(null); setStoryCaption(""); };
+
+const postStory = async () => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership || !storyDraft?.image || storyPosting) return;
+  setStoryPosting(true);
+  try {
+    await communityApi(`/groups/${activeGroupId}/stories`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ image: storyDraft.image, text: storyCaption.trim() }),
+    });
+    setStoryDraft(null);
+    setStoryCaption("");
+    applyStories(await fetchStories(membership));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't post your story.");
+  } finally {
+    setStoryPosting(false);
+  }
+};
+
+const deleteStory = async (storyId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/stories/${storyId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setGroupStories((cur) => cur.filter((st) => st.id !== storyId));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't delete that story.");
+  }
+};
+
+// Tap an emoji to react; tap the SAME emoji again to undo it (one reaction per person per story).
+const toggleStoryReaction = async (storyId, emojiKey) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  const prevEmoji = myStoryReactions[storyId];
+  const removing = prevEmoji === emojiKey;
+  setMyStoryReactions((cur) => {
+    const next = { ...cur };
+    if (removing) delete next[storyId]; else next[storyId] = emojiKey;
+    return next;
+  });
+  setGroupStories((cur) => cur.map((st) => {
+    if (st.id !== storyId) return st;
+    const reactions = { ...(st.reactions || {}) };
+    if (prevEmoji) reactions[prevEmoji] = Math.max(0, (reactions[prevEmoji] || 0) - 1);
+    if (!removing) reactions[emojiKey] = (reactions[emojiKey] || 0) + 1;
+    return { ...st, reactions };
+  }));
+  try {
+    await communityApi(`/groups/${activeGroupId}/stories/${storyId}/react`, {
+      method: removing ? "DELETE" : "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      ...(removing ? {} : { body: JSON.stringify({ emoji: emojiKey }) }),
+    });
+  } catch (err) {
+    // silent — optimistic, same as feed reactions
   }
 };
 
@@ -17024,51 +17126,43 @@ if (activeTab === "community") {
           <>
             <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
 
-              {/* Story-style avatar row */}
+              {/* Stories — their own row + composer, completely separate from feed posts (Telegram-style) */}
+              <input ref={storyImageInputRef} type="file" accept="image/*" onChange={handleStoryImageChange} style={{ display: "none" }} />
               <div className="flex items-start gap-3 mb-5 pb-1" style={{ overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
-                  const myStory = storiesByAuthor[communityUsername] || [];
-                  const hasOwnStory = myStory.length > 0;
-                  const seen = !!seenStoryAuthors[communityUsername];
-                  const ringSize = isDesktop ? "54px" : "46px";
+                  const hasOwnStory = (storiesByAuthor[communityUsername] || []).length > 0;
+                  const ownUnseen = authorHasUnseen(communityUsername);
                   return (
                     <div className="relative flex-shrink-0" style={{ width: isDesktop ? "68px" : "60px" }}>
                       <button
                         type="button"
-                        onClick={() => (hasOwnStory ? openStoryViewerFor(communityUsername) : (feedImageInputRef.current && feedImageInputRef.current.click()))}
+                        onClick={() => (hasOwnStory ? openStoryViewerFor(communityUsername) : openStoryComposer())}
                         className={`flex flex-col items-center w-full ${TAP}`}
                       >
                         <span
                           className="flex items-center justify-center rounded-full"
                           style={{
-                            width: ringSize, height: ringSize,
-                            padding: "2px",
-                            background: hasOwnStory ? (seen ? palette.border : STORY_RING_GRADIENT) : "transparent",
-                            border: hasOwnStory ? "none" : `1.5px dashed ${palette.textFaint}`,
-                            color: palette.textFaint,
+                            width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px",
+                            border: hasOwnStory ? `2px solid ${ownUnseen ? palette.gold : palette.border}` : `1.5px dashed ${palette.textFaint}`,
+                            padding: hasOwnStory ? "2px" : 0, color: palette.textFaint,
                           }}
                         >
-                          <span
-                            className="flex items-center justify-center rounded-full w-full h-full"
-                            style={{ background: hasOwnStory ? palette.bg : "transparent", padding: hasOwnStory ? "2px" : 0 }}
-                          >
-                            {hasOwnStory ? (
-                              <Avatar name={communityUsername} size={isDesktop ? 46 : 38} src={avatarForAuthor(communityUsername)} />
-                            ) : (
-                              <Plus size={isDesktop ? 20 : 17} />
-                            )}
-                          </span>
+                          {hasOwnStory ? (
+                            <Avatar name={communityUsername} size={isDesktop ? 46 : 38} src={avatarForAuthor(communityUsername)} />
+                          ) : (
+                            <Plus size={isDesktop ? 20 : 17} />
+                          )}
                         </span>
                         <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
-                          Your story
+                          My story
                         </span>
                       </button>
                       {hasOwnStory && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); feedImageInputRef.current && feedImageInputRef.current.click(); }}
+                          onClick={(e) => { e.stopPropagation(); openStoryComposer(); }}
                           className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                          style={{ width: "18px", height: "18px", right: isDesktop ? "6px" : "4px", top: isDesktop ? "34px" : "28px", background: "#2AABEE", color: "#FFFFFF", border: `2px solid ${palette.bg}` }}
+                          style={{ width: "18px", height: "18px", right: isDesktop ? "6px" : "4px", top: isDesktop ? "34px" : "28px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}` }}
                           aria-label="Add to your story"
                         >
                           <Plus size={11} />
@@ -17077,33 +17171,26 @@ if (activeTab === "community") {
                     </div>
                   );
                 })()}
-                {groupMembersList
-                  .filter((m) => m.username !== communityUsername)
-                  .map((m) => {
-                    const hasRecentPost = !!storiesByAuthor[m.username]?.length;
-                    const seen = !!seenStoryAuthors[m.username];
-                    const ringSize = isDesktop ? "54px" : "46px";
+                {storyAuthorOrder
+                  .filter((u) => u !== communityUsername)
+                  .map((u) => {
+                    const unseen = authorHasUnseen(u);
                     return (
                       <button
-                        key={m.username}
+                        key={u}
                         type="button"
-                        onClick={() => (hasRecentPost ? openStoryViewerFor(m.username) : openCommunityMemberProfile(m.username))}
+                        onClick={() => openStoryViewerFor(u)}
                         className={`flex flex-col items-center flex-shrink-0 ${TAP}`}
                         style={{ width: isDesktop ? "68px" : "60px" }}
                       >
                         <span
                           className="flex items-center justify-center rounded-full"
-                          style={{
-                            width: ringSize, height: ringSize, padding: "2px",
-                            background: hasRecentPost ? (seen ? palette.border : STORY_RING_GRADIENT) : palette.border,
-                          }}
+                          style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `2px solid ${unseen ? palette.gold : palette.border}`, padding: "2px" }}
                         >
-                          <span className="flex items-center justify-center rounded-full w-full h-full" style={{ background: palette.bg, padding: "2px" }}>
-                            <Avatar name={m.username} size={isDesktop ? 46 : 38} src={avatarForAuthor(m.username)} />
-                          </span>
+                          <Avatar name={u} size={isDesktop ? 46 : 38} src={avatarForAuthor(u)} />
                         </span>
-                        <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.text, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
-                          {m.username}
+                        <span className="truncate" style={{ width: "100%", marginTop: "6px", color: unseen ? palette.text : palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
+                          {u}
                         </span>
                       </button>
                     );
@@ -17631,6 +17718,42 @@ if (activeTab === "community") {
           );
         })()}
 
+        {storyDraft && (
+          <div className="fixed inset-0 flex items-center justify-center" style={{ background: "#000000", zIndex: 135 }}>
+            <div className="relative w-full h-full flex flex-col" style={{ maxWidth: isDesktop ? "420px" : "100%", margin: "0 auto" }}>
+              <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
+                <button type="button" onClick={cancelStoryDraft} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: "rgba(255,255,255,0.12)", color: "#FFFFFF" }} aria-label="Cancel story">
+                  <X size={16} />
+                </button>
+                <span style={{ color: "#FFFFFF", fontSize: "14px", fontWeight: 700 }}>New story</span>
+                <span style={{ width: "32px" }} />
+              </div>
+              <div className="flex-1 flex items-center justify-center px-4" style={{ minHeight: 0 }}>
+                <img src={storyDraft.image} alt="Story preview" className="rounded-xl" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              </div>
+              <div className="flex items-center gap-2 px-3 pb-4 pt-3 flex-shrink-0">
+                <input
+                  type="text"
+                  value={storyCaption}
+                  onChange={(e) => setStoryCaption(e.target.value.slice(0, 200))}
+                  placeholder="Add a caption…"
+                  className="flex-1 rounded-full px-4 py-2.5 outline-none"
+                  style={{ background: "rgba(255,255,255,0.12)", color: "#FFFFFF", fontSize: "13px", border: "1px solid rgba(255,255,255,0.18)" }}
+                />
+                <button
+                  type="button"
+                  onClick={postStory}
+                  disabled={storyPosting}
+                  className={`px-4 py-2.5 rounded-full ${TAP}`}
+                  style={{ background: palette.gold, color: palette.letterbox, fontFamily: mono, fontSize: "12px", fontWeight: 800, opacity: storyPosting ? 0.6 : 1 }}
+                >
+                  {storyPosting ? "Posting…" : "Post story"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {storyViewer && (() => {
           const author = storyAuthorOrder[storyViewer.authorIdx];
           const slides = storiesByAuthor[author] || [];
@@ -17639,51 +17762,33 @@ if (activeTab === "community") {
           const isMine = author === communityUsername;
           const pnlPositive = slide.pnl && !slide.pnl.trim().startsWith("-");
 
+          const handlePress = () => setStoryPaused(true);
+          const handleRelease = () => setStoryPaused(false);
           const handleTapZone = (dir) => (e) => {
             e.stopPropagation();
-            if (storyDragY > 4) return; // don't advance if this tap was actually a drag
             advanceStory(dir);
-          };
-          const replyDraft = commentDrafts[slide.id] || "";
-          const sendStoryReply = () => {
-            if (!replyDraft.trim()) return;
-            postFeedComment(slide.id);
           };
 
           return (
             <div
               className="fixed inset-0 flex items-center justify-center"
-              style={{ background: `rgba(0,0,0,${Math.max(0.35, 1 - storyDragY / 300)})`, zIndex: 130, touchAction: "none" }}
-              onMouseDown={handleStoryDragStart}
-              onMouseMove={handleStoryDragMove}
-              onMouseUp={handleStoryDragEnd}
-              onMouseLeave={handleStoryDragEnd}
-              onTouchStart={handleStoryDragStart}
-              onTouchMove={handleStoryDragMove}
-              onTouchEnd={handleStoryDragEnd}
+              style={{ background: "#000000", zIndex: 130 }}
+              onMouseDown={handlePress}
+              onMouseUp={handleRelease}
+              onMouseLeave={handleRelease}
+              onTouchStart={handlePress}
+              onTouchEnd={handleRelease}
             >
-              <div
-                className="relative w-full h-full flex flex-col"
-                style={{
-                  maxWidth: isDesktop ? "420px" : "100%",
-                  margin: "0 auto",
-                  background: "#000000",
-                  borderRadius: storyDragY > 0 ? "18px" : 0,
-                  overflow: "hidden",
-                  transform: `translateY(${storyDragY}px) scale(${Math.max(0.9, 1 - storyDragY / 1600)})`,
-                  transition: storyDragY === 0 ? "transform 0.2s ease, border-radius 0.2s ease" : "none",
-                }}
-              >
-                {/* progress segments — thin rounded pills, tight gap, Telegram-style */}
-                <div className="flex gap-[3px] px-2 pt-2 flex-shrink-0" style={{ zIndex: 2 }}>
+              <div className="relative w-full h-full flex flex-col" style={{ maxWidth: isDesktop ? "420px" : "100%", margin: "0 auto" }}>
+                {/* progress segments */}
+                <div className="flex gap-1 px-2.5 pt-2.5 flex-shrink-0" style={{ zIndex: 2 }}>
                   {slides.map((s, i) => (
-                    <div key={s.id || i} className="flex-1 rounded-full overflow-hidden" style={{ height: "2px", background: "rgba(255,255,255,0.25)" }}>
+                    <div key={s.id || i} className="flex-1 rounded-full overflow-hidden" style={{ height: "2.5px", background: "rgba(255,255,255,0.28)" }}>
                       <div
                         style={{
                           height: "100%",
                           width: i < storyViewer.slideIdx ? "100%" : i === storyViewer.slideIdx ? `${storyProgressPct}%` : "0%",
                           background: "#FFFFFF",
-                          borderRadius: "999px",
                           transition: i === storyViewer.slideIdx ? "none" : "width 0.15s linear",
                         }}
                       />
@@ -17692,22 +17797,22 @@ if (activeTab === "community") {
                 </div>
 
                 {/* header */}
-                <div className="flex items-center justify-between px-3 pt-2 pb-2 flex-shrink-0" style={{ zIndex: 2 }}>
+                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 flex-shrink-0" style={{ zIndex: 2 }}>
                   <div className="flex items-center gap-2 min-w-0">
                     <Avatar name={author} size={30} src={avatarForAuthor(author)} />
                     <div className="min-w-0">
-                      <div className="truncate" style={{ color: "#FFFFFF", fontSize: "13.5px", fontWeight: 700 }}>{isMine ? "Your story" : author}</div>
+                      <div className="truncate" style={{ color: "#FFFFFF", fontSize: "13px", fontWeight: 700 }}>{isMine ? "Your story" : author}</div>
                       <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "10.5px", fontFamily: mono }}>{feedTimeAgo(slide.ts)}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {isMine && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteFeedPost(slide.id); advanceStory(1); }} className={TAP} style={{ color: "rgba(255,255,255,0.85)" }} aria-label="Delete story">
-                        <Trash2 size={17} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); const left = slides.length - 1; deleteStory(slide.id); if (left <= 0) closeStoryViewer(); else setStoryViewer((cur) => cur && { ...cur, slideIdx: Math.min(cur.slideIdx, left - 1) }); }} className={TAP} style={{ color: "rgba(255,255,255,0.75)" }} aria-label="Delete story">
+                        <Trash2 size={16} />
                       </button>
                     )}
-                    <button type="button" onClick={closeStoryViewer} className={TAP} style={{ color: "rgba(255,255,255,0.85)" }} aria-label="Close story">
-                      <X size={20} />
+                    <button type="button" onClick={closeStoryViewer} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: "rgba(255,255,255,0.12)", color: "#FFFFFF" }} aria-label="Close story">
+                      <X size={15} />
                     </button>
                   </div>
                 </div>
@@ -17725,6 +17830,12 @@ if (activeTab === "community") {
                     </div>
                   )}
 
+                  {slide.image && slide.text && (
+                    <div className="absolute" style={{ left: "16px", right: "16px", bottom: "12px", zIndex: 4, textAlign: "center", color: "#FFFFFF", fontSize: "14px", lineHeight: 1.4, background: "rgba(0,0,0,0.5)", padding: "8px 12px", borderRadius: "12px", whiteSpace: "pre-wrap" }}>
+                      {slide.text}
+                    </div>
+                  )}
+
                   {slide.pnl && (
                     <span
                       className="absolute"
@@ -17739,21 +17850,21 @@ if (activeTab === "community") {
                   )}
                 </div>
 
-                {/* quick reactions — tap to react, tap again to undo */}
-                <div className="flex items-center justify-center gap-2 px-3 pt-1 pb-2 flex-shrink-0" style={{ zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
+                {/* reactions on the story itself — tap to react, tap again to undo */}
+                <div className="flex items-center justify-center gap-2 px-3 pb-4 pt-2 flex-shrink-0" style={{ zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
                   {FEED_REACTIONS.map((r) => {
                     const count = (slide.reactions && slide.reactions[r.key]) || 0;
-                    const active = myFeedReactions[slide.id] === r.key;
+                    const active = myStoryReactions[slide.id] === r.key;
                     return (
                       <button
                         key={r.key}
                         type="button"
-                        onClick={() => toggleFeedReaction(slide.id, r.key)}
+                        onClick={() => toggleStoryReaction(slide.id, r.key)}
                         className={`flex items-center gap-1 ${TAP}`}
                         style={{
                           color: "#FFFFFF", fontSize: "12px", fontFamily: mono, fontWeight: 700,
-                          background: active ? "rgba(42,171,238,0.25)" : "rgba(255,255,255,0.1)",
-                          border: `1px solid ${active ? "#2AABEE" : "rgba(255,255,255,0.18)"}`,
+                          background: active ? "rgba(224,172,95,0.25)" : "rgba(255,255,255,0.1)",
+                          border: `1px solid ${active ? palette.gold : "rgba(255,255,255,0.18)"}`,
                           borderRadius: "999px", padding: "5px 10px",
                         }}
                       >
@@ -17762,48 +17873,6 @@ if (activeTab === "community") {
                     );
                   })}
                 </div>
-
-                {/* Telegram-style reply bar — sends straight into the post's comments */}
-                {!isMine && (
-                  <div
-                    className="flex items-center gap-2 px-3 flex-shrink-0"
-                    style={{ zIndex: 2, paddingBottom: isDesktop ? "16px" : "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      type="text"
-                      value={replyDraft}
-                      onChange={(e) => setCommentDrafts((cur) => ({ ...cur, [slide.id]: e.target.value }))}
-                      onFocus={() => setStoryPaused(true)}
-                      onBlur={() => setStoryPaused(false)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendStoryReply(); } }}
-                      placeholder={`Reply to ${author}…`}
-                      className="flex-1 rounded-full outline-none"
-                      style={{
-                        background: "rgba(255,255,255,0.12)",
-                        border: "1px solid rgba(255,255,255,0.22)",
-                        color: "#FFFFFF", fontSize: "13.5px", padding: "9px 15px",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={sendStoryReply}
-                      disabled={!replyDraft.trim()}
-                      className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
-                      style={{
-                        width: "36px", height: "36px",
-                        background: replyDraft.trim() ? "#2AABEE" : "rgba(255,255,255,0.12)",
-                        color: "#FFFFFF",
-                        opacity: replyDraft.trim() ? 1 : 0.6,
-                      }}
-                      aria-label="Send reply"
-                    >
-                      <Send size={15} />
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           );

@@ -635,6 +635,18 @@ const AVATAR_HUES = [
 const getInitials = (name) =>
   (name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
 
+const feedTimeAgo = (ts) => {
+  const diffMs = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
 const avatarStyleFor = (seed) => {
   let h = 0;
   for (let i = 0; i < (seed || "").length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -16792,6 +16804,51 @@ if (activeTab === "community") {
         ) : communityPanelTab === "feed" ? (
           <>
             <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
+
+              {/* Story-style avatar row */}
+              <div className="flex items-start gap-3 mb-5 pb-1" style={{ overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                <button
+                  type="button"
+                  onClick={() => feedImageInputRef.current && feedImageInputRef.current.click()}
+                  className={`flex flex-col items-center flex-shrink-0 ${TAP}`}
+                  style={{ width: isDesktop ? "68px" : "60px" }}
+                >
+                  <span
+                    className="flex items-center justify-center rounded-full"
+                    style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `1.5px dashed ${palette.textFaint}`, color: palette.textFaint }}
+                  >
+                    <Plus size={isDesktop ? 20 : 17} />
+                  </span>
+                  <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
+                    Your story
+                  </span>
+                </button>
+                {groupMembersList
+                  .filter((m) => m.username !== communityUsername)
+                  .map((m) => {
+                    const hasRecentPost = groupFeed.some((p) => p.author === m.username);
+                    return (
+                      <button
+                        key={m.username}
+                        type="button"
+                        onClick={() => openCommunityMemberProfile(m.username)}
+                        className={`flex flex-col items-center flex-shrink-0 ${TAP}`}
+                        style={{ width: isDesktop ? "68px" : "60px" }}
+                      >
+                        <span
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `2px solid ${hasRecentPost ? palette.blue : palette.border}`, padding: "2px" }}
+                        >
+                          <Avatar name={m.username} size={isDesktop ? 46 : 38} src={avatarForAuthor(m.username)} />
+                        </span>
+                        <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.text, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
+                          {m.username}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+
               <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
                 <textarea value={newFeedText} onChange={(e) => setNewFeedText(e.target.value)}
                   placeholder="Share a trade with the group…" rows={2}
@@ -16850,36 +16907,41 @@ if (activeTab === "community") {
                   const liked = likedFeedIds.includes(p.id);
                   const pnlPositive = p.pnl && !p.pnl.trim().startsWith("-");
                   return (
-                    <div key={p.id} className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar name={p.author} size={26} src={avatarForAuthor(p.author)} />
-                          <button type="button" onClick={() => openCommunityMemberProfile(p.author)} className={TAP} style={{ color: palette.gold, fontSize: "12px", fontWeight: 700, background: "none", border: "none", padding: 0 }}>{p.author}</button>
-                          <span style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>
-                            {new Date(p.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {p.pnl && (
-                            <span style={{
-                              background: pnlPositive ? `${palette.green}22` : `${palette.red}22`,
-                              color: pnlPositive ? palette.green : palette.red,
-                              fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", fontFamily: mono,
-                            }}>{p.pnl}</span>
-                          )}
-                          {canDelete && (
-                            <button type="button" onClick={() => deleteFeedPost(p.id)} className={TAP} style={{ color: palette.textFaint }} aria-label="Delete post">
-                              <Trash2 size={13} />
+                    <div key={p.id} className="rounded-2xl p-4 mb-3.5" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <Avatar name={p.author} size={isDesktop ? 38 : 34} src={avatarForAuthor(p.author)} />
+                          <div className="min-w-0">
+                            <button type="button" onClick={() => openCommunityMemberProfile(p.author)} className={`block ${TAP}`} style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700, background: "none", border: "none", padding: 0, textAlign: "left" }}>
+                              {p.author}
                             </button>
-                          )}
+                            <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>
+                              {feedTimeAgo(p.ts)}
+                            </span>
+                          </div>
                         </div>
+                        {canDelete && (
+                          <button type="button" onClick={() => deleteFeedPost(p.id)} className={`flex-shrink-0 ${TAP}`} style={{ color: palette.textFaint }} aria-label="Delete post">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
-                      {p.text && <p className="text-sm mb-2" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.text}</p>}
-                      {p.image && <img src={p.image} alt="Feed attachment" className="rounded-xl w-full mb-2" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
-                      <button type="button" onClick={() => likeFeedPost(p.id)} disabled={liked} className={TAP}
-                        style={{ color: liked ? palette.gold : palette.textFaint, fontSize: "11px", fontFamily: mono, background: "none", border: "none", padding: 0 }}>
-                        ♥ {p.likeCount || 0}
-                      </button>
+                      {p.text && <p className="text-sm mb-2.5" style={{ color: palette.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{p.text}</p>}
+                      {p.pnl && (
+                        <span className="inline-block mb-2.5" style={{
+                          background: pnlPositive ? `${palette.green}1c` : `${palette.red}1c`,
+                          color: pnlPositive ? palette.green : palette.red,
+                          border: `1px solid ${pnlPositive ? palette.green : palette.red}44`,
+                          fontSize: "11.5px", fontWeight: 700, padding: "4px 11px", borderRadius: "999px", fontFamily: mono,
+                        }}>{p.pnl}</span>
+                      )}
+                      {p.image && <img src={p.image} alt="Feed attachment" className="rounded-xl w-full mb-2.5" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
+                      <div className="flex items-center gap-4 pt-1" style={{ borderTop: `1px solid ${palette.border}`, marginTop: "2px", paddingTop: "10px" }}>
+                        <button type="button" onClick={() => likeFeedPost(p.id)} disabled={liked} className={`flex items-center gap-1.5 ${TAP}`}
+                          style={{ color: liked ? palette.gold : palette.textFaint, fontSize: "12px", fontFamily: mono, fontWeight: 700, background: "none", border: "none", padding: 0 }}>
+                          <Flame size={15} style={liked ? { fill: palette.gold } : undefined} /> {p.likeCount || 0}
+                        </button>
+                      </div>
                     </div>
                   );
                 })

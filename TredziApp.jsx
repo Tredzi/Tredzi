@@ -647,6 +647,18 @@ const feedTimeAgo = (ts) => {
   return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 };
 
+const FEED_REACTIONS = [
+  { key: "fire", emoji: "🔥" },
+  { key: "like", emoji: "👍" },
+  { key: "love", emoji: "❤️" },
+  { key: "laugh", emoji: "😂" },
+  { key: "wow", emoji: "😮" },
+];
+
+const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const isWithinStoryWindow = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) < STORY_WINDOW_MS;
+const STORY_SLIDE_MS = 5000;
+
 const avatarStyleFor = (seed) => {
   let h = 0;
   for (let i = 0; i < (seed || "").length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -4494,6 +4506,14 @@ const [newFeedImage, setNewFeedImage] = useState(null);
 const [feedImageUploading, setFeedImageUploading] = useState(false);
 const feedImageInputRef = useRef(null);
 const [likedFeedIds, setLikedFeedIds] = useState([]);
+const [myFeedReactions, setMyFeedReactions] = useState({}); // { [postId]: reactionKey }
+const [feedComments, setFeedComments] = useState({}); // { [postId]: [{id, author, text, ts}] }
+const [feedCommentsOpenId, setFeedCommentsOpenId] = useState(null);
+const [feedCommentsLoading, setFeedCommentsLoading] = useState({});
+const [commentDrafts, setCommentDrafts] = useState({});
+const [storyViewer, setStoryViewer] = useState(null); // { authorIdx, slideIdx }
+const [storyPaused, setStoryPaused] = useState(false);
+const [storyProgressPct, setStoryProgressPct] = useState(0);
 const [pinnedMessageId, setPinnedMessageId] = useState(null);
 const [replyingTo, setReplyingTo] = useState(null); // { id, author, preview }
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
@@ -4724,6 +4744,73 @@ const memberAvatarByUsername = useMemo(() => {
   return map;
 }, [groupMembersList, communityUsername, communityAvatar]);
 const avatarForAuthor = (author) => memberAvatarByUsername[author] || undefined;
+
+// ---------- Stories (derived from the last 24h of feed posts) ----------
+const storiesByAuthor = useMemo(() => {
+  const map = {};
+  groupFeed.forEach((p) => {
+    if (!isWithinStoryWindow(p.ts)) return;
+    if (!map[p.author]) map[p.author] = [];
+    map[p.author].push(p);
+  });
+  Object.values(map).forEach((arr) => arr.sort((a, b) => new Date(a.ts) - new Date(b.ts)));
+  return map;
+}, [groupFeed]);
+
+const storyAuthorOrder = useMemo(() => {
+  const mine = storiesByAuthor[communityUsername]?.length ? [communityUsername] : [];
+  const others = groupMembersList
+    .map((m) => m.username)
+    .filter((u) => u !== communityUsername && storiesByAuthor[u]?.length);
+  return [...mine, ...others];
+}, [groupMembersList, storiesByAuthor, communityUsername]);
+
+const openStoryViewerFor = (username) => {
+  const idx = storyAuthorOrder.indexOf(username);
+  if (idx === -1) { openCommunityMemberProfile(username); return; }
+  setStoryPaused(false);
+  setStoryViewer({ authorIdx: idx, slideIdx: 0 });
+};
+
+const closeStoryViewer = () => setStoryViewer(null);
+
+const advanceStory = (dir) => {
+  setStoryViewer((cur) => {
+    if (!cur) return cur;
+    const author = storyAuthorOrder[cur.authorIdx];
+    const slides = storiesByAuthor[author] || [];
+    const nextSlide = cur.slideIdx + dir;
+    if (nextSlide >= slides.length) {
+      const nextAuthorIdx = cur.authorIdx + 1;
+      if (nextAuthorIdx >= storyAuthorOrder.length) return null;
+      return { authorIdx: nextAuthorIdx, slideIdx: 0 };
+    }
+    if (nextSlide < 0) {
+      const prevAuthorIdx = cur.authorIdx - 1;
+      if (prevAuthorIdx < 0) return { ...cur, slideIdx: 0 };
+      const prevSlides = storiesByAuthor[storyAuthorOrder[prevAuthorIdx]] || [];
+      return { authorIdx: prevAuthorIdx, slideIdx: Math.max(0, prevSlides.length - 1) };
+    }
+    return { ...cur, slideIdx: nextSlide };
+  });
+};
+
+// Auto-advance progress bar for the open story slide
+useEffect(() => {
+  if (!storyViewer || storyPaused) return;
+  setStoryProgressPct(0);
+  const start = Date.now();
+  const id = setInterval(() => {
+    const pct = Math.min(100, ((Date.now() - start) / STORY_SLIDE_MS) * 100);
+    setStoryProgressPct(pct);
+    if (pct >= 100) {
+      clearInterval(id);
+      advanceStory(1);
+    }
+  }, 50);
+  return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [storyViewer?.authorIdx, storyViewer?.slideIdx, storyPaused]);
 
 const openCommunityMemberProfile = (username) => {
   if (!username) return;
@@ -5254,6 +5341,101 @@ const likeFeedPost = async (postId) => {
     });
   } catch (err) {
     // silent — a failed like tap isn't worth surfacing an error banner for
+  }
+};
+
+// Tap an emoji to react; tap the SAME emoji again to undo it. Only one active
+// reaction per person per post, like Facebook/Instagram.
+const toggleFeedReaction = async (postId, emojiKey) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  const prevEmoji = myFeedReactions[postId];
+  const removing = prevEmoji === emojiKey;
+
+  setMyFeedReactions((cur) => {
+    const next = { ...cur };
+    if (removing) delete next[postId];
+    else next[postId] = emojiKey;
+    return next;
+  });
+  setGroupFeed((cur) => cur.map((p) => {
+    if (p.id !== postId) return p;
+    const reactions = { ...(p.reactions || {}) };
+    if (prevEmoji) reactions[prevEmoji] = Math.max(0, (reactions[prevEmoji] || 0) - 1);
+    if (!removing) reactions[emojiKey] = (reactions[emojiKey] || 0) + 1;
+    return { ...p, reactions };
+  }));
+
+  try {
+    if (removing) {
+      await communityApi(`/groups/${activeGroupId}/feed/${postId}/react`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+    } else {
+      await communityApi(`/groups/${activeGroupId}/feed/${postId}/react`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${membership.token}` },
+        body: JSON.stringify({ emoji: emojiKey, previous: prevEmoji || null }),
+      });
+    }
+  } catch (err) {
+    // silent — reactions are optimistic; a failed sync isn't worth an error banner
+  }
+};
+
+// ---------- Feed comments (real, backed by the Worker + D1) ----------
+const toggleFeedComments = (postId) => {
+  setFeedCommentsOpenId((cur) => (cur === postId ? null : postId));
+  if (!feedComments[postId]) loadFeedComments(postId);
+};
+
+const loadFeedComments = async (postId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  setFeedCommentsLoading((cur) => ({ ...cur, [postId]: true }));
+  try {
+    const data = await communityApi(`/groups/${activeGroupId}/feed/${postId}/comments`, {
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setFeedComments((cur) => ({ ...cur, [postId]: data.comments || [] }));
+  } catch (err) {
+    setFeedComments((cur) => ({ ...cur, [postId]: cur[postId] || [] }));
+  } finally {
+    setFeedCommentsLoading((cur) => ({ ...cur, [postId]: false }));
+  }
+};
+
+const postFeedComment = async (postId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  const text = (commentDrafts[postId] || "").trim();
+  if (!membership || !text) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/feed/${postId}/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+      body: JSON.stringify({ text }),
+    });
+    setCommentDrafts((cur) => ({ ...cur, [postId]: "" }));
+    setGroupFeed((cur) => cur.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || (feedComments[postId]?.length || 0)) + 1 } : p)));
+    loadFeedComments(postId);
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't post that comment.");
+  }
+};
+
+const deleteFeedComment = async (postId, commentId) => {
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  try {
+    await communityApi(`/groups/${activeGroupId}/feed/${postId}/comments/${commentId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    });
+    setFeedComments((cur) => ({ ...cur, [postId]: (cur[postId] || []).filter((c) => c.id !== commentId) }));
+    setGroupFeed((cur) => cur.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) } : p)));
+  } catch (err) {
+    setCommunityApiError(err.message || "Couldn't delete that comment.");
   }
 };
 
@@ -16807,37 +16989,63 @@ if (activeTab === "community") {
 
               {/* Story-style avatar row */}
               <div className="flex items-start gap-3 mb-5 pb-1" style={{ overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-                <button
-                  type="button"
-                  onClick={() => feedImageInputRef.current && feedImageInputRef.current.click()}
-                  className={`flex flex-col items-center flex-shrink-0 ${TAP}`}
-                  style={{ width: isDesktop ? "68px" : "60px" }}
-                >
-                  <span
-                    className="flex items-center justify-center rounded-full"
-                    style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `1.5px dashed ${palette.textFaint}`, color: palette.textFaint }}
-                  >
-                    <Plus size={isDesktop ? 20 : 17} />
-                  </span>
-                  <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
-                    Your story
-                  </span>
-                </button>
+                {(() => {
+                  const myStory = storiesByAuthor[communityUsername] || [];
+                  const hasOwnStory = myStory.length > 0;
+                  return (
+                    <div className="relative flex-shrink-0" style={{ width: isDesktop ? "68px" : "60px" }}>
+                      <button
+                        type="button"
+                        onClick={() => (hasOwnStory ? openStoryViewerFor(communityUsername) : (feedImageInputRef.current && feedImageInputRef.current.click()))}
+                        className={`flex flex-col items-center w-full ${TAP}`}
+                      >
+                        <span
+                          className="flex items-center justify-center rounded-full"
+                          style={{
+                            width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px",
+                            border: hasOwnStory ? `2px solid ${palette.gold}` : `1.5px dashed ${palette.textFaint}`,
+                            padding: hasOwnStory ? "2px" : 0, color: palette.textFaint,
+                          }}
+                        >
+                          {hasOwnStory ? (
+                            <Avatar name={communityUsername} size={isDesktop ? 46 : 38} src={avatarForAuthor(communityUsername)} />
+                          ) : (
+                            <Plus size={isDesktop ? 20 : 17} />
+                          )}
+                        </span>
+                        <span className="truncate" style={{ width: "100%", marginTop: "6px", color: palette.textMuted, fontSize: isDesktop ? "10.5px" : "9.5px", fontWeight: 600, textAlign: "center" }}>
+                          Your story
+                        </span>
+                      </button>
+                      {hasOwnStory && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); feedImageInputRef.current && feedImageInputRef.current.click(); }}
+                          className={`absolute flex items-center justify-center rounded-full ${TAP}`}
+                          style={{ width: "18px", height: "18px", right: isDesktop ? "6px" : "4px", top: isDesktop ? "34px" : "28px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}` }}
+                          aria-label="Add to your story"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 {groupMembersList
                   .filter((m) => m.username !== communityUsername)
                   .map((m) => {
-                    const hasRecentPost = groupFeed.some((p) => p.author === m.username);
+                    const hasRecentPost = !!storiesByAuthor[m.username]?.length;
                     return (
                       <button
                         key={m.username}
                         type="button"
-                        onClick={() => openCommunityMemberProfile(m.username)}
+                        onClick={() => (hasRecentPost ? openStoryViewerFor(m.username) : openCommunityMemberProfile(m.username))}
                         className={`flex flex-col items-center flex-shrink-0 ${TAP}`}
                         style={{ width: isDesktop ? "68px" : "60px" }}
                       >
                         <span
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `2px solid ${hasRecentPost ? palette.blue : palette.border}`, padding: "2px" }}
+                          style={{ width: isDesktop ? "54px" : "46px", height: isDesktop ? "54px" : "46px", border: `2px solid ${hasRecentPost ? palette.gold : palette.border}`, padding: "2px" }}
                         >
                           <Avatar name={m.username} size={isDesktop ? 46 : 38} src={avatarForAuthor(m.username)} />
                         </span>
@@ -16936,12 +17144,90 @@ if (activeTab === "community") {
                         }}>{p.pnl}</span>
                       )}
                       {p.image && <img src={p.image} alt="Feed attachment" className="rounded-xl w-full mb-2.5" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
-                      <div className="flex items-center gap-4 pt-1" style={{ borderTop: `1px solid ${palette.border}`, marginTop: "2px", paddingTop: "10px" }}>
-                        <button type="button" onClick={() => likeFeedPost(p.id)} disabled={liked} className={`flex items-center gap-1.5 ${TAP}`}
-                          style={{ color: liked ? palette.gold : palette.textFaint, fontSize: "12px", fontFamily: mono, fontWeight: 700, background: "none", border: "none", padding: 0 }}>
-                          <Flame size={15} style={liked ? { fill: palette.gold } : undefined} /> {p.likeCount || 0}
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap" style={{ borderTop: `1px solid ${palette.border}`, marginTop: "2px", paddingTop: "10px" }}>
+                        {FEED_REACTIONS.map((r) => {
+                          const count = (p.reactions && p.reactions[r.key]) || 0;
+                          const active = myFeedReactions[p.id] === r.key;
+                          return (
+                            <button
+                              key={r.key}
+                              type="button"
+                              onClick={() => toggleFeedReaction(p.id, r.key)}
+                              className={`flex items-center gap-1 ${TAP}`}
+                              style={{
+                                color: active ? palette.gold : palette.textFaint,
+                                fontSize: "12px", fontFamily: mono, fontWeight: 700,
+                                background: active ? `${palette.gold}14` : "transparent",
+                                border: `1px solid ${active ? `${palette.gold}44` : "transparent"}`,
+                                borderRadius: "999px", padding: "3px 7px",
+                              }}
+                              aria-label={active ? `Remove ${r.key} reaction` : `React with ${r.key}`}
+                            >
+                              <span style={{ fontSize: "13px" }}>{r.emoji}</span>{count > 0 && count}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => toggleFeedComments(p.id)}
+                          className={`flex items-center gap-1 ml-auto ${TAP}`}
+                          style={{ color: feedCommentsOpenId === p.id ? palette.gold : palette.textFaint, fontSize: "12px", fontFamily: mono, fontWeight: 700, background: "none", border: "none", padding: "3px 7px" }}
+                        >
+                          💬 {p.commentCount != null ? p.commentCount : (feedComments[p.id]?.length || 0)}
                         </button>
                       </div>
+
+                      {feedCommentsOpenId === p.id && (
+                        <div className="mt-2.5 pt-2.5" style={{ borderTop: `1px solid ${palette.border}` }}>
+                          {feedCommentsLoading[p.id] ? (
+                            <p className="text-xs" style={{ color: palette.textFaint }}>Loading comments…</p>
+                          ) : (feedComments[p.id] || []).length === 0 ? (
+                            <p className="text-xs mb-2" style={{ color: palette.textFaint }}>No comments yet — be the first to reply.</p>
+                          ) : (
+                            (feedComments[p.id] || []).map((c) => {
+                              const canDeleteComment = c.author === communityUsername || isGroupOwner;
+                              return (
+                                <div key={c.id} className="flex items-start gap-2 mb-2">
+                                  <Avatar name={c.author} size={22} src={avatarForAuthor(c.author)} />
+                                  <div className="flex-1 min-w-0 rounded-xl px-2.5 py-1.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span style={{ color: palette.text, fontSize: "11.5px", fontWeight: 700 }}>{c.author}</span>
+                                      <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>{feedTimeAgo(c.ts)}</span>
+                                    </div>
+                                    <p className="text-xs" style={{ color: palette.textMuted, whiteSpace: "pre-wrap" }}>{c.text}</p>
+                                  </div>
+                                  {canDeleteComment && (
+                                    <button type="button" onClick={() => deleteFeedComment(p.id, c.id)} className={`flex-shrink-0 ${TAP}`} style={{ color: palette.textFaint }} aria-label="Delete comment">
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            <input
+                              type="text"
+                              value={commentDrafts[p.id] || ""}
+                              onChange={(e) => setCommentDrafts((cur) => ({ ...cur, [p.id]: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === "Enter") postFeedComment(p.id); }}
+                              placeholder="Write a comment…"
+                              className="flex-1 rounded-lg px-2.5 py-1.5 bg-transparent outline-none"
+                              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => postFeedComment(p.id)}
+                              disabled={!(commentDrafts[p.id] || "").trim()}
+                              className={TAP}
+                              style={{ color: (commentDrafts[p.id] || "").trim() ? palette.gold : palette.textFaint, background: "none", border: "none", padding: "4px" }}
+                              aria-label="Send comment"
+                            >
+                              <Send size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -17286,6 +17572,124 @@ if (activeTab === "community") {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">{badges.length ? badges.slice(0, 4).map((badge) => <span key={String(badge)} style={{ color: palette.gold, background: `${palette.gold}12`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "5px 9px", fontSize: "9.5px", fontFamily: mono, fontWeight: 700 }}>{badge}</span>) : <span style={{ color: palette.textFaint, fontSize: "10.5px" }}>No badges yet</span>}</div>
                   {!isMe && !stats.statsPublic && <p className="text-xs mt-4" style={{ color: palette.textFaint }}>This member hasn't shared public performance stats.</p>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {storyViewer && (() => {
+          const author = storyAuthorOrder[storyViewer.authorIdx];
+          const slides = storiesByAuthor[author] || [];
+          const slide = slides[storyViewer.slideIdx];
+          if (!author || !slide) return null;
+          const isMine = author === communityUsername;
+          const pnlPositive = slide.pnl && !slide.pnl.trim().startsWith("-");
+
+          const handlePress = () => setStoryPaused(true);
+          const handleRelease = () => setStoryPaused(false);
+          const handleTapZone = (dir) => (e) => {
+            e.stopPropagation();
+            advanceStory(dir);
+          };
+
+          return (
+            <div
+              className="fixed inset-0 flex items-center justify-center"
+              style={{ background: "#000000", zIndex: 130 }}
+              onMouseDown={handlePress}
+              onMouseUp={handleRelease}
+              onMouseLeave={handleRelease}
+              onTouchStart={handlePress}
+              onTouchEnd={handleRelease}
+            >
+              <div className="relative w-full h-full flex flex-col" style={{ maxWidth: isDesktop ? "420px" : "100%", margin: "0 auto" }}>
+                {/* progress segments */}
+                <div className="flex gap-1 px-2.5 pt-2.5 flex-shrink-0" style={{ zIndex: 2 }}>
+                  {slides.map((s, i) => (
+                    <div key={s.id || i} className="flex-1 rounded-full overflow-hidden" style={{ height: "2.5px", background: "rgba(255,255,255,0.28)" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          width: i < storyViewer.slideIdx ? "100%" : i === storyViewer.slideIdx ? `${storyProgressPct}%` : "0%",
+                          background: "#FFFFFF",
+                          transition: i === storyViewer.slideIdx ? "none" : "width 0.15s linear",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* header */}
+                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 flex-shrink-0" style={{ zIndex: 2 }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar name={author} size={30} src={avatarForAuthor(author)} />
+                    <div className="min-w-0">
+                      <div className="truncate" style={{ color: "#FFFFFF", fontSize: "13px", fontWeight: 700 }}>{isMine ? "Your story" : author}</div>
+                      <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "10.5px", fontFamily: mono }}>{feedTimeAgo(slide.ts)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isMine && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteFeedPost(slide.id); advanceStory(1); }} className={TAP} style={{ color: "rgba(255,255,255,0.75)" }} aria-label="Delete story">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    <button type="button" onClick={closeStoryViewer} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: "rgba(255,255,255,0.12)", color: "#FFFFFF" }} aria-label="Close story">
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* slide content */}
+                <div className="relative flex-1 flex items-center justify-center px-4" style={{ minHeight: 0 }}>
+                  <div className="absolute inset-y-0 left-0" style={{ width: "35%", zIndex: 3 }} onClick={handleTapZone(-1)} />
+                  <div className="absolute inset-y-0 right-0" style={{ width: "35%", zIndex: 3 }} onClick={handleTapZone(1)} />
+
+                  {slide.image ? (
+                    <img src={slide.image} alt="Story" className="rounded-xl" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                  ) : (
+                    <div className="w-full rounded-2xl p-6 text-center" style={{ background: "linear-gradient(160deg, #23283A, #12151C)", border: `1px solid rgba(255,255,255,0.1)` }}>
+                      {slide.text && <p style={{ color: "#F5F6F9", fontSize: "16px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{slide.text}</p>}
+                    </div>
+                  )}
+
+                  {slide.pnl && (
+                    <span
+                      className="absolute"
+                      style={{
+                        bottom: "14px", left: "50%", transform: "translateX(-50%)",
+                        background: pnlPositive ? `${palette.green}cc` : `${palette.red}cc`,
+                        color: "#0A0C11", fontSize: "12.5px", fontWeight: 800, padding: "5px 13px", borderRadius: "999px", fontFamily: mono, zIndex: 4,
+                      }}
+                    >
+                      {slide.pnl}
+                    </span>
+                  )}
+                </div>
+
+                {/* reactions on the story itself — tap to react, tap again to undo */}
+                <div className="flex items-center justify-center gap-2 px-3 pb-4 pt-2 flex-shrink-0" style={{ zIndex: 2 }} onClick={(e) => e.stopPropagation()}>
+                  {FEED_REACTIONS.map((r) => {
+                    const count = (slide.reactions && slide.reactions[r.key]) || 0;
+                    const active = myFeedReactions[slide.id] === r.key;
+                    return (
+                      <button
+                        key={r.key}
+                        type="button"
+                        onClick={() => toggleFeedReaction(slide.id, r.key)}
+                        className={`flex items-center gap-1 ${TAP}`}
+                        style={{
+                          color: "#FFFFFF", fontSize: "12px", fontFamily: mono, fontWeight: 700,
+                          background: active ? "rgba(224,172,95,0.25)" : "rgba(255,255,255,0.1)",
+                          border: `1px solid ${active ? palette.gold : "rgba(255,255,255,0.18)"}`,
+                          borderRadius: "999px", padding: "5px 10px",
+                        }}
+                      >
+                        <span style={{ fontSize: "14px" }}>{r.emoji}</span>{count > 0 && count}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

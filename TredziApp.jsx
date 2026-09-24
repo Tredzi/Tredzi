@@ -18668,7 +18668,6 @@ if (activeTab === "community") {
           const split = isDesktop && !!po.image;
           const likes = po.likeCount || 0;
           const canSend = !!profileCommentDraft.trim() && !profileCommentSending;
-          const sectionLabel = { color: palette.textFaint, fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" };
           const header = (
             <div className="flex items-center justify-between px-3 flex-shrink-0" style={{ minHeight: "58px", paddingTop: isDesktop ? 0 : "env(safe-area-inset-top, 0px)", borderBottom: `1px solid ${palette.border}` }}>
               <div className="flex items-center gap-2.5 min-w-0">
@@ -18694,19 +18693,29 @@ if (activeTab === "community") {
               </div>
             </div>
           );
-          // The post's own caption — its own labelled block, visually separate from the comments below.
-          const captionBlock = po.text ? (
-            <div className="px-4 py-3.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.field, maxHeight: split ? "34%" : "none", overflowY: split ? "auto" : "visible" }}>
-              <div style={{ ...sectionLabel, marginBottom: "6px" }}>Caption</div>
-              <p style={{ color: palette.text, fontSize: "14px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{po.text}</p>
-            </div>
+          // Caption, placed like Instagram: on mobile it sits right under the like count as
+          // "username caption"; in the desktop two-pane viewer it is the first entry at the top of
+          // the right pane (avatar + username + caption + time), with the comments beneath it.
+          const captionRow = po.text ? (
+            split ? (
+              <div className="flex items-start gap-2.5 px-4 pt-4 pb-2">
+                <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
+                <div className="min-w-0 flex-1">
+                  <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <span style={{ fontWeight: 700, marginRight: "6px" }}>{po.author}</span>{po.text}
+                  </p>
+                  <span style={{ color: palette.textFaint, fontSize: "11px" }}>{feedTimeAgo(po.ts)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 pb-2">
+                <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <span style={{ fontWeight: 700, marginRight: "6px" }}>{po.author}</span>{po.text}
+                </p>
+                <span style={{ color: palette.textFaint, fontSize: "10.5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{feedTimeAgo(po.ts)}</span>
+              </div>
+            )
           ) : null;
-          const commentsHeading = (
-            <div className="flex items-center gap-2 px-4 pt-3.5 pb-1">
-              <span style={sectionLabel}>Comments</span>
-              <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{po.commentCount != null ? po.commentCount : profileComments.length}</span>
-            </div>
-          );
           const thread = (
             <div className="px-4 pt-2 pb-3">
               {profileCommentsLoading ? (
@@ -18754,7 +18763,7 @@ if (activeTab === "community") {
                 </button>
               </div>
               <div style={{ marginTop: "9px", color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{likes} {likes === 1 ? "like" : "likes"}</div>
-              <div style={{ marginTop: "2px", color: palette.textFaint, fontSize: "10.5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{feedTimeAgo(po.ts)}</div>
+              {!po.text && <div style={{ marginTop: "2px", color: palette.textFaint, fontSize: "10.5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{feedTimeAgo(po.ts)}</div>}
             </div>
           );
           const inputBar = (
@@ -18793,9 +18802,10 @@ if (activeTab === "community") {
                     </div>
                     <div className="flex flex-col" style={{ width: "400px", flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${palette.border}` }}>
                       {header}
-                      {captionBlock}
-                      {commentsHeading}
-                      <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>{thread}</div>
+                      <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
+                        {captionRow}
+                        {thread}
+                      </div>
                       {actions}
                       {inputBar}
                     </div>
@@ -18806,8 +18816,7 @@ if (activeTab === "community") {
                     <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
                       {po.image && <img src={po.image} alt="Post attachment" style={{ width: "100%", display: "block", maxHeight: fullScreen ? "62vh" : "60vh", objectFit: "contain", background: palette.letterbox }} />}
                       {actions}
-                      {captionBlock}
-                      {commentsHeading}
+                      {captionRow}
                       {thread}
                     </div>
                     {inputBar}

@@ -18221,6 +18221,10 @@ if (activeTab === "community") {
           const shell = (children) => (
             isDesktop ? (
               <div className="fixed inset-0 flex flex-col" style={{ background: palette.bg, zIndex: 108 }}>
+                {/* Mounted here too (not just on the Feed tab) so tapping a profile picture or the
+                    story circle can always open the file picker, even if Feed isn't the active tab
+                    underneath this overlay. */}
+                <input ref={storyImageInputRef} type="file" accept="image/*" onChange={handleStoryImageChange} style={{ display: "none" }} />
                 <div className="flex items-center gap-3 px-6 flex-shrink-0" style={{ height: "56px", borderBottom: `1px solid ${palette.border}`, background: palette.surface }}>
                   <button type="button" onClick={closeProfileBack} className={`flex items-center gap-1.5 ${TAP}`} style={{ background: "none", border: "none", color: palette.textMuted, fontSize: "13px", fontWeight: 600, fontFamily: sans }} aria-label="Back">
                     <ChevronLeft size={18} /> Back
@@ -18237,6 +18241,7 @@ if (activeTab === "community") {
             ) : (
               <div className="fixed inset-0 flex justify-center" style={{ background: palette.bg, zIndex: 108 }}>
                 <div className="flex flex-col w-full min-h-0">
+                  <input ref={storyImageInputRef} type="file" accept="image/*" onChange={handleStoryImageChange} style={{ display: "none" }} />
                   <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, paddingTop: "max(10px, env(safe-area-inset-top))" }}>
                     <button type="button" onClick={closeProfileBack} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }} aria-label="Back">
                       <ChevronLeft size={17} />
@@ -18274,16 +18279,34 @@ if (activeTab === "community") {
             ["Trades", stats.trades == null ? "—" : String(stats.trades), palette.text],
             ["Avg R", stats.avgR == null ? "—" : stats.avgR.toFixed(1), palette.text],
           ];
+          // Tapping the profile picture opens that person's story (Instagram-style). If it's your
+          // own picture and you have no active story, it starts one instead. If someone else has
+          // no story, the picture is just a picture — nothing to open.
+          const profileHasStory = (storiesByAuthor[p.username] || []).length > 0;
+          const profileStoryUnseen = authorHasUnseen(p.username);
+          const profileStoryAction = profileHasStory ? () => openStoryViewerFor(p.username) : (isMe ? openStoryComposer : null);
+          const profileRingGradient = profileHasStory
+            ? `linear-gradient(135deg, ${profileStoryUnseen ? palette.gold : palette.border}, ${profileStoryUnseen ? palette.goldBright : palette.border})`
+            : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`;
+          const avatarRingHandlers = profileStoryAction
+            ? {
+                role: "button",
+                tabIndex: 0,
+                onClick: profileStoryAction,
+                onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); profileStoryAction(); } },
+                "aria-label": profileHasStory ? `View ${p.username}'s story` : "Add to your story",
+              }
+            : {};
           const avatarBlock = (
             <div className="relative flex-shrink-0">
               {isDesktop ? (
-                <span className="inline-flex rounded-full" style={{ padding: "3px", background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` }}>
+                <span className={`inline-flex rounded-full ${profileStoryAction ? TAP : ""}`} style={{ padding: "3px", background: profileRingGradient, cursor: profileStoryAction ? "pointer" : "default" }} {...avatarRingHandlers}>
                   <span className="inline-flex rounded-full" style={{ padding: "4px", background: palette.bg }}>
                     <Avatar name={p.username} size={150} src={avatarSrc} online={p.isOnline} />
                   </span>
                 </span>
               ) : (
-                <span className="inline-flex rounded-full" style={{ padding: "2px", background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` }}>
+                <span className={`inline-flex rounded-full ${profileStoryAction ? TAP : ""}`} style={{ padding: "2px", background: profileRingGradient, cursor: profileStoryAction ? "pointer" : "default" }} {...avatarRingHandlers}>
                   <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
                     <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} />
                   </span>
@@ -18462,16 +18485,38 @@ if (activeTab === "community") {
             </div>
           );
 
-          // "New" circle (own profile only) — opens the new-post window, styled like Instagram's highlight bubble.
+          // Story-highlight circle (own profile only) — Instagram-style: shows your current
+          // story ring if you have one, or lets you start a new story. No longer opens the
+          // new-post composer (that's handled by the separate "New post" button/pill).
+          const hasOwnStory = (storiesByAuthor[p.username] || []).length > 0;
+          const ownStoryUnseen = authorHasUnseen(p.username);
           const newCircle = isMe ? (
             <div className="flex items-start" style={{ padding: isDesktop ? "0 40px 44px" : "0 16px 18px" }}>
-              <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex flex-col items-center ${TAP}`} style={{ background: "none", border: "none", padding: 0, width: isDesktop ? "96px" : "72px" }} aria-label="New post">
-                <span className="flex items-center justify-center rounded-full" style={{ width: isDesktop ? "88px" : "66px", height: isDesktop ? "88px" : "66px", padding: "3px", background: palette.border }}>
-                  <span className="flex items-center justify-center rounded-full w-full h-full" style={{ background: palette.surface }}>
-                    <Plus size={isDesktop ? 38 : 28} strokeWidth={1.6} style={{ color: palette.textMuted }} />
+              <button
+                type="button"
+                onClick={() => (hasOwnStory ? openStoryViewerFor(p.username) : openStoryComposer())}
+                className={`flex flex-col items-center ${TAP}`}
+                style={{ background: "none", border: "none", padding: 0, width: isDesktop ? "96px" : "72px" }}
+                aria-label={hasOwnStory ? "View your story" : "Add to your story"}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: isDesktop ? "88px" : "66px",
+                    height: isDesktop ? "88px" : "66px",
+                    padding: "3px",
+                    background: hasOwnStory ? `linear-gradient(135deg, ${ownStoryUnseen ? palette.gold : palette.border}, ${ownStoryUnseen ? palette.goldBright : palette.border})` : palette.border,
+                  }}
+                >
+                  <span className="flex items-center justify-center rounded-full w-full h-full overflow-hidden" style={{ background: palette.surface }}>
+                    {hasOwnStory ? (
+                      <Avatar name={p.username} size={isDesktop ? 82 : 60} src={avatarSrc} />
+                    ) : (
+                      <Plus size={isDesktop ? 38 : 28} strokeWidth={1.6} style={{ color: palette.textMuted }} />
+                    )}
                   </span>
                 </span>
-                <span style={{ marginTop: "9px", color: palette.text, fontSize: isDesktop ? "13.5px" : "12px", fontWeight: 700 }}>New</span>
+                <span style={{ marginTop: "9px", color: palette.text, fontSize: isDesktop ? "13.5px" : "12px", fontWeight: 700 }}>{hasOwnStory ? "Your story" : "New"}</span>
               </button>
             </div>
           ) : null;

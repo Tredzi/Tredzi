@@ -9466,6 +9466,15 @@ const hiddenTabIds = settings.hiddenTabs || [];
   );
   const activeInMobileOverflow = mobileNavOverflowTabs.some((t) => t.id === activeTab);
 
+  // ---------- Community sidebar ----------
+  const renderSidebar = () => (
+    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
+      <div className="p-3.5"><form onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }} className="flex items-center rounded-xl px-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><Search size={14} style={{ color: palette.textFaint, flexShrink: 0 }} /><input type="text" value={communitySearch} onChange={(e) => setCommunitySearch(e.target.value)} placeholder="Search" className="w-full bg-transparent py-2.5 px-2 outline-none" style={{ color: palette.text, fontSize: "12px" }} /></form></div>
+      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Flame size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</span></div><div className="flex flex-wrap gap-1.5">{["#XAUUSD", "#Gold", "#OrderFlow", "#VolumeProfile"].map((tag) => <button key={tag} type="button" onClick={() => searchCommunity(tag)} className={`px-2 py-1 rounded-lg ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "9px" }}>{tag}</button>)}</div></div></div>
+      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Search size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Explore</span></div><div className="flex flex-col gap-1">{["Trade Ideas", "Charts", "Education", "Journal"].map((item) => <button key={item} type="button" onClick={() => searchCommunity(item)} className={`w-full text-left rounded-lg px-2.5 py-2 ${TAP}`} style={{ color: palette.textMuted, background: "transparent", fontSize: "10.5px" }}>{item}</button>)}</div></div></div>
+    </div>
+  );
+
   let body = null;
 
   if (activeTab === "risk") {
@@ -19324,15 +19333,6 @@ if (activeTab === "community") {
       </div>
     );
   };
-
-  // ---------- Community sidebar ----------
-  const renderSidebar = () => (
-    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
-      <div className="p-3.5"><form onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }} className="flex items-center rounded-xl px-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><Search size={14} style={{ color: palette.textFaint, flexShrink: 0 }} /><input type="text" value={communitySearch} onChange={(e) => setCommunitySearch(e.target.value)} placeholder="Search" className="w-full bg-transparent py-2.5 px-2 outline-none" style={{ color: palette.text, fontSize: "12px" }} /></form></div>
-      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Flame size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</span></div><div className="flex flex-wrap gap-1.5">{["#XAUUSD", "#Gold", "#OrderFlow", "#VolumeProfile"].map((tag) => <button key={tag} type="button" onClick={() => searchCommunity(tag)} className={`px-2 py-1 rounded-lg ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "9px" }}>{tag}</button>)}</div></div></div>
-      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Search size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Explore</span></div><div className="flex flex-col gap-1">{["Trade Ideas", "Charts", "Education", "Journal"].map((item) => <button key={item} type="button" onClick={() => searchCommunity(item)} className={`w-full text-left rounded-lg px-2.5 py-2 ${TAP}`} style={{ color: palette.textMuted, background: "transparent", fontSize: "10.5px" }}>{item}</button>)}</div></div></div>
-    </div>
-  );
 
     // ---------- ONBOARDING (unchanged) ----------
     body = (

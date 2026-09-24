@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -4575,6 +4575,8 @@ const [profileCommentsLoading, setProfileCommentsLoading] = useState(false);
 const [profileCommentDraft, setProfileCommentDraft] = useState("");
 const [profileCommentSending, setProfileCommentSending] = useState(false);
 const profileCommentInputRef = useRef(null);
+const [profilePostMenuOpen, setProfilePostMenuOpen] = useState(false);
+const [profileEmojiOpen, setProfileEmojiOpen] = useState(false);
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
 const [communityLobbyTab, setCommunityLobbyTab] = useState("mine"); // "mine" | "discover"
 const [discoverGroups, setDiscoverGroups] = useState([]);
@@ -5134,6 +5136,8 @@ useEffect(() => {
   setProfileComments([]);
   setProfileCommentDraft("");
   setProfileError("");
+  setProfilePostMenuOpen(false);
+  setProfileEmojiOpen(false);
   setProfileCommentsLoading(true);
   (async () => {
     try {
@@ -18373,7 +18377,7 @@ if (activeTab === "community") {
               {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
             </div>
           );
-          const postsGridGap = isDesktop ? "4px" : "2px";
+          const postsGridGap = "2px";
           const postsGrid = !profilePostsLoaded ? (
             <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
           ) : profilePosts.length === 0 ? (
@@ -18392,10 +18396,10 @@ if (activeTab === "community") {
             </div>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: postsGridGap, paddingTop: isDesktop ? "0" : "2px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: postsGridGap, paddingTop: "0" }}>
                 {profilePosts.map((post) => {
                   return (
-                    <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={`group ${TAP}`} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", borderRadius: "0", background: palette.field, textAlign: "left", display: "block" }}>
+                    <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={`group ${TAP}`} aria-label="Open post" style={{ position: "relative", aspectRatio: "3 / 4", overflow: "hidden", padding: 0, border: "none", borderRadius: "0", background: palette.field, textAlign: "left", display: "block" }}>
                       {post.image ? (
                         <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
@@ -18443,33 +18447,34 @@ if (activeTab === "community") {
               {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
             </div>
           );
-          const tabBar = isDesktop ? (
-            <div className="flex justify-center" role="tablist" aria-label="Profile sections" style={{ gap: "64px", borderTop: `1px solid ${palette.border}` }}>
+          // Icon-only tabs across the full width, active one underlined — like Instagram.
+          const tabBar = (
+            <div className="flex" role="tablist" aria-label="Profile sections" style={{ borderBottom: `1px solid ${palette.border}` }}>
               {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
                 const on = profileSubTab === id;
                 return (
-                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex items-center gap-2 ${TAP}`} style={{ position: "relative", height: "52px", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12px", fontWeight: 700, fontFamily: sans, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                    <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: "-1px", height: "2px", background: palette.text, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
-                    <Icon size={14} style={{ color: on ? palette.gold : palette.textFaint }} />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
-              {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
-                const on = profileSubTab === id;
-                return (
-                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
-                    <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
-                    {label}
-                    <span aria-hidden="true" style={{ position: "absolute", left: "25%", right: "25%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
+                  <button key={id} type="button" role="tab" aria-selected={on} aria-label={label} title={label} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center ${TAP}`} style={{ position: "relative", height: isDesktop ? "54px" : "48px", background: "none", border: "none", color: on ? palette.text : palette.textFaint }}>
+                    <Icon size={isDesktop ? 24 : 22} strokeWidth={on ? 2.4 : 2} />
+                    <span aria-hidden="true" style={{ position: "absolute", bottom: "-1px", left: isDesktop ? "50%" : 0, right: isDesktop ? "auto" : 0, width: isDesktop ? "96px" : "auto", transform: isDesktop ? "translateX(-50%)" : "none", height: "2px", background: palette.text, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
                   </button>
                 );
               })}
             </div>
           );
+
+          // "New" circle (own profile only) — opens the new-post window, styled like Instagram's highlight bubble.
+          const newCircle = isMe ? (
+            <div className="flex items-start" style={{ padding: isDesktop ? "0 40px 44px" : "0 16px 18px" }}>
+              <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex flex-col items-center ${TAP}`} style={{ background: "none", border: "none", padding: 0, width: isDesktop ? "96px" : "72px" }} aria-label="New post">
+                <span className="flex items-center justify-center rounded-full" style={{ width: isDesktop ? "88px" : "66px", height: isDesktop ? "88px" : "66px", padding: "3px", background: palette.border }}>
+                  <span className="flex items-center justify-center rounded-full w-full h-full" style={{ background: palette.surface }}>
+                    <Plus size={isDesktop ? 38 : 28} strokeWidth={1.6} style={{ color: palette.textMuted }} />
+                  </span>
+                </span>
+                <span style={{ marginTop: "9px", color: palette.text, fontSize: isDesktop ? "13.5px" : "12px", fontWeight: 700 }}>New</span>
+              </button>
+            </div>
+          ) : null;
 
           if (isDesktop) {
             // Instagram-web layout: big ringed avatar left; username + actions, then
@@ -18505,9 +18510,10 @@ if (activeTab === "community") {
                   </div>
                 </div>
 
+                {newCircle}
                 {tabBar}
                 <div>
-                  {profileSubTab === "posts" ? <div style={{ paddingTop: "4px" }}>{postsGrid}</div> : statsPanel}
+                  {profileSubTab === "posts" ? postsGrid : statsPanel}
                 </div>
               </div>
             );
@@ -18543,6 +18549,7 @@ if (activeTab === "community") {
                 )}
               </div>
 
+              {newCircle}
               {tabBar}
 
               {profileSubTab === "posts" ? postsGrid : statsPanel}
@@ -18668,29 +18675,33 @@ if (activeTab === "community") {
           const split = isDesktop && !!po.image;
           const likes = po.likeCount || 0;
           const canSend = !!profileCommentDraft.trim() && !profileCommentSending;
+          const postDate = new Date(po.ts);
+          const dateLabel = postDate.toLocaleDateString([], { month: "long", day: "numeric", ...(postDate.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+          const EMOJIS = ["😀", "😂", "😍", "🔥", "👏", "🙌", "👍", "💯", "📈", "📉", "💰", "🚀", "😎", "🤝", "🎯", "🙏"];
           const header = (
-            <div className="flex items-center justify-between px-3 flex-shrink-0" style={{ minHeight: "58px", paddingTop: isDesktop ? 0 : "env(safe-area-inset-top, 0px)", borderBottom: `1px solid ${palette.border}` }}>
-              <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative flex items-center justify-between px-4 flex-shrink-0" style={{ minHeight: isDesktop ? "76px" : "58px", paddingTop: isDesktop ? 0 : "env(safe-area-inset-top, 0px)", borderBottom: `1px solid ${palette.border}` }}>
+              <div className="flex items-center gap-3 min-w-0">
                 {!isDesktop && (
-                  <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: "none", border: "none", color: palette.text }} aria-label="Back">
+                  <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: "none", border: "none", color: palette.text, marginLeft: "-8px" }} aria-label="Back">
                     <ChevronLeft size={22} />
                   </button>
                 )}
-                <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
-                <span className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{po.author}</span>
+                <Avatar name={po.author} size={isDesktop ? 44 : 34} src={profileData?.avatar || avatarForAuthor(po.author)} />
+                <span className="truncate" style={{ color: palette.text, fontSize: isDesktop ? "15px" : "14px", fontWeight: 700 }}>{po.author}</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {canDeletePost && (
-                  <button type="button" onClick={() => deleteProfilePost(po.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, color: palette.textMuted }} aria-label="Delete post">
-                    <Trash2 size={14} />
+              {canDeletePost && (
+                <>
+                  <button type="button" onClick={() => setProfilePostMenuOpen((v) => !v)} className={`flex items-center justify-center flex-shrink-0 ${TAP}`} style={{ width: "36px", height: "36px", background: "none", border: "none", color: palette.text }} aria-label="More options" aria-expanded={profilePostMenuOpen}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>
                   </button>
-                )}
-                {isDesktop && (
-                  <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, color: palette.textMuted }} aria-label="Close post">
-                    <X size={15} />
-                  </button>
-                )}
-              </div>
+                  {profilePostMenuOpen && (
+                    <div className="absolute overflow-hidden" style={{ right: "12px", top: "calc(100% - 10px)", zIndex: 5, minWidth: "190px", background: palette.surface, border: `1px solid ${palette.border}`, borderRadius: "12px", boxShadow: palette.shadow }}>
+                      <button type="button" onClick={() => { setProfilePostMenuOpen(false); deleteProfilePost(po.id); }} className={`block w-full ${TAP}`} style={{ background: "none", border: "none", borderBottom: `1px solid ${palette.border}`, padding: "13px 16px", textAlign: "left", color: palette.red, fontSize: "13.5px", fontWeight: 700 }}>Delete post</button>
+                      <button type="button" onClick={() => setProfilePostMenuOpen(false)} className={`block w-full ${TAP}`} style={{ background: "none", border: "none", padding: "13px 16px", textAlign: "left", color: palette.text, fontSize: "13.5px" }}>Cancel</button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           );
           // Caption, placed like Instagram: on mobile it sits right under the like count as
@@ -18698,13 +18709,13 @@ if (activeTab === "community") {
           // the right pane (avatar + username + caption + time), with the comments beneath it.
           const captionRow = po.text ? (
             split ? (
-              <div className="flex items-start gap-2.5 px-4 pt-4 pb-2">
-                <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
+              <div className="flex items-start gap-3 px-4 pt-5 pb-3">
+                <Avatar name={po.author} size={40} src={profileData?.avatar || avatarForAuthor(po.author)} />
                 <div className="min-w-0 flex-1">
-                  <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <p style={{ color: palette.text, fontSize: "14.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     <span style={{ fontWeight: 700, marginRight: "6px" }}>{po.author}</span>{po.text}
                   </p>
-                  <span style={{ color: palette.textFaint, fontSize: "11px" }}>{feedTimeAgo(po.ts)}</span>
+                  <span style={{ color: palette.textFaint, fontSize: "12px" }}>{feedTimeAgo(po.ts)}</span>
                 </div>
               </div>
             ) : (
@@ -18712,7 +18723,6 @@ if (activeTab === "community") {
                 <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                   <span style={{ fontWeight: 700, marginRight: "6px" }}>{po.author}</span>{po.text}
                 </p>
-                <span style={{ color: palette.textFaint, fontSize: "10.5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{feedTimeAgo(po.ts)}</span>
               </div>
             )
           ) : null;
@@ -18721,28 +18731,28 @@ if (activeTab === "community") {
               {profileCommentsLoading ? (
                 <p style={{ color: palette.textFaint, fontSize: "12px" }}>Loading comments…</p>
               ) : profileComments.length === 0 ? (
-                <div className="text-center" style={{ padding: split ? "40px 0" : "20px 0" }}>
-                  <div style={{ color: palette.text, fontSize: split ? "17px" : "14px", fontWeight: 800 }}>No comments yet</div>
+                <div className="text-center" style={{ padding: split ? "56px 0" : "20px 0" }}>
+                  <div style={{ color: palette.text, fontSize: split ? "18px" : "14px", fontWeight: 800 }}>No comments yet</div>
                   <div style={{ color: palette.textFaint, fontSize: "12.5px", marginTop: "4px" }}>Start the conversation.</div>
                 </div>
               ) : (
                 profileComments.map((c) => {
                   const canDeleteComment = c.author === communityUsername || po.author === communityUsername;
                   return (
-                    <div key={c.id} className="flex items-start gap-2.5 mb-3.5">
+                    <div key={c.id} className="flex items-start gap-3 mb-4">
                       <button type="button" onClick={() => { setProfilePostOpen(null); openCommunityMemberProfile(c.author); }} className={`flex-shrink-0 ${TAP}`} style={{ background: "none", border: "none", padding: 0 }} aria-label={`Open ${c.author}'s profile`}>
-                        <Avatar name={c.author} size={32} src={c.author === communityUsername ? (communityAvatar || avatarForAuthor(c.author)) : avatarForAuthor(c.author)} />
+                        <Avatar name={c.author} size={split ? 40 : 32} src={c.author === communityUsername ? (communityAvatar || avatarForAuthor(c.author)) : avatarForAuthor(c.author)} />
                       </button>
                       <div className="min-w-0 flex-1">
-                        <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        <p style={{ color: palette.text, fontSize: split ? "14.5px" : "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                           <span style={{ fontWeight: 700, marginRight: "6px" }}>{c.author}</span>
                           {c.author === po.author && <span style={{ color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "0 7px", fontSize: "10px", fontWeight: 700, marginRight: "6px" }}>Author</span>}
                           {c.text}
                         </p>
                         <div className="flex items-center gap-3" style={{ marginTop: "2px" }}>
-                          <span style={{ color: palette.textFaint, fontSize: "11px" }}>{feedTimeAgo(c.ts)}</span>
+                          <span style={{ color: palette.textFaint, fontSize: "12px" }}>{feedTimeAgo(c.ts)}</span>
                           {canDeleteComment && (
-                            <button type="button" onClick={() => deleteProfileComment(c.id)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.textFaint, fontSize: "11px", fontWeight: 700 }}>Delete</button>
+                            <button type="button" onClick={() => deleteProfileComment(c.id)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.textFaint, fontSize: "12px", fontWeight: 700 }}>Delete</button>
                           )}
                         </div>
                       </div>
@@ -18753,34 +18763,44 @@ if (activeTab === "community") {
             </div>
           );
           const actions = (
-            <div className="px-4 pt-3 pb-2.5 flex-shrink-0" style={{ borderTop: split ? `1px solid ${palette.border}` : "none" }}>
-              <div className="flex items-center gap-4">
+            <div className="px-4 pt-3.5 pb-3 flex-shrink-0" style={{ borderTop: split ? `1px solid ${palette.border}` : "none" }}>
+              <div className="flex items-center" style={{ gap: "18px" }}>
                 <button type="button" onClick={() => likeProfilePost(po.id)} className={TAP} style={{ background: "none", border: "none", padding: 0, display: "flex" }} aria-label={po.liked ? "Unlike" : "Like"} aria-pressed={!!po.liked}>
-                  <Heart size={25} fill={po.liked ? palette.red : "none"} color={po.liked ? palette.red : palette.text} strokeWidth={po.liked ? 0 : 2} />
+                  <Heart size={27} fill={po.liked ? palette.red : "none"} color={po.liked ? palette.red : palette.text} strokeWidth={po.liked ? 0 : 2} />
                 </button>
                 <button type="button" onClick={() => profileCommentInputRef.current && profileCommentInputRef.current.focus()} className={TAP} style={{ background: "none", border: "none", padding: 0, display: "flex" }} aria-label="Comment">
-                  <MessageCircle size={25} color={palette.text} />
+                  <MessageCircle size={27} color={palette.text} />
                 </button>
               </div>
-              <div style={{ marginTop: "9px", color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{likes} {likes === 1 ? "like" : "likes"}</div>
-              {!po.text && <div style={{ marginTop: "2px", color: palette.textFaint, fontSize: "10.5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>{feedTimeAgo(po.ts)}</div>}
+              <div style={{ marginTop: "10px", color: palette.text, fontSize: "14px", fontWeight: 700 }}>{likes} {likes === 1 ? "like" : "likes"}</div>
+              <div style={{ marginTop: "2px", color: palette.textFaint, fontSize: "12.5px" }}>{dateLabel}</div>
             </div>
           );
           const inputBar = (
-            <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, paddingBottom: isDesktop ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
-              <div className="flex items-center gap-3 px-4" style={{ height: "54px" }}>
-                <Avatar name={communityUsername} size={28} src={communityAvatar || undefined} />
+            <div className="relative flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, paddingBottom: isDesktop ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
+              {profileEmojiOpen && (
+                <div className="absolute grid" style={{ left: "12px", bottom: "calc(100% + 6px)", zIndex: 5, gridTemplateColumns: "repeat(8, 1fr)", gap: "2px", padding: "8px", background: palette.surface, border: `1px solid ${palette.border}`, borderRadius: "12px", boxShadow: palette.shadow }}>
+                  {EMOJIS.map((em) => (
+                    <button key={em} type="button" onClick={() => { setProfileCommentDraft((d) => (d + em).slice(0, 500)); if (profileCommentInputRef.current) profileCommentInputRef.current.focus(); }} className={TAP} style={{ background: "none", border: "none", width: "32px", height: "32px", fontSize: "19px", borderRadius: "8px" }}>{em}</button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-3 px-4" style={{ height: isDesktop ? "64px" : "56px" }}>
+                <button type="button" onClick={() => setProfileEmojiOpen((v) => !v)} className={TAP} style={{ background: "none", border: "none", padding: 0, display: "flex", color: profileEmojiOpen ? palette.gold : palette.text }} aria-label="Emoji" aria-expanded={profileEmojiOpen}>
+                  <Smile size={26} />
+                </button>
                 <input
                   ref={profileCommentInputRef}
                   type="text"
                   value={profileCommentDraft}
                   onChange={(e) => setProfileCommentDraft(e.target.value.slice(0, 500))}
+                  onFocus={() => setProfileEmojiOpen(false)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postProfileComment(); } }}
                   placeholder="Add a comment…"
                   className="flex-1 bg-transparent outline-none"
-                  style={{ color: palette.text, fontSize: "14px", fontFamily: sans, minWidth: 0 }}
+                  style={{ color: palette.text, fontSize: "14.5px", fontFamily: sans, minWidth: 0 }}
                 />
-                <button type="button" onClick={postProfileComment} disabled={!canSend} className={TAP} style={{ background: "none", border: "none", padding: 0, color: canSend ? palette.gold : palette.textFaint, fontSize: "13.5px", fontWeight: 700, fontFamily: sans, opacity: canSend ? 1 : 0.6 }}>
+                <button type="button" onClick={postProfileComment} disabled={!canSend} className={TAP} style={{ background: "none", border: "none", padding: 0, color: canSend ? palette.gold : palette.textFaint, fontSize: "14px", fontWeight: 700, fontFamily: sans, opacity: canSend ? 1 : 0.6 }}>
                   {profileCommentSending ? "Posting…" : "Post"}
                 </button>
               </div>
@@ -18789,18 +18809,23 @@ if (activeTab === "community") {
           );
           const fullScreen = !isDesktop;
           return (
-            <div className="fixed inset-0 flex items-center justify-center" style={{ padding: fullScreen ? 0 : "16px", background: "rgba(5,7,12,0.85)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
+            <div className="fixed inset-0 flex items-center justify-center" style={{ padding: fullScreen ? 0 : "24px 72px", background: "rgba(5,7,12,0.88)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
+              {isDesktop && (
+                <button type="button" onClick={() => setProfilePostOpen(null)} className={`absolute flex items-center justify-center ${TAP}`} style={{ top: "16px", right: "20px", width: "40px", height: "40px", background: "none", border: "none", color: "#FFFFFF" }} aria-label="Close post">
+                  <X size={30} />
+                </button>
+              )}
               <div
                 className="w-full overflow-hidden"
-                style={{ maxWidth: fullScreen ? "none" : split ? "1080px" : "520px", height: fullScreen ? "100%" : split ? "min(88vh, 740px)" : "auto", maxHeight: fullScreen ? "none" : "92vh", display: "flex", flexDirection: split ? "row" : "column", background: palette.surface, border: fullScreen ? "none" : `1px solid ${palette.border}`, borderRadius: fullScreen ? 0 : "16px", boxShadow: palette.shadow }}
-                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: fullScreen ? "none" : split ? "1400px" : "560px", height: fullScreen ? "100%" : split ? "min(90vh, 920px)" : "auto", maxHeight: fullScreen ? "none" : "92vh", display: "flex", flexDirection: split ? "row" : "column", background: palette.surface, border: fullScreen ? "none" : `1px solid ${palette.border}`, borderRadius: fullScreen ? 0 : "6px", boxShadow: palette.shadow }}
+                onClick={(e) => { e.stopPropagation(); setProfilePostMenuOpen(false); }}
               >
                 {split ? (
                   <>
                     <div className="flex items-center justify-center" style={{ flex: 1, minWidth: 0, background: palette.letterbox }}>
                       <img src={po.image} alt="Post attachment" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
                     </div>
-                    <div className="flex flex-col" style={{ width: "400px", flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${palette.border}` }}>
+                    <div className="flex flex-col" style={{ width: "clamp(440px, 36%, 600px)", flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${palette.border}` }}>
                       {header}
                       <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
                         {captionRow}

@@ -4545,7 +4545,8 @@ const [followListLoading, setFollowListLoading] = useState(false);
 
 // --- Profile tab (Instagram-style profile page) ---
 const [profileView, setProfileView] = useState(null); // username being viewed; null = my own profile
-const [profileBackTab, setProfileBackTab] = useState("chat"); // where the Back button returns to
+const [profileOpen, setProfileOpen] = useState(false); // the full-screen Profile section
+const [profileHistory, setProfileHistory] = useState([]); // previous profiles, so Back walks back through them
 const [profileData, setProfileData] = useState(null);
 const [profileLoading, setProfileLoading] = useState(false);
 const [profileError, setProfileError] = useState("");
@@ -4895,14 +4896,31 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [storyViewer?.authorIdx, storyViewer?.slideIdx, storyPaused]);
 
-// Tapping any username in the community now opens the full Profile tab
-// (instead of the old popup). Back returns to whichever tab you came from.
+// Profile is its own full-screen section. Tapping any username opens that person's profile;
+// the profile button next to the group menu opens yours. Back walks back through profiles you
+// opened from inside the profile, then closes the section.
 const openCommunityMemberProfile = (username) => {
   if (!username) return;
-  if (communityPanelTab !== "profile") setProfileBackTab(communityPanelTab);
-  setProfileView(username === communityUsername ? null : username);
+  const next = username === communityUsername ? null : username;
+  if (profileOpen) setProfileHistory((h) => [...h, profileView]);
+  else setProfileHistory([]);
+  setProfileView(next);
   setProfileSubTab("posts");
-  setCommunityPanelTab("profile");
+  setProfileOpen(true);
+};
+const openMyProfile = () => {
+  setProfileHistory([]);
+  setProfileView(null);
+  setProfileSubTab("posts");
+  setProfileOpen(true);
+};
+const closeProfileBack = () => {
+  if (profileHistory.length) {
+    setProfileView(profileHistory[profileHistory.length - 1]);
+    setProfileHistory((h) => h.slice(0, -1));
+  } else {
+    setProfileOpen(false);
+  }
 };
 
 const getCommunityMemberStats = (member) => {
@@ -5080,14 +5098,16 @@ useEffect(() => {
 
 // Profile tab: switching groups clears whoever you were looking at (profiles are per-group).
 useEffect(() => {
+  setProfileOpen(false);
+  setProfileHistory([]);
   setProfileView(null);
   setProfileData(null);
   setBioEditing(false);
 }, [activeGroupId]);
 
-// Profile tab: load the profile + their posts whenever the tab opens or the viewed member changes.
+// Profile section: load the profile + their posts whenever it opens or the viewed member changes.
 useEffect(() => {
-  if (!activeGroupId || communityPanelTab !== "profile") return;
+  if (!activeGroupId || !profileOpen) return;
   const membership = myGroups.find((g) => g.id === activeGroupId);
   const target = profileView || communityUsername;
   if (!membership || !target) return;
@@ -5119,7 +5139,7 @@ useEffect(() => {
   })();
   return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeGroupId, communityPanelTab, profileView, communityUsername]);
+}, [activeGroupId, profileOpen, profileView, communityUsername]);
 
 // Stories: load when the Feed tab opens (separate endpoint from the feed itself)
 useEffect(() => {
@@ -16454,6 +16474,16 @@ if (activeTab === "community") {
           </button>
           <button
             type="button"
+            onClick={openMyProfile}
+            className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+            style={{ width: isDesktop ? "34px" : "30px", height: isDesktop ? "34px" : "30px", background: "none", border: "none", padding: 0 }}
+            aria-label="My profile"
+            title="My profile"
+          >
+            <Avatar name={communityUsername || "?"} size={isDesktop ? 34 : 30} src={communityAvatar || undefined} />
+          </button>
+          <button
+            type="button"
             onClick={openGroupInfo}
             className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
             style={{ width: isDesktop ? "34px" : "30px", height: isDesktop ? "34px" : "30px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
@@ -16508,7 +16538,6 @@ if (activeTab === "community") {
             grid: (<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
             bulb: (<><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></>),
             note: (<><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" /><path d="M15 3v6h6" /></>),
-            user: (<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>),
           };
           const icon = (name, size, color) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
@@ -16527,12 +16556,10 @@ if (activeTab === "community") {
             { id: "qa", label: "Q&A", icon: "help" },
             { id: "vault", label: "Resources", icon: "folder" },
             { id: "leaderboard", label: "Leaderboard", icon: "trophy" },
-            { id: "profile", label: "Profile", icon: "user" },
           ];
           const activeGroup = TAB_GROUPS.find((g) => g.id === communityPanelTab || (g.subs && g.subs.some((s) => s.id === communityPanelTab))) || TAB_GROUPS[0];
 
           const openTab = (g, e) => {
-            if (g.id === "profile") setProfileView(null); // tapping the tab always shows *my* profile
             setCommunityPanelTab(g.subs ? (g.subState || g.subs[0].id) : g.id);
             setCommunityOpenTabDropdown(null);
             if (e && e.currentTarget && e.currentTarget.scrollIntoView) {
@@ -17747,238 +17774,6 @@ if (activeTab === "community") {
             </div>
           </>
 
-        ) : communityPanelTab === "profile" ? (
-          <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
-            {(() => {
-              const viewingName = profileView || communityUsername;
-              const isMe = !profileView || profileView === communityUsername;
-              const p = profileData && String(profileData.username).toLowerCase() === String(viewingName || "").toLowerCase() ? profileData : null;
-              const chip = { color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 700 };
-              const backBar = !isMe ? (
-                <button type="button" onClick={() => { setProfileView(null); setCommunityPanelTab(profileBackTab || "chat"); }} className={`flex items-center gap-1 px-3 pt-3 ${TAP}`} style={{ color: palette.textMuted, background: "none", border: "none", fontSize: "12.5px", fontWeight: 600, fontFamily: sans }}>
-                  <ChevronLeft size={16} /> Back
-                </button>
-              ) : null;
-              if (!p) {
-                return (
-                  <>
-                    {backBar}
-                    <p className="text-xs px-4 py-6" style={{ color: profileError ? palette.red : palette.textFaint }}>
-                      {profileError || (profileLoading ? "Loading profile…" : "Couldn't load this profile.")}
-                    </p>
-                  </>
-                );
-              }
-              const stats = getCommunityMemberStats(p);
-              const role = p.isOwner ? "Owner" : p.isAdmin ? "Admin" : p.isSignalProvider ? "Signal provider" : null;
-              const joinedText = p.joinedAt ? new Date(p.joinedAt).toLocaleDateString([], { month: "short", year: "numeric" }) : null;
-              const mutuals = p.mutuals || [];
-              const avatarSrc = isMe ? (communityAvatar || p.avatar || undefined) : (p.avatar || avatarForAuthor(p.username));
-              const curve = stats.equityCurve || [];
-              const cMin = curve.length ? Math.min(...curve) : 0;
-              const cMax = curve.length ? Math.max(...curve) : 0;
-              const cRange = cMax - cMin || 1;
-              const curvePoints = curve.map((v, i) => `${(i / Math.max(1, curve.length - 1)) * 100},${100 - ((v - cMin) / cRange) * 70 - 15}`).join(" ");
-              const fmtPct = (v) => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
-              const statTiles = [
-                ["Win rate", stats.winRate == null ? "—" : `${stats.winRate.toFixed(0)}%`, palette.green],
-                ["P&L", fmtPct(stats.pnlPct), stats.pnlPct != null && stats.pnlPct < 0 ? palette.red : palette.green],
-                ["Avg R", stats.avgR == null ? "—" : stats.avgR.toFixed(1), palette.text],
-                ["Trades", stats.trades == null ? "—" : String(stats.trades), palette.text],
-                ["Win streak", stats.streak == null ? "—" : String(stats.streak), palette.text],
-              ];
-              return (
-                <div style={{ maxWidth: "640px", margin: "0 auto", paddingBottom: "28px" }}>
-                  {backBar}
-
-                  {/* Header: photo + counts */}
-                  <div className="flex items-center gap-5 px-4 pt-4 pb-3">
-                    <div className="relative flex-shrink-0">
-                      <Avatar name={p.username} size={isDesktop ? 92 : 80} src={avatarSrc} ring online={p.isOnline} />
-                      {isMe && (
-                        <>
-                          <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
-                          <button
-                            type="button"
-                            onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
-                            disabled={communityAvatarUploading}
-                            className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                            style={{ left: "-2px", bottom: "-2px", width: "26px", height: "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
-                            aria-label="Change profile photo"
-                          >
-                            <Camera size={13} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex flex-1 justify-around text-center">
-                      {[["Posts", p.postCount, null], ["Followers", p.followerCount, "followers"], ["Following", p.followingCount, "following"]].map(([label, value, kind]) => (
-                        <button key={label} type="button" disabled={!kind} onClick={() => kind && openFollowList(p.username, kind)} className={kind ? TAP : ""} style={{ background: "none", border: "none", cursor: kind ? "pointer" : "default", padding: "2px 4px" }}>
-                          <div style={{ color: palette.text, fontSize: "17px", fontWeight: 800 }}>{value || 0}</div>
-                          <div style={{ color: palette.textMuted, fontSize: "11.5px" }}>{label}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Name, badges, bio */}
-                  <div className="px-4 pb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span style={{ color: palette.text, fontSize: "16px", fontWeight: 800 }}>{p.username}</span>
-                      {role && <span style={chip}>{role}</span>}
-                      {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
-                      {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
-                    </div>
-
-                    {isMe && bioEditing ? (
-                      <div className="mt-2">
-                        <textarea
-                          value={bioDraft}
-                          onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
-                          rows={3}
-                          autoFocus
-                          placeholder="Tell the group what you trade and how you think about risk…"
-                          className="w-full rounded-xl px-3 py-2 outline-none"
-                          style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45 }}
-                        />
-                        <div className="flex items-center justify-between mt-1.5">
-                          <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{bioDraft.length}/160</span>
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => setBioEditing(false)} className={TAP} style={{ background: "none", border: "none", color: palette.textMuted, fontSize: "12.5px", fontWeight: 600, padding: "6px 8px" }}>Cancel</button>
-                            <button type="button" onClick={saveProfileBio} disabled={bioSaving} className={`rounded-full ${TAP}`} style={{ background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`, border: "none", color: palette.letterbox, fontSize: "12.5px", fontWeight: 700, padding: "6px 16px", opacity: bioSaving ? 0.6 : 1 }}>
-                              {bioSaving ? "Saving…" : "Save bio"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : p.bio ? (
-                      <p className="mt-1.5" style={{ color: palette.text, fontSize: "13px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.bio}</p>
-                    ) : isMe ? (
-                      <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12.5px" }}>Add a short bio so people know who you are.</p>
-                    ) : null}
-
-                    {joinedText && <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "11.5px" }}>In this group since {joinedText}</p>}
-                    {!isMe && mutuals.length > 0 && (
-                      <p className="mt-1" style={{ color: palette.textMuted, fontSize: "11.5px" }}>
-                        Followed by{" "}
-                        {mutuals.slice(0, 2).map((name, i) => (
-                          <span key={name}>
-                            {i > 0 && ", "}
-                            <button type="button" onClick={() => openCommunityMemberProfile(name)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontWeight: 700, fontSize: "11.5px" }}>{name}</button>
-                          </span>
-                        ))}
-                        {mutuals.length > 2 && ` and ${mutuals.length - 2} other${mutuals.length - 2 === 1 ? "" : "s"} you follow`}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Primary action */}
-                  {!(isMe && bioEditing) && (
-                    <div className="flex gap-2 px-4 pb-4">
-                      {isMe ? (
-                        <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12.5px", fontWeight: 700, fontFamily: sans }}>
-                          <Pencil size={13} /> Edit bio
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)}
-                          disabled={followBusy}
-                          className={`flex-1 rounded-xl py-2 ${TAP}`}
-                          style={{
-                            background: p.isFollowedByMe ? palette.field : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
-                            border: `1px solid ${p.isFollowedByMe ? palette.border : "transparent"}`,
-                            color: p.isFollowedByMe ? palette.text : palette.letterbox,
-                            fontSize: "12.5px", fontWeight: 700, fontFamily: sans, opacity: followBusy ? 0.6 : 1,
-                          }}
-                        >
-                          {p.isFollowedByMe ? "Following" : p.followsMe ? "Follow back" : "Follow"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {profileError && <p className="text-xs px-4 pb-3" style={{ color: palette.red }}>{profileError}</p>}
-
-                  {/* Posts | Stats */}
-                  <div className="flex" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
-                    {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
-                      const on = profileSubTab === id;
-                      return (
-                        <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
-                          <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
-                          {label}
-                          <span aria-hidden="true" style={{ position: "absolute", left: "20%", right: "20%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {profileSubTab === "posts" ? (
-                    !profilePostsLoaded ? (
-                      <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
-                    ) : profilePosts.length === 0 ? (
-                      <div className="flex flex-col items-center text-center px-6 py-10">
-                        <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
-                          <LayoutGrid size={20} style={{ color: palette.gold }} />
-                        </span>
-                        <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
-                          {isMe ? "Share a trade in the Feed tab and it will show up here." : `${p.username} hasn't posted in this group yet.`}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2px", paddingTop: "2px" }}>
-                          {profilePosts.map((post) => {
-                            const positive = post.pnl && !post.pnl.trim().startsWith("-");
-                            return (
-                              <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={TAP} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", background: palette.field, textAlign: "left", display: "block" }}>
-                                {post.image ? (
-                                  <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                                ) : (
-                                  <span style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", padding: "10px", color: palette.text, fontSize: "11.5px", lineHeight: 1.4 }}>{post.text}</span>
-                                )}
-                                {post.pnl && (
-                                  <span style={{ position: "absolute", left: "5px", bottom: "5px", background: "rgba(5,7,12,0.72)", color: positive ? palette.green : palette.red, fontSize: "10.5px", fontWeight: 700, fontFamily: mono, padding: "2px 7px", borderRadius: "999px" }}>{post.pnl}</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {profilePostsNext && (
-                          <div className="flex justify-center py-4">
-                            <button type="button" onClick={loadMoreProfilePosts} className={`rounded-full px-4 py-2 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>Load more</button>
-                          </div>
-                        )}
-                      </>
-                    )
-                  ) : (
-                    <div className="px-4 pt-4">
-                      <div className="grid grid-cols-3 gap-2.5 mb-3.5">
-                        {statTiles.map(([label, value, color]) => (
-                          <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
-                            <div style={{ color: palette.textFaint, fontSize: "10.5px", marginBottom: "5px" }}>{label}</div>
-                            <div style={{ color, fontSize: "16px", fontWeight: 800 }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="rounded-2xl p-3.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
-                        <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>Equity curve</div>
-                        {curvePoints ? (
-                          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "110px", display: "block" }}>
-                            <polyline points={curvePoints} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
-                          </svg>
-                        ) : (
-                          <div className="flex items-center justify-center" style={{ height: "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
-                        )}
-                      </div>
-                      {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
         ) : communityPanelTab === "leaderboard" ? (
           <>
             {(() => {
@@ -18352,6 +18147,249 @@ if (activeTab === "community") {
         </div>
           </>
         )}
+
+        {profileOpen && (() => {
+          const viewingName = profileView || communityUsername;
+          const isMe = !profileView || profileView === communityUsername;
+          const p = profileData && String(profileData.username).toLowerCase() === String(viewingName || "").toLowerCase() ? profileData : null;
+          const chip = { color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 700 };
+          const pill = (primary, busy) => ({
+            height: "32px", padding: "0 18px", borderRadius: "999px", whiteSpace: "nowrap",
+            fontSize: "12.5px", fontWeight: 700, fontFamily: sans,
+            background: primary ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` : palette.field,
+            border: `1px solid ${primary ? "transparent" : palette.border}`,
+            color: primary ? palette.letterbox : palette.text,
+            opacity: busy ? 0.6 : 1,
+          });
+          const shell = (children) => (
+            <div className="fixed inset-0 flex justify-center" style={{ background: palette.bg, zIndex: 108 }}>
+              <div className="flex flex-col w-full min-h-0" style={{ maxWidth: isDesktop ? "640px" : "100%", borderLeft: isDesktop ? `1px solid ${palette.border}` : "none", borderRight: isDesktop ? `1px solid ${palette.border}` : "none" }}>
+                {children}
+              </div>
+            </div>
+          );
+          const topBar = (
+            <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, paddingTop: "max(10px, env(safe-area-inset-top))" }}>
+              <button type="button" onClick={closeProfileBack} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }} aria-label="Back">
+                <ChevronLeft size={17} />
+              </button>
+              <div className="min-w-0">
+                <div className="truncate" style={{ color: palette.text, fontSize: "15px", fontWeight: 800, lineHeight: 1.2 }}>{p ? p.username : (viewingName || "Profile")}</div>
+                {p && <div style={{ color: palette.textFaint, fontSize: "11px" }}>{p.postCount || 0} post{p.postCount === 1 ? "" : "s"}</div>}
+              </div>
+            </div>
+          );
+          if (!p) {
+            return shell(
+              <>
+                {topBar}
+                <p className="text-xs px-4 py-6" style={{ color: profileError ? palette.red : palette.textFaint }}>
+                  {profileError || (profileLoading ? "Loading profile…" : "Couldn't load this profile.")}
+                </p>
+              </>
+            );
+          }
+          const stats = getCommunityMemberStats(p);
+          const role = p.isOwner ? "Owner" : p.isAdmin ? "Admin" : p.isSignalProvider ? "Signal provider" : null;
+          const joinedText = p.joinedAt ? new Date(p.joinedAt).toLocaleDateString([], { month: "short", year: "numeric" }) : null;
+          const mutuals = p.mutuals || [];
+          const avatarSrc = isMe ? (communityAvatar || p.avatar || undefined) : (p.avatar || avatarForAuthor(p.username));
+          const coverBg = avatarStyleFor(p.username).bg;
+          const curve = stats.equityCurve || [];
+          const cMin = curve.length ? Math.min(...curve) : 0;
+          const cMax = curve.length ? Math.max(...curve) : 0;
+          const cRange = cMax - cMin || 1;
+          const curvePoints = curve.map((v, i) => `${(i / Math.max(1, curve.length - 1)) * 100},${100 - ((v - cMin) / cRange) * 70 - 15}`).join(" ");
+          const fmtPct = (v) => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+          const statTiles = [
+            ["Win rate", stats.winRate == null ? "—" : `${stats.winRate.toFixed(0)}%`, palette.green],
+            ["P&L", fmtPct(stats.pnlPct), stats.pnlPct != null && stats.pnlPct < 0 ? palette.red : palette.green],
+            ["Avg R", stats.avgR == null ? "—" : stats.avgR.toFixed(1), palette.text],
+            ["Trades", stats.trades == null ? "—" : String(stats.trades), palette.text],
+            ["Win streak", stats.streak == null ? "—" : String(stats.streak), palette.text],
+          ];
+          return shell(
+            <>
+              {topBar}
+              <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, paddingBottom: "28px" }}>
+                {/* Cover + photo + one compact action */}
+                <div style={{ height: isDesktop ? "120px" : "96px", background: coverBg, opacity: 0.85 }} />
+                <div className="flex items-start justify-between px-4">
+                  <div className="relative flex-shrink-0" style={{ marginTop: "-42px" }}>
+                    <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
+                      <Avatar name={p.username} size={isDesktop ? 92 : 80} src={avatarSrc} online={p.isOnline} />
+                    </span>
+                    {isMe && (
+                      <>
+                        <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
+                        <button
+                          type="button"
+                          onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
+                          disabled={communityAvatarUploading}
+                          className={`absolute flex items-center justify-center rounded-full ${TAP}`}
+                          style={{ right: "2px", bottom: "2px", width: "26px", height: "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
+                          aria-label="Change profile photo"
+                        >
+                          <Camera size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ marginTop: "12px" }}>
+                    {isMe ? (
+                      !bioEditing && (
+                        <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center gap-1.5 ${TAP}`} style={pill(false, false)}>
+                          <Pencil size={12} /> Edit bio
+                        </button>
+                      )
+                    ) : (
+                      <button type="button" onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)} disabled={followBusy} className={TAP} style={{ ...pill(!p.isFollowedByMe, followBusy), minWidth: "96px" }}>
+                        {p.isFollowedByMe ? "Following" : p.followsMe ? "Follow back" : "Follow"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Identity */}
+                <div className="px-4 pt-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span style={{ color: palette.text, fontSize: "18px", fontWeight: 800 }}>{p.username}</span>
+                    {role && <span style={chip}>{role}</span>}
+                    {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
+                    {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
+                  </div>
+
+                  {isMe && bioEditing ? (
+                    <div className="mt-2">
+                      <textarea
+                        value={bioDraft}
+                        onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
+                        rows={3}
+                        autoFocus
+                        placeholder="Tell the group what you trade and how you think about risk…"
+                        className="w-full rounded-xl px-3 py-2 outline-none"
+                        style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45 }}
+                      />
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{bioDraft.length}/160</span>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => setBioEditing(false)} className={TAP} style={{ ...pill(false, false), height: "30px", padding: "0 14px" }}>Cancel</button>
+                          <button type="button" onClick={saveProfileBio} disabled={bioSaving} className={TAP} style={{ ...pill(true, bioSaving), height: "30px", padding: "0 16px" }}>
+                            {bioSaving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : p.bio ? (
+                    <p className="mt-1.5" style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.bio}</p>
+                  ) : isMe ? (
+                    <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12.5px" }}>Add a short bio so people know who you are.</p>
+                  ) : null}
+
+                  {joinedText && <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12px" }}>In this group since {joinedText}</p>}
+
+                  <div className="flex items-center gap-4 mt-2.5">
+                    {[[p.followingCount, "Following", "following"], [p.followerCount, "Followers", "followers"]].map(([value, label, kind]) => (
+                      <button key={kind} type="button" onClick={() => openFollowList(p.username, kind)} className={TAP} style={{ background: "none", border: "none", padding: 0, fontSize: "13px", color: palette.textMuted }}>
+                        <span style={{ color: palette.text, fontWeight: 800 }}>{value || 0}</span> {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {!isMe && mutuals.length > 0 && (
+                    <p className="mt-2" style={{ color: palette.textMuted, fontSize: "12px" }}>
+                      Followed by{" "}
+                      {mutuals.slice(0, 2).map((name, i) => (
+                        <span key={name}>
+                          {i > 0 && ", "}
+                          <button type="button" onClick={() => openCommunityMemberProfile(name)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontWeight: 700, fontSize: "12px" }}>{name}</button>
+                        </span>
+                      ))}
+                      {mutuals.length > 2 && ` and ${mutuals.length - 2} other${mutuals.length - 2 === 1 ? "" : "s"} you follow`}
+                    </p>
+                  )}
+                  {profileError && <p className="text-xs mt-2" style={{ color: palette.red }}>{profileError}</p>}
+                </div>
+
+                {/* Posts | Stats */}
+                <div className="flex mt-4" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
+                  {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
+                    const on = profileSubTab === id;
+                    return (
+                      <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
+                        <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
+                        {label}
+                        <span aria-hidden="true" style={{ position: "absolute", left: "25%", right: "25%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {profileSubTab === "posts" ? (
+                  !profilePostsLoaded ? (
+                    <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
+                  ) : profilePosts.length === 0 ? (
+                    <div className="flex flex-col items-center text-center px-6 py-10">
+                      <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                        <LayoutGrid size={20} style={{ color: palette.gold }} />
+                      </span>
+                      <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                        {isMe ? "Share a trade in the Feed tab and it will show up here." : `${p.username} hasn't posted in this group yet.`}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2px", paddingTop: "2px" }}>
+                        {profilePosts.map((post) => {
+                          const positive = post.pnl && !post.pnl.trim().startsWith("-");
+                          return (
+                            <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={TAP} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", background: palette.field, textAlign: "left", display: "block" }}>
+                              {post.image ? (
+                                <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                              ) : (
+                                <span style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", padding: "10px", color: palette.text, fontSize: "11.5px", lineHeight: 1.4 }}>{post.text}</span>
+                              )}
+                              {post.pnl && (
+                                <span style={{ position: "absolute", left: "5px", bottom: "5px", background: "rgba(5,7,12,0.72)", color: positive ? palette.green : palette.red, fontSize: "10.5px", fontWeight: 700, fontFamily: mono, padding: "2px 7px", borderRadius: "999px" }}>{post.pnl}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {profilePostsNext && (
+                        <div className="flex justify-center py-4">
+                          <button type="button" onClick={loadMoreProfilePosts} className={TAP} style={pill(false, false)}>Load more</button>
+                        </div>
+                      )}
+                    </>
+                  )
+                ) : (
+                  <div className="px-4 pt-4">
+                    <div className="grid grid-cols-3 gap-2.5 mb-3.5">
+                      {statTiles.map(([label, value, color]) => (
+                        <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                          <div style={{ color: palette.textFaint, fontSize: "10.5px", marginBottom: "5px" }}>{label}</div>
+                          <div style={{ color, fontSize: "16px", fontWeight: 800 }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-2xl p-3.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                      <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>Equity curve</div>
+                      {curvePoints ? (
+                        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "110px", display: "block" }}>
+                          <polyline points={curvePoints} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
+                        </svg>
+                      ) : (
+                        <div className="flex items-center justify-center" style={{ height: "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
+                      )}
+                    </div>
+                    {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {followListOpen && (
           <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.76)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 115 }} onClick={() => setFollowListOpen(null)}>

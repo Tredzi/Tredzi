@@ -4559,6 +4559,16 @@ const [bioEditing, setBioEditing] = useState(false);
 const [bioDraft, setBioDraft] = useState("");
 const [bioSaving, setBioSaving] = useState(false);
 const profileAvatarInputRef = useRef(null);
+// New-post composer for the Profile tab's own Posts grid — Instagram-style, and separate
+// from posting to a group's feed (different table on the backend: profile_posts).
+const [profileComposerOpen, setProfileComposerOpen] = useState(false);
+const [profilePostText, setProfilePostText] = useState("");
+const [profilePostPnl, setProfilePostPnl] = useState("");
+const [profilePostImage, setProfilePostImage] = useState(null);
+const [profilePostImageUploading, setProfilePostImageUploading] = useState(false);
+const [profilePostSubmitting, setProfilePostSubmitting] = useState(false);
+const profilePostImageInputRef = useRef(null);
+const [likedProfilePostIds, setLikedProfilePostIds] = useState([]);
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
 const [communityLobbyTab, setCommunityLobbyTab] = useState("mine"); // "mine" | "discover"
 const [discoverGroups, setDiscoverGroups] = useState([]);
@@ -5096,23 +5106,15 @@ useEffect(() => {
 }, [activeGroupId, communityPanelTab]);
 
 
-// Profile tab: switching groups clears whoever you were looking at (profiles are per-group).
+// Profile section: load the profile + their posts whenever it opens or the viewed account
+// changes. This is a universal, account-wide profile now — it does NOT depend on
+// activeGroupId, so switching groups while it's open no longer resets or reloads it.
 useEffect(() => {
-  setProfileOpen(false);
-  setProfileHistory([]);
-  setProfileView(null);
-  setProfileData(null);
-  setBioEditing(false);
-}, [activeGroupId]);
-
-// Profile section: load the profile + their posts whenever it opens or the viewed member changes.
-useEffect(() => {
-  if (!activeGroupId || !profileOpen) return;
-  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!profileOpen || !session?.token) return;
   const target = profileView || communityUsername;
-  if (!membership || !target) return;
+  if (!target) return;
   let cancelled = false;
-  const headers = { Authorization: `Bearer ${membership.token}` };
+  const headers = { Authorization: `Bearer ${session.token}` };
   setProfileData(null);
   setProfileError("");
   setProfileLoading(true);
@@ -5124,8 +5126,8 @@ useEffect(() => {
     try {
       const enc = encodeURIComponent(target);
       const [prof, posts] = await Promise.all([
-        communityApi(`/groups/${activeGroupId}/profile/${enc}`, { headers }),
-        communityApi(`/groups/${activeGroupId}/profile/${enc}/posts`, { headers }),
+        communityApi(`/profile/${enc}`, { headers }),
+        communityApi(`/profile/${enc}/posts`, { headers }),
       ]);
       if (cancelled) return;
       setProfileData(prof.profile);
@@ -5139,7 +5141,7 @@ useEffect(() => {
   })();
   return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeGroupId, profileOpen, profileView, communityUsername]);
+}, [profileOpen, profileView, communityUsername, session?.token]);
 
 // Stories: load when the Feed tab opens (separate endpoint from the feed itself)
 useEffect(() => {
@@ -7094,16 +7096,15 @@ if (!isSignal && !communityMsgText.trim()) return;
     }
   };
 
-  // --- Follow / unfollow (Instagram-style). Works from the profile page and from the follower lists. ---
+  // --- Follow / unfollow (Instagram-style, account-wide). Works from the profile page,
+  // the follower lists, and any group's member list. ---
   const toggleFollowMember = async (username, currentlyFollowing) => {
-    if (!activeGroupId || followBusy) return;
-    const membership = myGroups.find((g) => g.id === activeGroupId);
-    if (!membership) return;
+    if (!session?.token || followBusy) return;
     setFollowBusy(true);
     try {
-      const data = await communityApi(`/groups/${activeGroupId}/follow/${encodeURIComponent(username)}`, {
+      const data = await communityApi(`/follow/${encodeURIComponent(username)}`, {
         method: currentlyFollowing ? "DELETE" : "POST",
-        headers: { Authorization: `Bearer ${membership.token}` },
+        headers: { Authorization: `Bearer ${session.token}` },
       });
       setGroupMembersList((cur) => cur.map((m) => m.username === username
         ? { ...m, isFollowedByMe: data.isFollowing, followerCount: data.followerCount }
@@ -7142,13 +7143,74 @@ if (!isSignal && !communityMsgText.trim()) return;
     }
   };
 
-  const loadMoreProfilePosts = async () => {
-    if (!profileData || !profilePostsNext) return;
-    const membership = myGroups.find((g) => g.id === activeGroupId);
-    if (!membership) return;
+  // Create a post directly on the profile (own Instagram-style grid, not a group feed post).
+  const uploadProfilePostImage = async (file) => {
+    if (!file) return;
+    setProfilePostImageUploading(true);
     try {
-      const data = await communityApi(`/groups/${activeGroupId}/profile/${encodeURIComponent(profileData.username)}/posts?before=${profilePostsNext}`, {
-        headers: { Authorization: `Bearer ${membership.token}` },
+      const dataUrl = await resizeImageFile(file, 800);
+      setProfilePostImage(dataUrl);
+    } catch (err) {
+      setProfileError("Couldn't attach that image.");
+    } finally {
+      setProfilePostImageUploading(false);
+    }
+  };
+
+  const handleProfilePostImageChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (file) uploadProfilePostImage(file);
+  };
+
+  const createProfilePost = async () => {
+    if (!session?.token || profilePostSubmitting) return;
+    if (!profilePostText.trim() && !profilePostImage) return;
+    setProfilePostSubmitting(true);
+    try {
+      await communityApi("/profile/posts", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ text: profilePostText.trim(), pnl: profilePostPnl.trim(), image: profilePostImage }),
+      });
+      setProfilePostText("");
+      setProfilePostPnl("");
+      setProfilePostImage(null);
+      setProfileComposerOpen(false);
+      const enc = encodeURIComponent(communityUsername);
+      const data = await communityApi(`/profile/${enc}/posts`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setProfilePosts(data.posts || []);
+      setProfilePostsNext(data.nextCursor || null);
+      setProfileData((cur) => (cur ? { ...cur, postCount: (cur.postCount || 0) + 1 } : cur));
+    } catch (err) {
+      setProfileError(err.message || "Couldn't share that.");
+    } finally {
+      setProfilePostSubmitting(false);
+    }
+  };
+
+  const likeProfilePost = async (postId) => {
+    if (!session?.token || likedProfilePostIds.includes(postId)) return;
+    setLikedProfilePostIds((cur) => [...cur, postId]);
+    setProfilePosts((cur) => cur.map((p) => (p.id === postId ? { ...p, likeCount: (p.likeCount || 0) + 1 } : p)));
+    setProfilePostOpen((cur) => (cur && cur.id === postId ? { ...cur, likeCount: (cur.likeCount || 0) + 1 } : cur));
+    try {
+      await communityApi(`/profile/posts/${postId}/like`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch (err) {
+      // Non-critical — leave the optimistic like count as-is.
+    }
+  };
+
+  const loadMoreProfilePosts = async () => {
+    if (!profileData || !profilePostsNext || !session?.token) return;
+    try {
+      const data = await communityApi(`/profile/${encodeURIComponent(profileData.username)}/posts?before=${profilePostsNext}`, {
+        headers: { Authorization: `Bearer ${session.token}` },
       });
       setProfilePosts((cur) => [...cur, ...(data.posts || [])]);
       setProfilePostsNext(data.nextCursor || null);
@@ -7160,13 +7222,11 @@ if (!isSignal && !communityMsgText.trim()) return;
   const openFollowList = async (username, kind) => {
     setFollowListOpen({ username, kind });
     setFollowListData([]);
-    if (!activeGroupId) return;
-    const membership = myGroups.find((g) => g.id === activeGroupId);
-    if (!membership) return;
+    if (!session?.token) return;
     setFollowListLoading(true);
     try {
-      const data = await communityApi(`/groups/${activeGroupId}/follow-list/${encodeURIComponent(username)}?kind=${kind}`, {
-        headers: { Authorization: `Bearer ${membership.token}` },
+      const data = await communityApi(`/follow-list/${encodeURIComponent(username)}?kind=${kind}`, {
+        headers: { Authorization: `Bearer ${session.token}` },
       });
       setFollowListData(data[kind] || []);
     } catch (err) {
@@ -18161,36 +18221,46 @@ if (activeTab === "community") {
             color: primary ? palette.letterbox : palette.text,
             opacity: busy ? 0.6 : 1,
           });
+          // Universal profile: same account, same card, no matter which group opened it —
+          // so on desktop it reads like Instagram's web profile (centered card, big round
+          // avatar beside the stats/bio, no phone-frame chrome), not a mobile screen stretched wide.
           const shell = (children) => (
-            <div className="fixed inset-0 flex justify-center" style={{ background: palette.bg, zIndex: 108 }}>
-              <div className="flex flex-col w-full min-h-0" style={{ maxWidth: isDesktop ? "640px" : "100%", borderLeft: isDesktop ? `1px solid ${palette.border}` : "none", borderRight: isDesktop ? `1px solid ${palette.border}` : "none" }}>
-                {children}
+            isDesktop ? (
+              <div className="fixed inset-0 flex items-start justify-center overflow-y-auto" style={{ background: "rgba(5,7,12,0.72)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 108, padding: "48px 24px" }} onClick={closeProfileBack}>
+                <div className="relative w-full flex-shrink-0" style={{ maxWidth: "935px" }} onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={closeProfileBack} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-14px", right: "-14px", width: "34px", height: "34px", background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, boxShadow: palette.shadow, zIndex: 1 }} aria-label="Close profile">
+                    <X size={16} />
+                  </button>
+                  <div className="rounded-2xl overflow-hidden" style={{ background: palette.bg, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                    {children}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-          const topBar = (
-            <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, paddingTop: "max(10px, env(safe-area-inset-top))" }}>
-              <button type="button" onClick={closeProfileBack} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }} aria-label="Back">
-                <ChevronLeft size={17} />
-              </button>
-              <div className="min-w-0">
-                <div className="truncate" style={{ color: palette.text, fontSize: "15px", fontWeight: 800, lineHeight: 1.2 }}>{p ? p.username : (viewingName || "Profile")}</div>
-                {p && <div style={{ color: palette.textFaint, fontSize: "11px" }}>{p.postCount || 0} post{p.postCount === 1 ? "" : "s"}</div>}
+            ) : (
+              <div className="fixed inset-0 flex justify-center" style={{ background: palette.bg, zIndex: 108 }}>
+                <div className="flex flex-col w-full min-h-0">
+                  <div className="flex items-center gap-3 px-3 py-2.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface, paddingTop: "max(10px, env(safe-area-inset-top))" }}>
+                    <button type="button" onClick={closeProfileBack} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }} aria-label="Back">
+                      <ChevronLeft size={17} />
+                    </button>
+                    <div className="min-w-0">
+                      <div className="truncate" style={{ color: palette.text, fontSize: "15px", fontWeight: 800, lineHeight: 1.2 }}>{p ? p.username : (viewingName || "Profile")}</div>
+                      {p && <div style={{ color: palette.textFaint, fontSize: "11px" }}>{p.postCount || 0} post{p.postCount === 1 ? "" : "s"}</div>}
+                    </div>
+                  </div>
+                  {children}
+                </div>
               </div>
-            </div>
+            )
           );
           if (!p) {
             return shell(
-              <>
-                {topBar}
-                <p className="text-xs px-4 py-6" style={{ color: profileError ? palette.red : palette.textFaint }}>
-                  {profileError || (profileLoading ? "Loading profile…" : "Couldn't load this profile.")}
-                </p>
-              </>
+              <p className="text-xs px-4 py-6" style={{ color: profileError ? palette.red : palette.textFaint }}>
+                {profileError || (profileLoading ? "Loading profile…" : "Couldn't load this profile.")}
+              </p>
             );
           }
           const stats = getCommunityMemberStats(p);
-          const role = p.isOwner ? "Owner" : p.isAdmin ? "Admin" : p.isSignalProvider ? "Signal provider" : null;
           const joinedText = p.joinedAt ? new Date(p.joinedAt).toLocaleDateString([], { month: "short", year: "numeric" }) : null;
           const mutuals = p.mutuals || [];
           const avatarSrc = isMe ? (communityAvatar || p.avatar || undefined) : (p.avatar || avatarForAuthor(p.username));
@@ -18208,186 +18278,239 @@ if (activeTab === "community") {
             ["Trades", stats.trades == null ? "—" : String(stats.trades), palette.text],
             ["Win streak", stats.streak == null ? "—" : String(stats.streak), palette.text],
           ];
-          return shell(
+          const avatarBlock = (
+            <div className="relative flex-shrink-0">
+              <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
+                <Avatar name={p.username} size={isDesktop ? 150 : 80} src={avatarSrc} online={p.isOnline} />
+              </span>
+              {isMe && (
+                <>
+                  <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
+                  <button
+                    type="button"
+                    onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
+                    disabled={communityAvatarUploading}
+                    className={`absolute flex items-center justify-center rounded-full ${TAP}`}
+                    style={{ right: isDesktop ? "8px" : "2px", bottom: isDesktop ? "8px" : "2px", width: "26px", height: "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
+                    aria-label="Change profile photo"
+                  >
+                    <Camera size={12} />
+                  </button>
+                </>
+              )}
+            </div>
+          );
+          const bioBlock = (
             <>
-              {topBar}
-              <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, paddingBottom: "28px" }}>
-                {/* Cover + photo + one compact action */}
-                <div style={{ height: isDesktop ? "120px" : "96px", background: coverBg, opacity: 0.85 }} />
-                <div className="flex items-start justify-between px-4">
-                  <div className="relative flex-shrink-0" style={{ marginTop: "-42px" }}>
-                    <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
-                      <Avatar name={p.username} size={isDesktop ? 92 : 80} src={avatarSrc} online={p.isOnline} />
+              {isMe && bioEditing ? (
+                <div className="mt-2">
+                  <textarea
+                    value={bioDraft}
+                    onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
+                    rows={3}
+                    autoFocus
+                    placeholder="Tell people what you trade and how you think about risk…"
+                    className="w-full rounded-xl px-3 py-2 outline-none"
+                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45, maxWidth: isDesktop ? "360px" : "none" }}
+                  />
+                  <div className="flex items-center justify-between mt-1.5" style={{ maxWidth: isDesktop ? "360px" : "none" }}>
+                    <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{bioDraft.length}/160</span>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setBioEditing(false)} className={TAP} style={{ ...pill(false, false), height: "30px", padding: "0 14px" }}>Cancel</button>
+                      <button type="button" onClick={saveProfileBio} disabled={bioSaving} className={TAP} style={{ ...pill(true, bioSaving), height: "30px", padding: "0 16px" }}>
+                        {bioSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : p.bio ? (
+                <p className="mt-1.5" style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.bio}</p>
+              ) : isMe ? (
+                <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12.5px" }}>Add a short bio so people know who you are.</p>
+              ) : null}
+              {joinedText && <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12px" }}>Joined {joinedText}</p>}
+              {!isMe && mutuals.length > 0 && (
+                <p className="mt-2" style={{ color: palette.textMuted, fontSize: "12px" }}>
+                  Followed by{" "}
+                  {mutuals.slice(0, 2).map((name, i) => (
+                    <span key={name}>
+                      {i > 0 && ", "}
+                      <button type="button" onClick={() => openCommunityMemberProfile(name)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontWeight: 700, fontSize: "12px" }}>{name}</button>
                     </span>
-                    {isMe && (
-                      <>
-                        <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
-                        <button
-                          type="button"
-                          onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
-                          disabled={communityAvatarUploading}
-                          className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                          style={{ right: "2px", bottom: "2px", width: "26px", height: "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
-                          aria-label="Change profile photo"
-                        >
-                          <Camera size={12} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  <div style={{ marginTop: "12px" }}>
-                    {isMe ? (
-                      !bioEditing && (
-                        <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center gap-1.5 ${TAP}`} style={pill(false, false)}>
-                          <Pencil size={12} /> Edit bio
-                        </button>
-                      )
-                    ) : (
-                      <button type="button" onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)} disabled={followBusy} className={TAP} style={{ ...pill(!p.isFollowedByMe, followBusy), minWidth: "96px" }}>
-                        {p.isFollowedByMe ? "Following" : p.followsMe ? "Follow back" : "Follow"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Identity */}
-                <div className="px-4 pt-2.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span style={{ color: palette.text, fontSize: "18px", fontWeight: 800 }}>{p.username}</span>
-                    {role && <span style={chip}>{role}</span>}
-                    {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
-                    {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
-                  </div>
-
-                  {isMe && bioEditing ? (
-                    <div className="mt-2">
-                      <textarea
-                        value={bioDraft}
-                        onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
-                        rows={3}
-                        autoFocus
-                        placeholder="Tell the group what you trade and how you think about risk…"
-                        className="w-full rounded-xl px-3 py-2 outline-none"
-                        style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45 }}
-                      />
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{bioDraft.length}/160</span>
-                        <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => setBioEditing(false)} className={TAP} style={{ ...pill(false, false), height: "30px", padding: "0 14px" }}>Cancel</button>
-                          <button type="button" onClick={saveProfileBio} disabled={bioSaving} className={TAP} style={{ ...pill(true, bioSaving), height: "30px", padding: "0 16px" }}>
-                            {bioSaving ? "Saving…" : "Save"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : p.bio ? (
-                    <p className="mt-1.5" style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.bio}</p>
-                  ) : isMe ? (
-                    <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12.5px" }}>Add a short bio so people know who you are.</p>
-                  ) : null}
-
-                  {joinedText && <p className="mt-1.5" style={{ color: palette.textFaint, fontSize: "12px" }}>In this group since {joinedText}</p>}
-
-                  <div className="flex items-center gap-4 mt-2.5">
-                    {[[p.followingCount, "Following", "following"], [p.followerCount, "Followers", "followers"]].map(([value, label, kind]) => (
-                      <button key={kind} type="button" onClick={() => openFollowList(p.username, kind)} className={TAP} style={{ background: "none", border: "none", padding: 0, fontSize: "13px", color: palette.textMuted }}>
-                        <span style={{ color: palette.text, fontWeight: 800 }}>{value || 0}</span> {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {!isMe && mutuals.length > 0 && (
-                    <p className="mt-2" style={{ color: palette.textMuted, fontSize: "12px" }}>
-                      Followed by{" "}
-                      {mutuals.slice(0, 2).map((name, i) => (
-                        <span key={name}>
-                          {i > 0 && ", "}
-                          <button type="button" onClick={() => openCommunityMemberProfile(name)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontWeight: 700, fontSize: "12px" }}>{name}</button>
-                        </span>
-                      ))}
-                      {mutuals.length > 2 && ` and ${mutuals.length - 2} other${mutuals.length - 2 === 1 ? "" : "s"} you follow`}
-                    </p>
-                  )}
-                  {profileError && <p className="text-xs mt-2" style={{ color: palette.red }}>{profileError}</p>}
-                </div>
-
-                {/* Posts | Stats */}
-                <div className="flex mt-4" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
-                  {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
-                    const on = profileSubTab === id;
-                    return (
-                      <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
-                        <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
-                        {label}
-                        <span aria-hidden="true" style={{ position: "absolute", left: "25%", right: "25%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {profileSubTab === "posts" ? (
-                  !profilePostsLoaded ? (
-                    <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
-                  ) : profilePosts.length === 0 ? (
-                    <div className="flex flex-col items-center text-center px-6 py-10">
-                      <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
-                        <LayoutGrid size={20} style={{ color: palette.gold }} />
-                      </span>
-                      <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
-                        {isMe ? "Share a trade in the Feed tab and it will show up here." : `${p.username} hasn't posted in this group yet.`}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2px", paddingTop: "2px" }}>
-                        {profilePosts.map((post) => {
-                          const positive = post.pnl && !post.pnl.trim().startsWith("-");
-                          return (
-                            <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={TAP} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", background: palette.field, textAlign: "left", display: "block" }}>
-                              {post.image ? (
-                                <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                              ) : (
-                                <span style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", padding: "10px", color: palette.text, fontSize: "11.5px", lineHeight: 1.4 }}>{post.text}</span>
-                              )}
-                              {post.pnl && (
-                                <span style={{ position: "absolute", left: "5px", bottom: "5px", background: "rgba(5,7,12,0.72)", color: positive ? palette.green : palette.red, fontSize: "10.5px", fontWeight: 700, fontFamily: mono, padding: "2px 7px", borderRadius: "999px" }}>{post.pnl}</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {profilePostsNext && (
-                        <div className="flex justify-center py-4">
-                          <button type="button" onClick={loadMoreProfilePosts} className={TAP} style={pill(false, false)}>Load more</button>
-                        </div>
-                      )}
-                    </>
-                  )
-                ) : (
-                  <div className="px-4 pt-4">
-                    <div className="grid grid-cols-3 gap-2.5 mb-3.5">
-                      {statTiles.map(([label, value, color]) => (
-                        <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
-                          <div style={{ color: palette.textFaint, fontSize: "10.5px", marginBottom: "5px" }}>{label}</div>
-                          <div style={{ color, fontSize: "16px", fontWeight: 800 }}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="rounded-2xl p-3.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
-                      <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>Equity curve</div>
-                      {curvePoints ? (
-                        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "110px", display: "block" }}>
-                          <polyline points={curvePoints} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
-                        </svg>
+                  ))}
+                  {mutuals.length > 2 && ` and ${mutuals.length - 2} other${mutuals.length - 2 === 1 ? "" : "s"} you follow`}
+                </p>
+              )}
+              {profileError && <p className="text-xs mt-2" style={{ color: palette.red }}>{profileError}</p>}
+            </>
+          );
+          const actionButton = isMe ? (
+            !bioEditing && (
+              <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center gap-1.5 ${TAP}`} style={pill(false, false)}>
+                <Pencil size={12} /> Edit bio
+              </button>
+            )
+          ) : (
+            <button type="button" onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)} disabled={followBusy} className={TAP} style={{ ...pill(!p.isFollowedByMe, followBusy), minWidth: "96px" }}>
+              {p.isFollowedByMe ? "Following" : p.followsMe ? "Follow back" : "Follow"}
+            </button>
+          );
+          const statsRow = (
+            <div className="flex items-center gap-4 mt-2.5">
+              {[[p.followingCount, "Following", "following"], [p.followerCount, "Followers", "followers"]].map(([value, label, kind]) => (
+                <button key={kind} type="button" onClick={() => openFollowList(p.username, kind)} className={TAP} style={{ background: "none", border: "none", padding: 0, fontSize: "13px", color: palette.textMuted }}>
+                  <span style={{ color: palette.text, fontWeight: 800 }}>{value || 0}</span> {label}
+                </button>
+              ))}
+            </div>
+          );
+          const nameRow = (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span style={{ color: palette.text, fontSize: isDesktop ? "20px" : "18px", fontWeight: 800 }}>{p.username}</span>
+              {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
+              {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
+            </div>
+          );
+          const postsGridGap = isDesktop ? "24px" : "2px";
+          const postsGrid = !profilePostsLoaded ? (
+            <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
+          ) : profilePosts.length === 0 ? (
+            <div className="flex flex-col items-center text-center px-6 py-10">
+              <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                <LayoutGrid size={20} style={{ color: palette.gold }} />
+              </span>
+              <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
+                {isMe ? "Share your first post and it'll show up here." : `${p.username} hasn't posted yet.`}
+              </p>
+              {isMe && (
+                <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center gap-1.5 mt-3 ${TAP}`} style={pill(true, false)}>
+                  <Plus size={13} /> Share a post
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: postsGridGap, paddingTop: isDesktop ? "24px" : "2px" }}>
+                {profilePosts.map((post) => {
+                  const positive = post.pnl && !post.pnl.trim().startsWith("-");
+                  return (
+                    <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={`group ${TAP}`} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", borderRadius: isDesktop ? "6px" : "0", background: palette.field, textAlign: "left", display: "block" }}>
+                      {post.image ? (
+                        <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
-                        <div className="flex items-center justify-center" style={{ height: "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
+                        <span style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", padding: "10px", color: palette.text, fontSize: "11.5px", lineHeight: 1.4 }}>{post.text}</span>
                       )}
-                    </div>
-                    {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
+                      {post.pnl && (
+                        <span style={{ position: "absolute", left: "5px", bottom: "5px", background: "rgba(5,7,12,0.72)", color: positive ? palette.green : palette.red, fontSize: "10.5px", fontWeight: 700, fontFamily: mono, padding: "2px 7px", borderRadius: "999px" }}>{post.pnl}</span>
+                      )}
+                      {isDesktop && (
+                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100" style={{ background: "rgba(5,7,12,0.45)", transition: "opacity 0.15s", color: "#fff", fontSize: "13px", fontWeight: 700, fontFamily: mono }}>
+                          👍 {post.likeCount || 0}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {profilePostsNext && (
+                <div className="flex justify-center py-4">
+                  <button type="button" onClick={loadMoreProfilePosts} className={TAP} style={pill(false, false)}>Load more</button>
+                </div>
+              )}
+            </>
+          );
+          const statsPanel = (
+            <div className="px-4 pt-4" style={{ paddingLeft: isDesktop ? 0 : undefined, paddingRight: isDesktop ? 0 : undefined }}>
+              <div className="grid grid-cols-3 gap-2.5 mb-3.5">
+                {statTiles.map(([label, value, color]) => (
+                  <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                    <div style={{ color: palette.textFaint, fontSize: "10.5px", marginBottom: "5px" }}>{label}</div>
+                    <div style={{ color, fontSize: "16px", fontWeight: 800 }}>{value}</div>
                   </div>
+                ))}
+              </div>
+              <div className="rounded-2xl p-3.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>Equity curve (across every group)</div>
+                {curvePoints ? (
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "110px", display: "block" }}>
+                    <polyline points={curvePoints} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
+                  </svg>
+                ) : (
+                  <div className="flex items-center justify-center" style={{ height: "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
                 )}
               </div>
-            </>
+              {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
+            </div>
+          );
+          const tabBar = (
+            <div className="flex" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
+              {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
+                const on = profileSubTab === id;
+                return (
+                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: isDesktop ? "11.5px" : "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans, letterSpacing: isDesktop ? "0.06em" : "normal", textTransform: isDesktop ? "uppercase" : "none" }}>
+                    <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
+                    {label}
+                    <span aria-hidden="true" style={{ position: "absolute", left: "25%", right: "25%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
+                  </button>
+                );
+              })}
+            </div>
+          );
+
+          if (isDesktop) {
+            return shell(
+              <div style={{ maxHeight: "calc(100vh - 96px)", overflowY: "auto" }}>
+                <div className="flex items-start gap-10 px-10" style={{ paddingTop: "48px", paddingBottom: "28px" }}>
+                  {avatarBlock}
+                  <div className="min-w-0 flex-1" style={{ paddingTop: "6px" }}>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {nameRow}
+                      {actionButton}
+                      {isMe && (
+                        <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center gap-1.5 ${TAP}`} style={pill(true, false)}>
+                          <Plus size={13} /> New post
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-4">{statsRow}</div>
+                    <div style={{ maxWidth: "420px" }}>{bioBlock}</div>
+                  </div>
+                </div>
+                {tabBar}
+                <div style={{ padding: "0 40px 40px" }}>
+                  {profileSubTab === "posts" ? postsGrid : statsPanel}
+                </div>
+              </div>
+            );
+          }
+
+          return shell(
+            <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, paddingBottom: "28px" }}>
+              {/* Cover + photo + one compact action */}
+              <div style={{ height: "96px", background: coverBg, opacity: 0.85 }} />
+              <div className="flex items-start justify-between px-4">
+                <div style={{ marginTop: "-42px" }}>{avatarBlock}</div>
+                <div className="flex items-center gap-2" style={{ marginTop: "12px" }}>
+                  {isMe && (
+                    <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.text }} aria-label="New post">
+                      <Plus size={15} />
+                    </button>
+                  )}
+                  {actionButton}
+                </div>
+              </div>
+
+              {/* Identity */}
+              <div className="px-4 pt-2.5">
+                {nameRow}
+                {bioBlock}
+                {statsRow}
+              </div>
+
+              {tabBar}
+
+              {profileSubTab === "posts" ? postsGrid : statsPanel}
+            </div>
           );
         })()}
 
@@ -18471,9 +18594,87 @@ if (activeTab === "community") {
                     {profilePostOpen.pnl && (
                       <span style={{ background: !profilePostOpen.pnl.trim().startsWith("-") ? `${palette.green}1c` : `${palette.red}1c`, color: !profilePostOpen.pnl.trim().startsWith("-") ? palette.green : palette.red, fontSize: "11.5px", fontWeight: 700, padding: "4px 11px", borderRadius: "999px", fontFamily: mono }}>{profilePostOpen.pnl}</span>
                     )}
-                    <span style={{ color: palette.textFaint, fontSize: "12px", fontFamily: mono }}>👍 {profilePostOpen.likeCount || 0}</span>
+                    <button
+                      type="button"
+                      onClick={() => likeProfilePost(profilePostOpen.id)}
+                      disabled={likedProfilePostIds.includes(profilePostOpen.id)}
+                      className={`flex items-center gap-1 ${TAP}`}
+                      style={{ background: "none", border: "none", padding: 0, color: likedProfilePostIds.includes(profilePostOpen.id) ? palette.gold : palette.textFaint, fontSize: "12px", fontFamily: mono }}
+                    >
+                      👍 {profilePostOpen.likeCount || 0}
+                    </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {profileComposerOpen && (
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.82)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 122 }} onClick={() => !profilePostSubmitting && setProfileComposerOpen(false)}>
+            <div className="w-full rounded-2xl overflow-hidden" style={{ maxWidth: "420px", maxHeight: "86vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <span style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>New post</span>
+                <button type="button" onClick={() => setProfileComposerOpen(false)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", background: palette.field, color: palette.textMuted }} aria-label="Close">
+                  <X size={13} />
+                </button>
+              </div>
+              <div className="p-4" style={{ overflowY: "auto" }}>
+                <p style={{ color: palette.textFaint, fontSize: "11px", marginBottom: "10px" }}>
+                  Posts here show up in your Posts grid on your profile — separate from any group's feed.
+                </p>
+                <textarea
+                  value={profilePostText}
+                  onChange={(e) => setProfilePostText(e.target.value.slice(0, 1000))}
+                  rows={4}
+                  autoFocus
+                  placeholder="Share a trade, a thought, a milestone…"
+                  className="w-full rounded-xl px-3 py-2 outline-none"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45 }}
+                />
+                <input
+                  value={profilePostPnl}
+                  onChange={(e) => setProfilePostPnl(e.target.value.slice(0, 20))}
+                  placeholder="P&L (optional, e.g. +2.4%)"
+                  className="w-full rounded-xl px-3 py-2 outline-none mt-2"
+                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: mono }}
+                />
+                {profilePostImage && (
+                  <div className="relative mt-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${palette.border}` }}>
+                    <img src={profilePostImage} alt="" style={{ width: "100%", maxHeight: "220px", objectFit: "cover", display: "block" }} />
+                    <button type="button" onClick={() => setProfilePostImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "6px", right: "6px", width: "24px", height: "24px", background: "rgba(5,7,12,0.7)", color: "#fff" }} aria-label="Remove image">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mt-3">
+                  <input ref={profilePostImageInputRef} type="file" accept="image/*" onChange={handleProfilePostImageChange} style={{ display: "none" }} />
+                  <button
+                    type="button"
+                    onClick={() => profilePostImageInputRef.current && profilePostImageInputRef.current.click()}
+                    disabled={profilePostImageUploading}
+                    className={`flex items-center gap-1.5 ${TAP}`}
+                    style={{ height: "32px", padding: "0 14px", borderRadius: "999px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px", fontWeight: 700, opacity: profilePostImageUploading ? 0.6 : 1 }}
+                  >
+                    <Camera size={13} /> {profilePostImageUploading ? "Uploading…" : profilePostImage ? "Replace photo" : "Add photo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={createProfilePost}
+                    disabled={profilePostSubmitting || (!profilePostText.trim() && !profilePostImage)}
+                    className={TAP}
+                    style={{
+                      height: "32px", padding: "0 18px", borderRadius: "999px",
+                      fontSize: "12.5px", fontWeight: 700, fontFamily: sans,
+                      background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                      border: "1px solid transparent", color: palette.letterbox,
+                      opacity: profilePostSubmitting || (!profilePostText.trim() && !profilePostImage) ? 0.6 : 1,
+                    }}
+                  >
+                    {profilePostSubmitting ? "Sharing…" : "Share"}
+                  </button>
+                </div>
+                {profileError && <p className="text-xs mt-2" style={{ color: palette.red }}>{profileError}</p>}
               </div>
             </div>
           </div>

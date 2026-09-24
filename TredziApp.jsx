@@ -19431,6 +19431,7 @@ if (activeTab === "community") {
   );
 
 
+  if (!communityUsername) {
     // ---------- ONBOARDING (unchanged) ----------
     body = (
       <>
@@ -19540,6 +19541,8 @@ if (activeTab === "community") {
     // ---------- MOBILE GROUP ----------
     body = renderChatPanel({ height: "100%" });
   }
+  }
+  // end community tab
 
   return (
     <div

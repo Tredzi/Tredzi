@@ -4542,6 +4542,8 @@ const [followBusy, setFollowBusy] = useState(false);
 const [followListOpen, setFollowListOpen] = useState(null); // { username, kind: "followers"|"following" }
 const [followListData, setFollowListData] = useState([]);
 const [followListLoading, setFollowListLoading] = useState(false);
+const [followListQuery, setFollowListQuery] = useState("");
+const followListReqRef = useRef(0);
 
 // --- Profile tab (Instagram-style profile page) ---
 const [profileView, setProfileView] = useState(null); // username being viewed; null = my own profile
@@ -7293,19 +7295,22 @@ if (!isSignal && !communityMsgText.trim()) return;
   };
 
   const openFollowList = async (username, kind) => {
+    const reqId = ++followListReqRef.current;
     setFollowListOpen({ username, kind });
     setFollowListData([]);
+    setFollowListQuery("");
     if (!session?.token) return;
     setFollowListLoading(true);
     try {
       const data = await communityApi(`/follow-list/${encodeURIComponent(username)}?kind=${kind}`, {
         headers: { Authorization: `Bearer ${session.token}` },
       });
+      if (followListReqRef.current !== reqId) return;   // user switched tabs — drop the stale reply
       setFollowListData(data[kind] || []);
     } catch (err) {
-      setCommunityApiError(err.message);
+      if (followListReqRef.current === reqId) setCommunityApiError(err.message);
     } finally {
-      setFollowListLoading(false);
+      if (followListReqRef.current === reqId) setFollowListLoading(false);
     }
   };
 
@@ -18199,7 +18204,7 @@ if (activeTab === "community") {
           const p = profileData && String(profileData.username).toLowerCase() === String(viewingName || "").toLowerCase() ? profileData : null;
           const chip = { color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 700 };
           const pill = (primary, busy) => ({
-            height: "32px", padding: "0 18px", borderRadius: isDesktop ? "8px" : "999px", whiteSpace: "nowrap",
+            height: isDesktop ? "32px" : "34px", padding: "0 18px", borderRadius: "8px", whiteSpace: "nowrap",
             fontSize: "12.5px", fontWeight: 700, fontFamily: sans,
             background: primary ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` : palette.field,
             border: `1px solid ${primary ? "transparent" : palette.border}`,
@@ -18233,8 +18238,7 @@ if (activeTab === "community") {
                       <ChevronLeft size={17} />
                     </button>
                     <div className="min-w-0">
-                      <div className="truncate" style={{ color: palette.text, fontSize: "15px", fontWeight: 800, lineHeight: 1.2 }}>{p ? p.username : (viewingName || "Profile")}</div>
-                      {p && <div style={{ color: palette.textFaint, fontSize: "11px" }}>{p.postCount || 0} post{p.postCount === 1 ? "" : "s"}</div>}
+                      <div className="truncate" style={{ color: palette.text, fontSize: "16px", fontWeight: 800, lineHeight: 1.2 }}>{p ? p.username : (viewingName || "Profile")}</div>
                     </div>
                   </div>
                   {children}
@@ -18275,8 +18279,10 @@ if (activeTab === "community") {
                   </span>
                 </span>
               ) : (
-                <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
-                  <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} />
+                <span className="inline-flex rounded-full" style={{ padding: "2px", background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` }}>
+                  <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
+                    <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} />
+                  </span>
                 </span>
               )}
               {isMe && (
@@ -18287,7 +18293,7 @@ if (activeTab === "community") {
                     onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
                     disabled={communityAvatarUploading}
                     className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                    style={{ right: isDesktop ? "8px" : "2px", bottom: isDesktop ? "8px" : "2px", width: "26px", height: "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
+                    style={{ right: isDesktop ? "8px" : "0px", bottom: isDesktop ? "8px" : "0px", width: isDesktop ? "30px" : "26px", height: isDesktop ? "30px" : "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
                     aria-label="Change profile photo"
                   >
                     <Camera size={12} />
@@ -18342,12 +18348,12 @@ if (activeTab === "community") {
           );
           const actionButton = isMe ? (
             !bioEditing && (
-              <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center gap-1.5 ${TAP}`} style={pill(false, false)}>
+              <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center justify-center gap-1.5 ${TAP}`} style={{ ...pill(false, false), flex: isDesktop ? "none" : 1 }}>
                 <Pencil size={12} /> Edit bio
               </button>
             )
           ) : (
-            <button type="button" onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)} disabled={followBusy} className={TAP} style={{ ...pill(!p.isFollowedByMe, followBusy), minWidth: "96px" }}>
+            <button type="button" onClick={() => toggleFollowMember(p.username, !!p.isFollowedByMe)} disabled={followBusy} className={TAP} style={{ ...pill(!p.isFollowedByMe, followBusy), minWidth: "96px", flex: isDesktop ? "none" : 1 }}>
               {p.isFollowedByMe ? "Following" : p.followsMe ? "Follow back" : "Follow"}
             </button>
           );
@@ -18507,27 +18513,34 @@ if (activeTab === "community") {
             );
           }
 
+          // Mobile: Instagram layout — photo on the left, Posts / Followers / Following beside it,
+          // name + bio underneath, then a full-width action row, tabs, and the grid.
           return shell(
-            <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, paddingBottom: "28px" }}>
-              {/* Cover + photo + one compact action */}
-              <div style={{ height: "96px", background: coverBg, opacity: 0.85 }} />
-              <div className="flex items-start justify-between px-4">
-                <div style={{ marginTop: "-42px" }}>{avatarBlock}</div>
-                <div className="flex items-center gap-2" style={{ marginTop: "12px" }}>
-                  {isMe && (
-                    <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.text }} aria-label="New post">
-                      <Plus size={15} />
+            <div className="flex-1" style={{ overflowY: "auto", minHeight: 0, paddingBottom: "max(28px, env(safe-area-inset-bottom))" }}>
+              <div className="flex items-center gap-4 px-4" style={{ paddingTop: "18px" }}>
+                {avatarBlock}
+                <div className="flex flex-1 items-center justify-around">
+                  {[[p.postCount, "Posts", null], [p.followerCount, "Followers", "followers"], [p.followingCount, "Following", "following"]].map(([value, label, kind]) => (
+                    <button key={label} type="button" disabled={!kind} onClick={() => kind && openFollowList(p.username, kind)} className={`flex flex-col items-center ${kind ? TAP : ""}`} style={{ background: "none", border: "none", padding: "2px 4px", cursor: kind ? "pointer" : "default" }}>
+                      <span style={{ color: palette.text, fontSize: "18px", fontWeight: 800, lineHeight: 1.2 }}>{(value || 0).toLocaleString()}</span>
+                      <span style={{ color: palette.textMuted, fontSize: "12.5px", marginTop: "1px" }}>{label}</span>
                     </button>
-                  )}
-                  {actionButton}
+                  ))}
                 </div>
               </div>
 
-              {/* Identity */}
-              <div className="px-4 pt-2.5">
+              <div className="px-4" style={{ paddingTop: "12px" }}>
                 {nameRow}
                 {bioBlock}
-                {statsRow}
+              </div>
+
+              <div className="flex items-center gap-2 px-4" style={{ paddingTop: "14px", paddingBottom: "16px" }}>
+                {actionButton}
+                {isMe && !bioEditing && (
+                  <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center justify-center gap-1.5 ${TAP}`} style={{ ...pill(true, false), flex: 1 }}>
+                    <Plus size={14} /> New post
+                  </button>
+                )}
               </div>
 
               {tabBar}
@@ -18537,62 +18550,117 @@ if (activeTab === "community") {
           );
         })()}
 
-        {followListOpen && (
-          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.76)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 115 }} onClick={() => setFollowListOpen(null)}>
-            <div className="w-full rounded-2xl overflow-hidden" style={{ maxWidth: "360px", maxHeight: "70vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}` }}>
-                <span style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>
-                  {followListOpen.username}'s {followListOpen.kind}
-                </span>
-                <button type="button" onClick={() => setFollowListOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", background: palette.field, color: palette.textMuted }} aria-label="Close">
-                  <X size={13} />
-                </button>
-              </div>
-              <div className="p-3" style={{ overflowY: "auto" }}>
-                {followListLoading ? (
-                  <p className="text-xs px-1" style={{ color: palette.textFaint }}>Loading…</p>
-                ) : followListData.length === 0 ? (
-                  <p className="text-xs px-1" style={{ color: palette.textFaint }}>
-                    {followListOpen.kind === "followers" ? "No followers yet." : "Not following anyone yet."}
-                  </p>
-                ) : (
-                  followListData.map((row) => {
-                    const rowIsMe = row.username === communityUsername;
+        {followListOpen && (() => {
+          const fl = followListOpen;
+          const known = profileData && String(profileData.username).toLowerCase() === String(fl.username).toLowerCase() ? profileData : null;
+          const q = followListQuery.trim().toLowerCase();
+          const rows = q ? followListData.filter((r) => String(r.username).toLowerCase().includes(q)) : followListData;
+          const tabs = [["followers", "Followers", known ? known.followerCount : null], ["following", "Following", known ? known.followingCount : null]];
+          return (
+            <div className="fixed inset-0 flex justify-center" style={{ alignItems: isDesktop ? "center" : "flex-end", padding: isDesktop ? "16px" : 0, background: "rgba(5,7,12,0.78)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 115 }} onClick={() => setFollowListOpen(null)}>
+              <div
+                className="w-full overflow-hidden"
+                style={{ maxWidth: "440px", height: isDesktop ? "min(580px, 84vh)" : "82vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, borderRadius: isDesktop ? "16px" : "18px 18px 0 0", paddingBottom: isDesktop ? 0 : "env(safe-area-inset-bottom, 0px)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Title */}
+                <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ height: "52px" }}>
+                  <span style={{ width: "30px" }} />
+                  <span className="truncate" style={{ color: palette.text, fontSize: "15px", fontWeight: 700 }}>{fl.username}</span>
+                  <button type="button" onClick={() => setFollowListOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "30px", height: "30px", background: palette.field, color: palette.textMuted }} aria-label="Close">
+                    <X size={15} />
+                  </button>
+                </div>
+
+                {/* Followers | Following */}
+                <div className="flex flex-shrink-0" role="tablist" aria-label="Follow lists" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  {tabs.map(([kind, label, count]) => {
+                    const on = fl.kind === kind;
                     return (
-                      <div key={row.username} className="flex items-center gap-2.5 w-full rounded-xl px-2 py-2 mb-1">
-                        <button
-                          type="button"
-                          onClick={() => { setFollowListOpen(null); openCommunityMemberProfile(row.username); }}
-                          className={`flex items-center gap-2.5 flex-1 min-w-0 ${TAP}`}
-                          style={{ background: "none", border: "none", textAlign: "left" }}
-                        >
-                          <Avatar name={row.username} size={34} src={row.avatar || avatarForAuthor(row.username)} online={isAuthorOnline(row.username)} />
-                          <span className="truncate" style={{ color: palette.text, fontSize: "13px", fontWeight: 600 }}>{row.username}</span>
-                        </button>
-                        {!rowIsMe && (
+                      <button key={kind} type="button" role="tab" aria-selected={on} onClick={() => { if (!on) openFollowList(fl.username, kind); }} className={`flex-1 ${TAP}`} style={{ position: "relative", height: "44px", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "13px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
+                        {label}{count != null ? <span style={{ marginLeft: "6px", fontFamily: mono, fontSize: "12px", color: on ? palette.gold : palette.textFaint }}>{count}</span> : null}
+                        <span aria-hidden="true" style={{ position: "absolute", left: "20%", right: "20%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search */}
+                <div className="px-4 py-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 rounded-xl px-3" style={{ height: "38px", background: palette.field, border: `1px solid ${palette.border}` }}>
+                    <Search size={15} style={{ color: palette.textFaint, flexShrink: 0 }} />
+                    <input
+                      type="text"
+                      value={followListQuery}
+                      onChange={(e) => setFollowListQuery(e.target.value)}
+                      placeholder="Search"
+                      className="flex-1 bg-transparent outline-none"
+                      style={{ color: palette.text, fontSize: "13.5px", fontFamily: sans, minWidth: 0 }}
+                    />
+                    {followListQuery && (
+                      <button type="button" onClick={() => setFollowListQuery("")} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.textFaint, display: "flex" }} aria-label="Clear search">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* List */}
+                <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
+                  {followListLoading ? (
+                    <p className="px-4 py-3" style={{ color: palette.textFaint, fontSize: "12.5px" }}>Loading…</p>
+                  ) : rows.length === 0 ? (
+                    <div className="flex flex-col items-center text-center px-8" style={{ paddingTop: "48px" }}>
+                      <span className="flex items-center justify-center rounded-full" style={{ width: "56px", height: "56px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
+                        <Users size={24} style={{ color: palette.gold }} />
+                      </span>
+                      <p style={{ color: palette.text, fontSize: "14px", fontWeight: 700, marginTop: "14px" }}>
+                        {q ? "No results" : fl.kind === "followers" ? "No followers yet" : "Not following anyone yet"}
+                      </p>
+                      <p style={{ color: palette.textFaint, fontSize: "12px", marginTop: "4px" }}>
+                        {q ? `Nobody matches “${followListQuery.trim()}”.` : fl.kind === "followers" ? "When people follow this account, they'll show up here." : "Accounts this person follows will show up here."}
+                      </p>
+                    </div>
+                  ) : (
+                    rows.map((row) => {
+                      const rowIsMe = row.username === communityUsername;
+                      return (
+                        <div key={row.username} className="flex items-center gap-3 w-full px-4" style={{ minHeight: "64px" }}>
                           <button
                             type="button"
-                            onClick={() => toggleFollowMember(row.username, !!row.isFollowedByMe)}
-                            disabled={followBusy}
-                            className={`flex-shrink-0 rounded-full ${TAP}`}
-                            style={{
-                              background: row.isFollowedByMe ? palette.field : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
-                              border: `1px solid ${row.isFollowedByMe ? palette.border : "transparent"}`,
-                              color: row.isFollowedByMe ? palette.textMuted : palette.letterbox,
-                              fontSize: "11.5px", fontWeight: 700, padding: "5px 12px", opacity: followBusy ? 0.6 : 1,
-                            }}
+                            onClick={() => { setFollowListOpen(null); openCommunityMemberProfile(row.username); }}
+                            className={`flex items-center gap-3 flex-1 min-w-0 ${TAP}`}
+                            style={{ background: "none", border: "none", textAlign: "left", padding: 0 }}
                           >
-                            {row.isFollowedByMe ? "Following" : "Follow"}
+                            <Avatar name={row.username} size={44} src={row.avatar || avatarForAuthor(row.username)} online={isAuthorOnline(row.username)} />
+                            <span className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{row.username}</span>
                           </button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                          {!rowIsMe && (
+                            <button
+                              type="button"
+                              onClick={() => toggleFollowMember(row.username, !!row.isFollowedByMe)}
+                              disabled={followBusy}
+                              className={`flex-shrink-0 ${TAP}`}
+                              style={{
+                                height: "32px", minWidth: "92px", padding: "0 16px", borderRadius: "8px",
+                                background: row.isFollowedByMe ? palette.field : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                                border: `1px solid ${row.isFollowedByMe ? palette.border : "transparent"}`,
+                                color: row.isFollowedByMe ? palette.text : palette.letterbox,
+                                fontSize: "12.5px", fontWeight: 700, fontFamily: sans, opacity: followBusy ? 0.6 : 1,
+                              }}
+                            >
+                              {row.isFollowedByMe ? "Following" : "Follow"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {profilePostOpen && (() => {
           const po = profilePostOpen;
@@ -18600,42 +18668,52 @@ if (activeTab === "community") {
           const split = isDesktop && !!po.image;
           const likes = po.likeCount || 0;
           const canSend = !!profileCommentDraft.trim() && !profileCommentSending;
+          const sectionLabel = { color: palette.textFaint, fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" };
           const header = (
-            <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ height: "58px", borderBottom: `1px solid ${palette.border}` }}>
+            <div className="flex items-center justify-between px-3 flex-shrink-0" style={{ minHeight: "58px", paddingTop: isDesktop ? 0 : "env(safe-area-inset-top, 0px)", borderBottom: `1px solid ${palette.border}` }}>
               <div className="flex items-center gap-2.5 min-w-0">
+                {!isDesktop && (
+                  <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", background: "none", border: "none", color: palette.text }} aria-label="Back">
+                    <ChevronLeft size={22} />
+                  </button>
+                )}
                 <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
-                <span className="truncate" style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{po.author}</span>
+                <span className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{po.author}</span>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {canDeletePost && (
-                  <button type="button" onClick={() => deleteProfilePost(po.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "30px", height: "30px", background: palette.field, color: palette.textMuted }} aria-label="Delete post">
+                  <button type="button" onClick={() => deleteProfilePost(po.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, color: palette.textMuted }} aria-label="Delete post">
                     <Trash2 size={14} />
                   </button>
                 )}
-                <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "30px", height: "30px", background: palette.field, color: palette.textMuted }} aria-label="Close post">
-                  <X size={14} />
-                </button>
+                {isDesktop && (
+                  <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "32px", height: "32px", background: palette.field, color: palette.textMuted }} aria-label="Close post">
+                    <X size={15} />
+                  </button>
+                )}
               </div>
             </div>
           );
+          // The post's own caption — its own labelled block, visually separate from the comments below.
+          const captionBlock = po.text ? (
+            <div className="px-4 py-3.5 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.field, maxHeight: split ? "34%" : "none", overflowY: split ? "auto" : "visible" }}>
+              <div style={{ ...sectionLabel, marginBottom: "6px" }}>Caption</div>
+              <p style={{ color: palette.text, fontSize: "14px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{po.text}</p>
+            </div>
+          ) : null;
+          const commentsHeading = (
+            <div className="flex items-center gap-2 px-4 pt-3.5 pb-1">
+              <span style={sectionLabel}>Comments</span>
+              <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{po.commentCount != null ? po.commentCount : profileComments.length}</span>
+            </div>
+          );
           const thread = (
-            <div className="px-4 py-3">
-              {po.text && (
-                <div className="flex items-start gap-2.5 mb-4">
-                  <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
-                  <div className="min-w-0 flex-1">
-                    <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      <span style={{ fontWeight: 700, marginRight: "6px" }}>{po.author}</span>{po.text}
-                    </p>
-                    <span style={{ color: palette.textFaint, fontSize: "11px" }}>{feedTimeAgo(po.ts)}</span>
-                  </div>
-                </div>
-              )}
+            <div className="px-4 pt-2 pb-3">
               {profileCommentsLoading ? (
                 <p style={{ color: palette.textFaint, fontSize: "12px" }}>Loading comments…</p>
               ) : profileComments.length === 0 ? (
-                <div className="text-center" style={{ padding: split ? "48px 0" : "18px 0" }}>
-                  <div style={{ color: palette.text, fontSize: split ? "18px" : "14px", fontWeight: 800 }}>No comments yet.</div>
+                <div className="text-center" style={{ padding: split ? "40px 0" : "20px 0" }}>
+                  <div style={{ color: palette.text, fontSize: split ? "17px" : "14px", fontWeight: 800 }}>No comments yet</div>
                   <div style={{ color: palette.textFaint, fontSize: "12.5px", marginTop: "4px" }}>Start the conversation.</div>
                 </div>
               ) : (
@@ -18648,7 +18726,9 @@ if (activeTab === "community") {
                       </button>
                       <div className="min-w-0 flex-1">
                         <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                          <span style={{ fontWeight: 700, marginRight: "6px" }}>{c.author}</span>{c.text}
+                          <span style={{ fontWeight: 700, marginRight: "6px" }}>{c.author}</span>
+                          {c.author === po.author && <span style={{ color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "0 7px", fontSize: "10px", fontWeight: 700, marginRight: "6px" }}>Author</span>}
+                          {c.text}
                         </p>
                         <div className="flex items-center gap-3" style={{ marginTop: "2px" }}>
                           <span style={{ color: palette.textFaint, fontSize: "11px" }}>{feedTimeAgo(c.ts)}</span>
@@ -18678,8 +18758,9 @@ if (activeTab === "community") {
             </div>
           );
           const inputBar = (
-            <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}` }}>
-              <div className="flex items-center gap-3 px-4" style={{ height: "52px" }}>
+            <div className="flex-shrink-0" style={{ borderTop: `1px solid ${palette.border}`, paddingBottom: isDesktop ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
+              <div className="flex items-center gap-3 px-4" style={{ height: "54px" }}>
+                <Avatar name={communityUsername} size={28} src={communityAvatar || undefined} />
                 <input
                   ref={profileCommentInputRef}
                   type="text"
@@ -18688,7 +18769,7 @@ if (activeTab === "community") {
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postProfileComment(); } }}
                   placeholder="Add a comment…"
                   className="flex-1 bg-transparent outline-none"
-                  style={{ color: palette.text, fontSize: "13.5px", fontFamily: sans, minWidth: 0 }}
+                  style={{ color: palette.text, fontSize: "14px", fontFamily: sans, minWidth: 0 }}
                 />
                 <button type="button" onClick={postProfileComment} disabled={!canSend} className={TAP} style={{ background: "none", border: "none", padding: 0, color: canSend ? palette.gold : palette.textFaint, fontSize: "13.5px", fontWeight: 700, fontFamily: sans, opacity: canSend ? 1 : 0.6 }}>
                   {profileCommentSending ? "Posting…" : "Post"}
@@ -18697,11 +18778,12 @@ if (activeTab === "community") {
               {profileError && <p className="px-4 pb-2" style={{ color: palette.red, fontSize: "11.5px" }}>{profileError}</p>}
             </div>
           );
+          const fullScreen = !isDesktop;
           return (
-            <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.85)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
+            <div className="fixed inset-0 flex items-center justify-center" style={{ padding: fullScreen ? 0 : "16px", background: "rgba(5,7,12,0.85)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
               <div
-                className="w-full rounded-2xl overflow-hidden"
-                style={{ maxWidth: split ? "1080px" : isDesktop ? "520px" : "480px", height: split ? "min(88vh, 740px)" : isDesktop ? "auto" : "92vh", maxHeight: "92vh", display: "flex", flexDirection: split ? "row" : "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+                className="w-full overflow-hidden"
+                style={{ maxWidth: fullScreen ? "none" : split ? "1080px" : "520px", height: fullScreen ? "100%" : split ? "min(88vh, 740px)" : "auto", maxHeight: fullScreen ? "none" : "92vh", display: "flex", flexDirection: split ? "row" : "column", background: palette.surface, border: fullScreen ? "none" : `1px solid ${palette.border}`, borderRadius: fullScreen ? 0 : "16px", boxShadow: palette.shadow }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {split ? (
@@ -18711,6 +18793,8 @@ if (activeTab === "community") {
                     </div>
                     <div className="flex flex-col" style={{ width: "400px", flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${palette.border}` }}>
                       {header}
+                      {captionBlock}
+                      {commentsHeading}
                       <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>{thread}</div>
                       {actions}
                       {inputBar}
@@ -18720,8 +18804,10 @@ if (activeTab === "community") {
                   <>
                     {header}
                     <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
-                      {po.image && <img src={po.image} alt="Post attachment" style={{ width: "100%", display: "block", maxHeight: "60vh", objectFit: "contain", background: palette.letterbox }} />}
+                      {po.image && <img src={po.image} alt="Post attachment" style={{ width: "100%", display: "block", maxHeight: fullScreen ? "62vh" : "60vh", objectFit: "contain", background: palette.letterbox }} />}
                       {actions}
+                      {captionBlock}
+                      {commentsHeading}
                       {thread}
                     </div>
                     {inputBar}
@@ -18800,9 +18886,9 @@ if (activeTab === "community") {
             </div>
           );
           return (
-            <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.85)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 122 }} onClick={closeComposer}>
-              <div className="w-full rounded-2xl overflow-hidden" style={{ maxWidth: isDesktop ? "880px" : "440px", maxHeight: "92vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ height: "48px", borderBottom: `1px solid ${palette.border}` }}>
+            <div className="fixed inset-0 flex items-center justify-center" style={{ padding: isDesktop ? "16px" : 0, background: "rgba(5,7,12,0.85)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 122 }} onClick={closeComposer}>
+              <div className="w-full overflow-hidden" style={{ maxWidth: isDesktop ? "880px" : "none", height: isDesktop ? "auto" : "100%", maxHeight: isDesktop ? "92vh" : "none", display: "flex", flexDirection: "column", background: palette.surface, border: isDesktop ? `1px solid ${palette.border}` : "none", borderRadius: isDesktop ? "16px" : 0, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-4 flex-shrink-0" style={{ height: isDesktop ? "48px" : "calc(48px + env(safe-area-inset-top, 0px))", paddingTop: isDesktop ? 0 : "env(safe-area-inset-top, 0px)", borderBottom: `1px solid ${palette.border}` }}>
                   <button type="button" onClick={closeComposer} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.textMuted, fontSize: "13.5px", fontWeight: 600 }}>Cancel</button>
                   <span style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>Create new post</span>
                   <button type="button" onClick={createProfilePost} disabled={!canShare} className={TAP} style={{ background: "none", border: "none", padding: 0, color: canShare ? palette.gold : palette.textFaint, fontSize: "13.5px", fontWeight: 700, opacity: canShare ? 1 : 0.6 }}>
@@ -18810,7 +18896,7 @@ if (activeTab === "community") {
                   </button>
                 </div>
                 <input ref={profilePostImageInputRef} type="file" accept="image/*" onChange={handleProfilePostImageChange} style={{ display: "none" }} />
-                <div style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", height: isDesktop ? "min(72vh, 560px)" : "auto", overflowY: isDesktop ? "hidden" : "auto", minHeight: 0 }}>
+                <div style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", height: isDesktop ? "min(72vh, 560px)" : "auto", flex: isDesktop ? "none" : "1 1 auto", overflowY: isDesktop ? "hidden" : "auto", minHeight: 0 }}>
                   {mediaPane}
                   {captionPane}
                 </div>

@@ -4578,20 +4578,25 @@ const profileCommentInputRef = useRef(null);
 const [profilePostMenuOpen, setProfilePostMenuOpen] = useState(false);
 const [profileEmojiOpen, setProfileEmojiOpen] = useState(false);
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
-const [communityLobbyTab, setCommunityLobbyTab] = useState("global"); // "global" | "mine"
+const [communityLobbyTab, setCommunityLobbyTab] = useState("mine"); // "mine" | "discover" | "global"
 const [globalFeed, setGlobalFeed] = useState([]);
 const [globalFeedLoaded, setGlobalFeedLoaded] = useState(false);
-const [globalFeedNext, setGlobalFeedNext] = useState(null);
-const [globalFeedComposerOpen, setGlobalFeedComposerOpen] = useState(false);
+const [globalFeedLoading, setGlobalFeedLoading] = useState(false);
 const [globalPostText, setGlobalPostText] = useState("");
 const [globalPostImage, setGlobalPostImage] = useState(null);
 const [globalPostImageUploading, setGlobalPostImageUploading] = useState(false);
-const [globalPostSubmitting, setGlobalPostSubmitting] = useState(false);
 const globalPostImageInputRef = useRef(null);
-const [globalFeedComments, setGlobalFeedComments] = useState({});
 const [globalFeedCommentsOpenId, setGlobalFeedCommentsOpenId] = useState(null);
-const [globalFeedCommentsLoading, setGlobalFeedCommentsLoading] = useState({});
+const [globalFeedComments, setGlobalFeedComments] = useState({});
 const [globalFeedCommentDrafts, setGlobalFeedCommentDrafts] = useState({});
+const [globalFeedCommentsLoading, setGlobalFeedCommentsLoading] = useState({});
+const [globalFeedPosting, setGlobalFeedPosting] = useState(false);
+const [discoverGroups, setDiscoverGroups] = useState([]);
+const [discoverLoaded, setDiscoverLoaded] = useState(false);
+const [discoverSearch, setDiscoverSearch] = useState("");
+const [pendingJoinRequests, setPendingJoinRequests] = useState([]);
+const [pendingJoinRequestsLoaded, setPendingJoinRequestsLoaded] = useState(false);
+const [groupJoinRequests, setGroupJoinRequests] = useState([]);
 const [groupJoinRequestsLoaded, setGroupJoinRequestsLoaded] = useState(false);
 const [newGroupPublic, setNewGroupPublic] = useState(false);
 const [newGroupTags, setNewGroupTags] = useState("");
@@ -6850,7 +6855,6 @@ useEffect(() => {
       setNewGroupCode("");
       setNewGroupPublic(false);
       setNewGroupTags("");
-      setCommunityLobbyTab("mine");
       setActiveGroupId(data.id);
     } catch (err) {
       setGroupCodeError(err.message);
@@ -6873,7 +6877,6 @@ useEffect(() => {
       const already = myGroups.some((g) => g.id === data.id);
       await persistMyGroups(already ? myGroups : [...myGroups, membership]);
       setJoinCodeInput("");
-      setCommunityLobbyTab("mine");
       setActiveGroupId(data.id);
     } catch (err) {
       setJoinCodeError(err.message);
@@ -6885,6 +6888,276 @@ useEffect(() => {
   const leaveCommunityGroup = (id) => {
     persistMyGroups(myGroups.filter((g) => g.id !== id));
     if (activeGroupId === id) setActiveGroupId(null);
+  };
+
+  const persistPendingJoinRequests = async (next) => {
+    setPendingJoinRequests(next);
+    try { await window.storage.set(COMMUNITY_JOIN_REQUESTS_KEY, JSON.stringify(next), false); } catch (err) {}
+  };
+
+  const loadDiscoverGroups = async () => {
+    setDiscoverLoaded(false);
+    try {
+      const q = discoverSearch.trim();
+      const data = await communityApi(`/groups/discover${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+      setDiscoverGroups(data.groups || []);
+    } catch (err) {
+      setCommunityApiError(err.message);
+    } finally {
+      setDiscoverLoaded(true);
+    }
+  };
+
+  // ---------- Global Community Feed (account-wide, not tied to groups) ----------
+  const loadGlobalFeed = async () => {
+    if (!session?.token || globalFeedLoading) return;
+    setGlobalFeedLoading(true);
+    try {
+      const data = await communityApi("/feed", {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setGlobalFeed(data.posts || []);
+      setGlobalFeedLoaded(true);
+    } catch (err) {
+      setCommunityApiError(err.message || "Couldn't load the global feed.");
+      setGlobalFeedLoaded(true);
+    } finally {
+      setGlobalFeedLoading(false);
+    }
+  };
+
+  const uploadGlobalPostImage = async (file) => {
+    if (!file) return;
+    setGlobalFeedCommentsOpenId(null);
+    setGlobalPostImageUploading(true);
+    try {
+      const dataUrl = await resizeImageFile(file, 800);
+      setGlobalPostImage(dataUrl);
+    } catch (err) {
+      setCommunityApiError("Couldn't attach that image.");
+    } finally {
+      setGlobalPostImageUploading(false);
+    }
+  };
+
+  const handleGlobalPostImageChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (file) uploadGlobalPostImage(file);
+  };
+
+  const createGlobalFeedPost = async () => {
+    if (!session?.token || globalFeedPosting) return;
+    if (!globalPostText.trim() && !globalPostImage) return;
+    setGlobalFeedPosting(true);
+    try {
+      await communityApi("/profile/posts", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ text: globalPostText.trim(), image: globalPostImage }),
+      });
+      setGlobalPostText("");
+      setGlobalPostImage(null);
+      await loadGlobalFeed();
+    } catch (err) {
+      setCommunityApiError(err.message || "Couldn't share that.");
+    } finally {
+      setGlobalFeedPosting(false);
+    }
+  };
+
+  const likeGlobalFeedPost = async (postId) => {
+    if (!session?.token) return;
+    const current = globalFeed.find((p) => p.id === postId);
+    if (!current) return;
+    const wasLiked = !!current.liked;
+    setGlobalFeed((cur) => cur.map((p) => p.id === postId
+      ? { ...p, liked: !wasLiked, likeCount: Math.max(0, (p.likeCount || 0) + (wasLiked ? -1 : 1)) }
+      : p
+    ));
+    try {
+      await communityApi(`/profile/posts/${postId}/like`, {
+        method: wasLiked ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch (err) {
+      setGlobalFeed((cur) => cur.map((p) => p.id === postId
+        ? { ...p, liked: wasLiked, likeCount: Math.max(0, (p.likeCount || 0) + (wasLiked ? 1 : -1)) }
+        : p
+      ));
+    }
+  };
+
+  const openGlobalFeedComments = async (postId) => {
+    const nextOpen = globalFeedCommentsOpenId === postId ? null : postId;
+    setGlobalFeedCommentsOpenId(nextOpen);
+    if (nextOpen === null || globalFeedComments[postId]) return;
+    setGlobalFeedCommentsLoading((cur) => ({ ...cur, [postId]: true }));
+    try {
+      const data = await communityApi(`/profile/posts/${postId}/comments`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setGlobalFeedComments((cur) => ({ ...cur, [postId]: data.comments || [] }));
+    } catch (err) {
+      setGlobalFeedComments((cur) => ({ ...cur, [postId]: [] }));
+    } finally {
+      setGlobalFeedCommentsLoading((cur) => ({ ...cur, [postId]: false }));
+    }
+  };
+
+  const postGlobalFeedComment = async (postId) => {
+    const text = (globalFeedCommentDrafts[postId] || "").trim();
+    if (!session?.token || !text) return;
+    try {
+      const res = await communityApi(`/profile/posts/${postId}/comments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ text }),
+      });
+      setGlobalFeedCommentDrafts((cur) => ({ ...cur, [postId]: "" }));
+      setGlobalFeedComments((cur) => ({
+        ...cur,
+        [postId]: [...(cur[postId] || []), { id: res.id, author: communityUsername, text, ts: res.ts || Date.now() }],
+      }));
+      setGlobalFeed((cur) => cur.map((p) => p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p));
+    } catch (err) {
+      setCommunityApiError(err.message || "Couldn't post that comment.");
+    }
+  };
+
+  const deleteGlobalFeedPost = async (postId) => {
+    if (!session?.token) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this post?")) return;
+    try {
+      await communityApi(`/profile/posts/${postId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setGlobalFeed((cur) => cur.filter((p) => p.id !== postId));
+      setGlobalFeedCommentsOpenId((cur) => cur === postId ? null : cur);
+    } catch (err) {
+      setCommunityApiError(err.message || "Couldn't delete that post.");
+    }
+  };
+
+  const renderGlobalFeed = () => (
+    <div className="h-full overflow-y-auto" style={{ background: palette.bg }}>
+      <div className={`${isDesktop ? "max-w-2xl mx-auto" : "w-full"} p-3 sm:p-4`}>
+        <div className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+          <div className="flex items-center gap-2 mb-2.5">
+            <Avatar name={communityUsername || "You"} size={34} />
+            <div className="min-w-0">
+              <div style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>Global Feed</div>
+              <div style={{ color: palette.textFaint, fontSize: "10.5px" }}>Share with everyone on Tredzi</div>
+            </div>
+          </div>
+          <textarea
+            value={globalPostText}
+            onChange={(e) => setGlobalPostText(e.target.value.slice(0, 1000))}
+            placeholder="Share a trade idea, chart insight, lesson, or update…"
+            rows={3}
+            className="w-full rounded-xl px-3 py-2.5 outline-none resize-none"
+            style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px" }}
+          />
+          {globalPostImage && (
+            <div className="relative mt-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${palette.border}` }}>
+              <img src={globalPostImage} alt="Post attachment" style={{ width: "100%", maxHeight: "260px", objectFit: "cover", display: "block" }} />
+              <button type="button" onClick={() => setGlobalPostImage(null)} className={`absolute top-2 right-2 flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: "rgba(0,0,0,0.65)", color: "#fff", border: "none" }}><X size={15} /></button>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 mt-2.5">
+            <div className="flex items-center gap-2">
+              <input ref={globalPostImageInputRef} type="file" accept="image/*" onChange={handleGlobalPostImageChange} style={{ display: "none" }} />
+              <button type="button" onClick={() => globalPostImageInputRef.current?.click()} className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "10.5px" }}>
+                <Camera size={13} /> {globalPostImageUploading ? "Adding…" : "Photo"}
+              </button>
+            </div>
+            <button type="button" onClick={createGlobalFeedPost} disabled={globalFeedPosting || (!globalPostText.trim() && !globalPostImage)} className={`rounded-lg px-3.5 py-1.5 ${TAP}`} style={{ background: globalFeedPosting || (!globalPostText.trim() && !globalPostImage) ? palette.border : palette.gold, color: globalFeedPosting || (!globalPostText.trim() && !globalPostImage) ? palette.textFaint : palette.letterbox, fontFamily: mono, fontSize: "11px", fontWeight: 800 }}>
+              {globalFeedPosting ? "Posting…" : "Post"}
+            </button>
+          </div>
+        </div>
+
+        {!globalFeedLoaded || globalFeedLoading ? (
+          <div className="rounded-2xl p-6 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textFaint, fontSize: "12px" }}>Loading global feed…</div>
+        ) : globalFeed.length === 0 ? (
+          <div className="rounded-2xl p-8 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+            <span className="flex items-center justify-center rounded-full mx-auto mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}><Users size={20} style={{ color: palette.gold }} /></span>
+            <div style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>No global posts yet</div>
+            <div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Be the first trader to share something with the Tredzi community.</div>
+          </div>
+        ) : (
+          globalFeed.map((post) => (
+            <article key={post.id} className="rounded-2xl overflow-hidden mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+              <div className="flex items-center justify-between px-3.5 pt-3.5 pb-2.5">
+                <button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={`flex items-center gap-2 min-w-0 text-left ${TAP}`}>
+                  <Avatar name={post.author} size={34} />
+                  <div className="min-w-0">
+                    <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{post.author}</div>
+                    <div style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>{feedTimeAgo(post.ts)}</div>
+                  </div>
+                </button>
+                {post.author === communityUsername && (
+                  <button type="button" onClick={() => deleteGlobalFeedPost(post.id)} className={TAP} style={{ color: palette.textFaint, background: "none", border: "none" }} aria-label="Delete post"><Trash2 size={15} /></button>
+                )}
+              </div>
+              {post.text && <div className="px-3.5 pb-3" style={{ color: palette.text, fontSize: "13px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{post.text}</div>}
+              {post.image && <img src={post.image} alt="Post attachment" style={{ width: "100%", maxHeight: isDesktop ? "520px" : "420px", objectFit: "cover", display: "block" }} />}
+              <div className="flex items-center gap-4 px-3.5 py-2.5" style={{ borderTop: `1px solid ${palette.border}` }}>
+                <button type="button" onClick={() => likeGlobalFeedPost(post.id)} className={`flex items-center gap-1.5 ${TAP}`} style={{ color: post.liked ? palette.gold : palette.textMuted, background: "none", border: "none", fontFamily: mono, fontSize: "10.5px" }}><Heart size={15} fill={post.liked ? palette.gold : "none"} /> {post.likeCount || 0}</button>
+                <button type="button" onClick={() => openGlobalFeedComments(post.id)} className={`flex items-center gap-1.5 ${TAP}`} style={{ color: palette.textMuted, background: "none", border: "none", fontFamily: mono, fontSize: "10.5px" }}><MessageCircle size={15} /> {post.commentCount || 0}</button>
+              </div>
+              {globalFeedCommentsOpenId === post.id && (
+                <div style={{ borderTop: `1px solid ${palette.border}` }}>
+                  <div className="px-3.5 py-2.5">
+                    {globalFeedCommentsLoading[post.id] ? <div style={{ color: palette.textFaint, fontSize: "11px" }}>Loading comments…</div> : (globalFeedComments[post.id] || []).map((c) => (
+                      <div key={c.id} className="mb-2.5">
+                        <span style={{ color: palette.gold, fontSize: "11px", fontWeight: 700 }}>{c.author}</span> <span style={{ color: palette.text, fontSize: "11.5px" }}>{c.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderTop: `1px solid ${palette.border}` }}>
+                    <input type="text" value={globalFeedCommentDrafts[post.id] || ""} onChange={(e) => setGlobalFeedCommentDrafts((cur) => ({ ...cur, [post.id]: e.target.value.slice(0, 500) }))} onKeyDown={(e) => { if (e.key === "Enter") postGlobalFeedComment(post.id); }} placeholder="Add a comment…" className="flex-1 bg-transparent outline-none" style={{ color: palette.text, fontSize: "11.5px", minWidth: 0 }} />
+                    <button type="button" onClick={() => postGlobalFeedComment(post.id)} disabled={!((globalFeedCommentDrafts[post.id] || "").trim())} className={TAP} style={{ background: "none", border: "none", color: palette.gold, fontSize: "11px", fontWeight: 700 }}>Post</button>
+                  </div>
+                </div>
+              )}
+            </article>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const requestToJoinGroup = async (group) => {
+    try {
+      await communityApi(`/groups/${group.id}/request-join`, {
+        method: "POST",
+        body: JSON.stringify({ username: communityUsername }),
+      });
+      await persistPendingJoinRequests([...pendingJoinRequests, { id: group.id, name: group.name, ts: Date.now() }]);
+    } catch (err) {
+      setCommunityApiError(err.message);
+    }
+  };
+
+  const checkJoinRequestStatus = async (req) => {
+    try {
+      const data = await communityApi(`/groups/${req.id}/request-status?username=${encodeURIComponent(communityUsername)}`);
+      if (data.approved && data.token) {
+        const membership = { id: req.id, token: data.token, name: data.name || req.name, description: data.description, role: "member" };
+        await persistMyGroups([...myGroups, membership]);
+        await persistPendingJoinRequests(pendingJoinRequests.filter((r) => r.id !== req.id));
+        setActiveGroupId(req.id);
+      } else if (data.declined) {
+        await persistPendingJoinRequests(pendingJoinRequests.filter((r) => r.id !== req.id));
+        setCommunityApiError(`Your request to join ${req.name} was declined.`);
+      } else {
+        setCommunityApiError("Still pending \u2014 no response yet.");
+      }
+    } catch (err) {
+      setCommunityApiError(err.message);
+    }
   };
 
   const loadGroupJoinRequests = async () => {
@@ -7116,186 +7389,6 @@ if (!isSignal && !communityMsgText.trim()) return;
       setBioSaving(false);
     }
   };
-
-  // ---------- Global Community Feed (account-wide, independent of groups) ----------
-  const loadGlobalFeed = async (before = null) => {
-    if (!session?.token) return;
-    try {
-      const suffix = before ? `?before=${before}` : "";
-      const data = await communityApi(`/feed${suffix}`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      setGlobalFeed((cur) => before ? [...cur, ...(data.posts || [])] : (data.posts || []));
-      setGlobalFeedNext(data.nextCursor || null);
-      setGlobalFeedLoaded(true);
-    } catch (err) {
-      setGlobalFeedLoaded(true);
-      setCommunityApiError(err.message || "Couldn't load the global feed.");
-    }
-  };
-
-  const uploadGlobalPostImage = async (file) => {
-    if (!file) return;
-    setGlobalPostImageUploading(true);
-    try {
-      setGlobalPostImage(await resizeImageFile(file, 800));
-    } catch (err) {
-      setCommunityApiError("Couldn't attach that image.");
-    } finally {
-      setGlobalPostImageUploading(false);
-    }
-  };
-
-  const handleGlobalPostImageChange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (file) uploadGlobalPostImage(file);
-  };
-
-  const createGlobalFeedPost = async () => {
-    if (!session?.token || globalPostSubmitting) return;
-    if (!globalPostText.trim() && !globalPostImage) return;
-    setGlobalPostSubmitting(true);
-    try {
-      await communityApi("/feed", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ text: globalPostText.trim(), image: globalPostImage }),
-      });
-      setGlobalPostText("");
-      setGlobalPostImage(null);
-      setGlobalFeedComposerOpen(false);
-      await loadGlobalFeed();
-    } catch (err) {
-      setCommunityApiError(err.message || "Couldn't share that.");
-    } finally {
-      setGlobalPostSubmitting(false);
-    }
-  };
-
-  const likeGlobalFeedPost = async (postId) => {
-    if (!session?.token) return;
-    const current = globalFeed.find((p) => p.id === postId);
-    if (!current) return;
-    const wasLiked = !!current.liked;
-    setGlobalFeed((cur) => cur.map((p) => p.id === postId
-      ? { ...p, liked: !wasLiked, likeCount: Math.max(0, (p.likeCount || 0) + (wasLiked ? -1 : 1)) }
-      : p));
-    try {
-      await communityApi(`/profile/posts/${postId}/like`, {
-        method: wasLiked ? "DELETE" : "POST",
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-    } catch (err) {
-      setGlobalFeed((cur) => cur.map((p) => p.id === postId
-        ? { ...p, liked: wasLiked, likeCount: Math.max(0, (p.likeCount || 0) + (wasLiked ? 1 : -1)) }
-        : p));
-    }
-  };
-
-  const openGlobalFeedComments = async (postId) => {
-    if (globalFeedCommentsOpenId === postId) {
-      setGlobalFeedCommentsOpenId(null);
-      return;
-    }
-    setGlobalFeedCommentsOpenId(postId);
-    if (globalFeedComments[postId]) return;
-    setGlobalFeedCommentsLoading((cur) => ({ ...cur, [postId]: true }));
-    try {
-      const data = await communityApi(`/profile/posts/${postId}/comments`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      setGlobalFeedComments((cur) => ({ ...cur, [postId]: data.comments || [] }));
-    } catch (err) {
-      setCommunityApiError(err.message || "Couldn't load comments.");
-    } finally {
-      setGlobalFeedCommentsLoading((cur) => ({ ...cur, [postId]: false }));
-    }
-  };
-
-  const postGlobalFeedComment = async (postId) => {
-    const text = (globalFeedCommentDrafts[postId] || "").trim();
-    if (!session?.token || !text) return;
-    try {
-      const res = await communityApi(`/profile/posts/${postId}/comments`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ text }),
-      });
-      setGlobalFeedCommentDrafts((cur) => ({ ...cur, [postId]: "" }));
-      setGlobalFeedComments((cur) => ({
-        ...cur,
-        [postId]: [...(cur[postId] || []), { id: res.id, author: communityUsername, text, ts: res.ts || Date.now() }],
-      }));
-      setGlobalFeed((cur) => cur.map((p) => p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p));
-    } catch (err) {
-      setCommunityApiError(err.message || "Couldn't post that comment.");
-    }
-  };
-
-  const deleteGlobalFeedPost = async (postId) => {
-    if (!session?.token) return;
-    if (typeof window !== "undefined" && !window.confirm("Delete this post?")) return;
-    try {
-      await communityApi(`/profile/posts/${postId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      setGlobalFeed((cur) => cur.filter((p) => p.id !== postId));
-    } catch (err) {
-      setCommunityApiError(err.message || "Couldn't delete that post.");
-    }
-  };
-
-  const renderGlobalFeed = () => (
-    <div className="flex flex-col h-full" style={{ background: palette.bg }}>
-      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface }}>
-        <div>
-          <div className="flex items-center gap-2">
-            <Newspaper size={15} style={{ color: palette.gold }} />
-            <span style={{ fontFamily: display, fontSize: "16px", fontWeight: 800, color: palette.text }}>Global Feed</span>
-          </div>
-          <div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "2px" }}>Posts from the Tredzi community</div>
-        </div>
-        <button type="button" onClick={() => loadGlobalFeed()} className={`px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "10px" }}>Refresh</button>
-      </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ minHeight: 0 }}>
-        <div className="max-w-2xl mx-auto">
-          <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-            {!globalFeedComposerOpen ? (
-              <button type="button" onClick={() => setGlobalFeedComposerOpen(true)} className={`w-full text-left rounded-xl px-3.5 py-3 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textFaint, fontSize: "12.5px" }}>Share something with everyone on Tredzi…</button>
-            ) : (
-              <>
-                <textarea value={globalPostText} onChange={(e) => setGlobalPostText(e.target.value)} placeholder="What's happening in the market?" rows={3} className="w-full bg-transparent outline-none mb-2" style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
-                {globalPostImage && <div className="relative inline-block mb-2"><img src={globalPostImage} alt="Post attachment" className="rounded-lg" style={{ width: "112px", height: "112px", objectFit: "cover", border: `1px solid ${palette.border}` }} /><button type="button" onClick={() => setGlobalPostImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "18px", height: "18px", background: palette.red, color: "#FFFFFF" }}><X size={11} /></button></div>}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2"><input ref={globalPostImageInputRef} type="file" accept="image/*" onChange={handleGlobalPostImageChange} className="hidden" /><button type="button" onClick={() => globalPostImageInputRef.current && globalPostImageInputRef.current.click()} disabled={globalPostImageUploading} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "11px", fontFamily: mono }}><Camera size={13} />{globalPostImageUploading ? "Attaching…" : "Photo"}</button><button type="button" onClick={() => { setGlobalFeedComposerOpen(false); setGlobalPostText(""); setGlobalPostImage(null); }} className={`px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: "transparent", border: `1px solid ${palette.border}`, color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>Cancel</button></div>
-                  <button type="button" onClick={createGlobalFeedPost} disabled={(!globalPostText.trim() && !globalPostImage) || globalPostSubmitting} className={`px-4 py-1.5 rounded-lg ${TAP}`} style={{ background: (globalPostText.trim() || globalPostImage) ? palette.gold : palette.border, color: (globalPostText.trim() || globalPostImage) ? palette.letterbox : palette.textFaint, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}>{globalPostSubmitting ? "Posting…" : "Post"}</button>
-                </div>
-              </>
-            )}
-          </div>
-          {!globalFeedLoaded ? <div className="py-12 text-center" style={{ color: palette.textFaint, fontSize: "12px" }}>Loading global feed…</div> : globalFeed.length === 0 ? (
-            <div className="rounded-2xl p-8 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}><Newspaper size={24} style={{ color: palette.gold, margin: "0 auto 10px" }} /><div style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>No posts yet</div><div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Be the first trader to share something with the community.</div></div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {globalFeed.map((post) => {
-                const mine = post.author === communityUsername;
-                const comments = globalFeedComments[post.id] || [];
-                return <article key={post.id} className="rounded-2xl overflow-hidden" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}><Avatar name={post.author} size={34} src={post.avatar || avatarForAuthor(post.author)} /><div className="flex-1 min-w-0"><button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{post.author}</button><div style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, marginTop: "2px" }}>{new Date(post.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>{mine && <button type="button" onClick={() => deleteGlobalFeedPost(post.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", color: palette.textFaint }} aria-label="Delete post"><Trash2 size={13} /></button>}</div>
-                  <div className="px-3.5 py-3.5">{post.text && <div style={{ color: palette.text, fontSize: "13px", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{post.text}</div>}{post.image && <img src={post.image} alt="Community post" className="w-full rounded-xl" style={{ maxHeight: "520px", objectFit: "cover", marginTop: post.text ? "10px" : 0, border: `1px solid ${palette.border}` }} />}</div>
-                  <div className="flex items-center gap-1 px-3 py-2" style={{ borderTop: `1px solid ${palette.border}` }}><button type="button" onClick={() => likeGlobalFeedPost(post.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ color: post.liked ? palette.gold : palette.textMuted, background: post.liked ? `${palette.gold}12` : "transparent", fontFamily: mono, fontSize: "10.5px" }}><Heart size={13} fill={post.liked ? "currentColor" : "none"} />{post.likeCount || 0}</button><button type="button" onClick={() => openGlobalFeedComments(post.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ color: globalFeedCommentsOpenId === post.id ? palette.gold : palette.textMuted, background: globalFeedCommentsOpenId === post.id ? `${palette.gold}12` : "transparent", fontFamily: mono, fontSize: "10.5px" }}><MessageCircle size={13} />{post.commentCount || 0}</button></div>
-                  {globalFeedCommentsOpenId === post.id && <div className="px-3.5 pb-3.5" style={{ borderTop: `1px solid ${palette.border}` }}>{globalFeedCommentsLoading[post.id] ? <div className="py-3 text-xs" style={{ color: palette.textFaint }}>Loading comments…</div> : comments.length > 0 ? <div className="flex flex-col gap-2 py-3">{comments.map((c) => <div key={c.id} className="rounded-xl px-3 py-2" style={{ background: palette.field }}><span style={{ color: palette.text, fontSize: "11px", fontWeight: 700 }}>{c.author}</span><span style={{ color: palette.textMuted, fontSize: "11px", marginLeft: "7px" }}>{c.text}</span></div>)}</div> : <div className="py-3 text-xs" style={{ color: palette.textFaint }}>No comments yet.</div>}<div className="flex items-center gap-2"><input value={globalFeedCommentDrafts[post.id] || ""} onChange={(e) => setGlobalFeedCommentDrafts((cur) => ({ ...cur, [post.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postGlobalFeedComment(post.id); } }} placeholder="Write a comment…" className="flex-1 rounded-xl px-3 py-2 outline-none" style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "11.5px" }} /><button type="button" onClick={() => postGlobalFeedComment(post.id)} disabled={!(globalFeedCommentDrafts[post.id] || "").trim()} className={`flex items-center justify-center rounded-xl ${TAP}`} style={{ width: "36px", height: "36px", background: palette.gold, color: palette.letterbox }}><Send size={14} /></button></div></div>}
-                </article>;
-              })}
-              {globalFeedNext && <button type="button" onClick={() => loadGlobalFeed(globalFeedNext)} className={`w-full rounded-xl py-2.5 mt-1 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}>Load more</button>}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 
   // Create a post directly on the profile (own Instagram-style grid, not a group feed post).
   const uploadProfilePostImage = async (file) => {
@@ -19287,30 +19380,315 @@ if (activeTab === "community") {
     );
   };
 
-  // ---------- Community sidebar ----------
-  const renderSidebar = () => (
-    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
-      <div className="px-3.5 pt-3.5 pb-2">
-        <button type="button" onClick={() => { setCommunityLobbyTab("global"); setActiveGroupId(null); if (!globalFeedLoaded) loadGlobalFeed(); }} className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-3 ${TAP}`} style={{ background: communityLobbyTab === "global" ? `${palette.gold}18` : palette.field, border: `1px solid ${communityLobbyTab === "global" ? palette.gold + "66" : palette.border}`, color: communityLobbyTab === "global" ? palette.gold : palette.textMuted }}>
-          <Newspaper size={15} />
-          <div className="text-left"><div style={{ fontFamily: mono, fontSize: "12px", fontWeight: 800 }}>Global Feed</div><div style={{ fontSize: "9.5px", color: palette.textFaint, marginTop: "1px" }}>Everyone on Tredzi</div></div>
-        </button>
+  // ---------- Sidebar (desktop only, persistent) ----------
+const renderSidebar = () => (
+    <div
+      className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden"
+      style={{
+        width: "312px",
+        border: `1px solid ${palette.border}`,
+        boxShadow: palette.shadow,
+        background: palette.surface,
+      }}
+    >
+      <div className="flex gap-2 px-3.5 pt-3.5 pb-2" style={{ paddingTop: "14px" }}>
+        {[{ id: "global", label: "Global Feed" }, { id: "mine", label: "Groups" }].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => { setCommunityLobbyTab(t.id); setActiveGroupId(null); if (t.id === "global" && !globalFeedLoaded) loadGlobalFeed(); }}
+            className={`flex-1 px-2 py-2 rounded-lg ${TAP}`}
+            style={{
+              background: communityLobbyTab === t.id ? palette.gold : palette.field,
+              color: communityLobbyTab === t.id ? palette.letterbox : palette.textMuted,
+              border: `1px solid ${communityLobbyTab === t.id ? palette.gold : palette.border}`,
+              fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      <div className="px-3.5 pb-2 pt-1">
-        <div className="flex items-center justify-between px-1 mb-2"><span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Groups</span><button type="button" onClick={() => { setCommunityLobbyTab("mine"); setActiveGroupId(null); }} className={`px-2 py-1 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textFaint, fontFamily: mono, fontSize: "9px" }}>Groups</button></div>
-        <div className="flex-1 overflow-y-auto">
-          {myGroups.length === 0 ? <div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div style={{ color: palette.text, fontSize: "11.5px", fontWeight: 700 }}>No groups yet</div><div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "3px", lineHeight: 1.4 }}>Create a group or join one with an invite code.</div></div> : myGroups.map((g) => {
-            const active = communityLobbyTab === "mine" && g.id === activeGroupId;
-            return <button key={g.id} type="button" onClick={() => { setCommunityLobbyTab("mine"); setActiveGroupId(g.id); }} className={`relative w-full flex items-center gap-3 rounded-xl px-3 py-3 mb-2 text-left ${TAP}`} style={{ background: active ? `linear-gradient(135deg, ${palette.gold}1A, ${palette.field}88)` : "transparent", border: `1px solid ${active ? palette.gold + "44" : "transparent"}` }}>
-              {active && <span style={{ position: "absolute", left: 0, top: "10px", bottom: "10px", width: "3px", borderRadius: "999px", background: palette.gold }} />}
-              <Avatar name={g.name} size={34} src={g.avatar} /><div className="flex-1 min-w-0"><div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{g.name}</div><div className="truncate" style={{ color: palette.textFaint, fontSize: "9.5px", marginTop: "2px" }}>{g.role === "owner" ? "Owner" : "Member"}</div></div><ChevronRight size={14} style={{ color: active ? palette.gold : palette.textFaint }} />
-            </button>;
-          })}
+
+      <div className="flex-1 overflow-y-auto p-3">
+
+
+{communityLobbyTab === "global" ? renderGlobalFeed() : communityLobbyTab === "discover" ? (
+  <>
+    <div className="flex items-center rounded-lg px-2.5 mb-2" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+      <Search size={13} style={{ color: palette.textFaint, flexShrink: 0 }} />
+      <input
+        type="text"
+        value={discoverSearch}
+        onChange={(e) => setDiscoverSearch(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") loadDiscoverGroups(); }}
+        placeholder="Search public groups"
+        className="w-full bg-transparent py-2 px-1.5 outline-none"
+        style={{ color: palette.text, fontSize: "12px" }}
+      />
+      <button
+        type="button"
+        onClick={loadDiscoverGroups}
+        className={TAP}
+        style={{ color: palette.gold, fontSize: "10.5px", fontFamily: mono, flexShrink: 0, paddingRight: "4px" }}
+      >
+        Go
+      </button>
+    </div>
+
+    {pendingJoinRequestsLoaded && pendingJoinRequests.length > 0 && (
+      <div className="mb-2">
+        <span className="block mb-1.5 uppercase px-1" style={{ color: palette.textFaint, letterSpacing: "0.07em", fontSize: "9.5px", fontWeight: 700 }}>
+          Your Pending Requests
+        </span>
+        {pendingJoinRequests.map((req) => (
+          <div
+            key={req.id}
+            className="flex items-center justify-between rounded-xl px-2.5 py-2 mb-1.5"
+            style={{ background: palette.surface, border: `1px solid ${palette.gold}44` }}
+          >
+            <span className="truncate" style={{ color: palette.text, fontSize: "12px" }}>{req.name}</span>
+            <button
+              type="button"
+              onClick={() => checkJoinRequestStatus(req)}
+              className={`px-2.5 py-1 rounded-lg flex-shrink-0 ${TAP}`}
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontFamily: mono, fontSize: "10px", fontWeight: 700 }}
+            >
+              Check
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {!discoverLoaded ? (
+      <p className="text-xs px-1" style={{ color: palette.textFaint }}>Loading…</p>
+    ) : discoverGroups.length === 0 ? (
+      <p className="text-xs px-1" style={{ color: palette.textFaint }}>No public groups found.</p>
+    ) : (
+      discoverGroups.map((g) => {
+        const alreadyIn = myGroups.some((m) => m.id === g.id);
+        const requested = pendingJoinRequests.some((r) => r.id === g.id);
+        return (
+          <div key={g.id} className="rounded-xl px-2.5 py-2.5 mb-1.5" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+            <div className="flex items-center gap-2">
+              <Avatar name={g.name} size={32} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600 }}>{g.name}</div>
+                  {g.memberCount != null && g.memberCount >= 20 && (
+                    <span style={{ flexShrink: 0, fontSize: "8px", fontFamily: mono, fontWeight: 700, color: palette.green, border: `1px solid ${palette.green}55`, borderRadius: "999px", padding: "1px 5px", textTransform: "uppercase" }}>
+                      Popular
+                    </span>
+                  )}
+                </div>
+                <div className="truncate" style={{ color: palette.textFaint, fontSize: "10px" }}>
+                  {g.description || "Public group"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => requestToJoinGroup(g)}
+                disabled={alreadyIn || requested}
+                className={`px-2.5 py-1 rounded-lg flex-shrink-0 ${TAP}`}
+                style={{
+                  background: alreadyIn || requested ? palette.field : palette.gold,
+                  color: alreadyIn || requested ? palette.textFaint : palette.letterbox,
+                  border: `1px solid ${alreadyIn || requested ? palette.border : palette.gold}`,
+                  fontFamily: mono, fontSize: "10.5px", fontWeight: 700,
+                }}
+              >
+                {alreadyIn ? "Joined" : requested ? "Sent" : "Join"}
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5" style={{ paddingLeft: "40px" }}>
+              {g.memberCount != null && (
+                <span className="flex items-center gap-1" style={{ fontSize: "9px", fontFamily: mono, color: palette.textFaint, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "1px 6px" }}>
+                  <Users size={9} />
+                  {g.memberCount}
+                </span>
+              )}
+              {Array.isArray(g.tags) && g.tags.map((tag) => (
+                <span
+                  key={tag}
+                  style={{ fontSize: "9px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })
+    )}
+  </>
+) : (
+          <>
+            {myGroups.map((g) => {
+              const active = g.id === activeGroupId;
+              const isOwner = g.role === "owner";
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setActiveGroupId(g.id)}
+                  className={`relative w-full flex items-center gap-3 rounded-xl px-3 py-3 mb-2 text-left ${TAP}`}
+                  style={{
+                    background: active ? `linear-gradient(135deg, ${palette.gold}1A, ${palette.field}88)` : "transparent",
+                    border: `1px solid ${active ? `${palette.gold}44` : "transparent"}`,
+                  }}
+                >
+                  {active && (
+                    <span style={{ position: "absolute", left: 0, top: "10px", bottom: "10px", width: "3px", borderRadius: "999px", background: palette.gold }} />
+                  )}
+                  <Avatar name={g.name} size={42} online={active} src={groupAvatarMap[g.id]} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div style={{ color: active ? palette.goldBright : palette.text, fontSize: "13.5px", fontWeight: active ? 700 : 600 }} className="truncate">
+                        {g.name}
+                      </div>
+                      {isOwner && (
+                        <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 5px", textTransform: "uppercase" }}>
+                          Owner
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ color: palette.textFaint, fontSize: "11px" }} className="truncate">
+                      {g.description || "Private trading group"}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            {myGroups.length === 0 && (
+              <div className="flex flex-col items-center text-center px-3 py-8">
+                <span
+                  className="flex items-center justify-center rounded-full mb-3"
+                  style={{ width: "44px", height: "44px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}
+                >
+                  <Users size={19} style={{ color: palette.gold }} />
+                </span>
+                <p style={{ color: palette.text, fontSize: "12.5px", fontWeight: 600, marginBottom: "3px" }}>No groups yet</p>
+                <p className="text-xs" style={{ color: palette.textFaint }}>Create one or find a public group to join below.</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="p-2.5" style={{ borderTop: `1px solid ${palette.border}` }}>
+        {!addingGroup ? (
+          <button
+            type="button"
+            onClick={() => setAddingGroup(true)}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl py-2.5 ${TAP}`}
+            style={{
+              background: palette.gold,
+              color: palette.letterbox,
+              fontFamily: mono, fontSize: "12.5px", fontWeight: 700,
+            }}
+          >
+            <Plus size={14} />
+            New Group
+          </button>
+        ) : (
+          <div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.gold}55` }}>
+            <input
+              type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="Group name" maxLength={40}
+              className="w-full rounded-lg px-2.5 py-2 mb-1.5 bg-transparent outline-none"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
+            />
+            <input
+              type="text" value={newGroupCode}
+              onChange={(e) => { setNewGroupCode(e.target.value); if (groupCodeError) setGroupCodeError(""); }}
+              placeholder="Entry code (4+ chars)" maxLength={40}
+              className="w-full rounded-lg px-2.5 py-2 mb-1.5 bg-transparent outline-none"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
+            />
+            <div className="flex gap-1.5 mb-1.5">
+              {[{ v: false, label: "Private" }, { v: true, label: "Public" }].map((opt) => (
+                <button
+                  key={String(opt.v)}
+                  type="button"
+                  onClick={() => setNewGroupPublic(opt.v)}
+                  className={`flex-1 rounded-lg py-1.5 ${TAP}`}
+                  style={{
+                    background: newGroupPublic === opt.v ? palette.gold : palette.surface,
+                    color: newGroupPublic === opt.v ? palette.letterbox : palette.textMuted,
+                    border: `1px solid ${newGroupPublic === opt.v ? palette.gold : palette.border}`,
+                    fontFamily: mono, fontSize: "11px", fontWeight: 700,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={newGroupTags}
+              onChange={(e) => setNewGroupTags(e.target.value)}
+              placeholder="Tags, comma separated"
+              className="w-full rounded-lg px-2.5 py-2 mb-1 bg-transparent outline-none"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "11.5px" }}
+            />
+            {groupCodeError && <p className="text-xs mb-1.5" style={{ color: palette.red }}>{groupCodeError}</p>}
+            <div className="flex gap-1.5">
+              <button
+                type="button" onClick={createCommunityGroup}
+                disabled={!newGroupName.trim() || newGroupCode.trim().length < 4 || creatingGroup}
+                className={`flex-1 rounded-lg py-2 ${TAP}`}
+                style={{
+                  background: newGroupName.trim() && newGroupCode.trim().length >= 4 ? palette.gold : palette.border,
+                  color: newGroupName.trim() && newGroupCode.trim().length >= 4 ? palette.letterbox : palette.textFaint,
+                  fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
+                }}
+              >
+                {creatingGroup ? "…" : "Create"}
+              </button>
+              <button
+                type="button" onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupCode(""); setGroupCodeError(""); }}
+                className={`px-3 rounded-lg ${TAP}`}
+                style={{ background: "transparent", border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "11.5px" }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-1.5 mt-2">
+          <input
+            type="text" value={joinCodeInput}
+            onChange={(e) => { setJoinCodeInput(e.target.value); if (joinCodeError) setJoinCodeError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") joinGroupByCode(); }}
+            placeholder="Have a code?"
+            className="flex-1 rounded-lg px-2.5 py-2 bg-transparent outline-none"
+            style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12px" }}
+          />
+          <button
+            type="button" onClick={joinGroupByCode} disabled={!joinCodeInput.trim() || joiningGroup}
+            className={`flex-shrink-0 rounded-lg px-3 ${TAP}`}
+            style={{
+              background: joinCodeInput.trim() ? palette.gold : palette.border,
+              color: joinCodeInput.trim() ? palette.letterbox : palette.textFaint,
+              fontFamily: mono, fontSize: "11.5px", fontWeight: 700,
+            }}
+          >
+            {joiningGroup ? "…" : "Join"}
+          </button>
         </div>
+        {joinCodeError && <p className="text-xs mt-1.5" style={{ color: palette.red }}>{joinCodeError}</p>}
       </div>
     </div>
   );
 
+  if (!communityUsernameLoaded || !myGroupsLoaded) {
+    body = (
+      <p className="text-xs mb-4" style={{ color: palette.textFaint }}>
+        Loading community…
+      </p>
+    );
+  } else if (!communityUsername) {
     // ---------- ONBOARDING (unchanged) ----------
     body = (
       <>
@@ -19378,48 +19756,359 @@ if (activeTab === "community") {
       </>
     );
 } else if (isDesktop) {
-    // ---------- DESKTOP COMMUNITY ----------
+    // ---------- DESKTOP: persistent sidebar + chat pane (Discord/Telegram merged) ----------
     body = (
       <div className="flex gap-4 flex-1" style={{ minHeight: 0, height: "100%" }}>
         {renderSidebar()}
-        <div className="flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-          {communityLobbyTab === "global" ? renderGlobalFeed() : activeGroupId ? renderChatPanel({ background: palette.bg, height: "100%" }) : (
+        <div
+          className="flex-1 min-w-0 rounded-2xl overflow-hidden"
+          style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+        >
+          {communityLobbyTab === "global" ? (
+            renderGlobalFeed()
+          ) : activeGroupId ? (
+            renderChatPanel({ background: palette.bg, height: "100%" })
+          ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-8" style={{ background: palette.bg }}>
-              <span className="flex items-center justify-center rounded-full mb-4" style={{ width: "64px", height: "64px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}><Users size={28} style={{ color: palette.gold }} /></span>
-              <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text, marginBottom: "6px" }}>Pick a group to start</div>
-              <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "280px" }}>Select a group on the left to open its chat and tools, or switch back to Global Feed.</p>
+              <span
+                className="flex items-center justify-center rounded-full mb-4"
+                style={{ width: "64px", height: "64px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}
+              >
+                <Users size={28} style={{ color: palette.gold }} />
+              </span>
+              <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text, marginBottom: "6px" }}>
+                Pick a group to start chatting
+              </div>
+              <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "280px" }}>
+                Select one of your groups on the left, or create/join a new one.
+              </p>
             </div>
           )}
         </div>
       </div>
     );
-  } else if (communityLobbyTab === "global") {
-    // ---------- MOBILE GLOBAL FEED ----------
-    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>{renderGlobalFeed()}</div>;
   } else if (!activeGroupId) {
-    // ---------- MOBILE GROUP LOBBY ----------
+    // ---------- MOBILE LOBBY (unchanged) ----------
     const joined = myGroups;
     body = (
-      <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex-1 overflow-y-auto">
-          <button type="button" onClick={() => { setCommunityLobbyTab("global"); if (!globalFeedLoaded) loadGlobalFeed(); }} className={`w-full flex items-center gap-3 rounded-2xl p-4 mb-4 ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.gold}44`, color: palette.text }}>
-            <span className="flex items-center justify-center rounded-xl" style={{ width: "42px", height: "42px", background: `${palette.gold}14`, color: palette.gold }}><Newspaper size={19} /></span><div className="flex-1 text-left"><div style={{ fontSize: "14px", fontWeight: 800 }}>Global Feed</div><div style={{ color: palette.textFaint, fontSize: "10.5px", marginTop: "2px" }}>See posts from everyone on Tredzi</div></div><ChevronRight size={16} style={{ color: palette.gold }} />
-          </button>
-          <div className="flex items-center justify-between mb-3"><span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>My Groups</span></div>
-          {joined.length === 0 ? (
-            <div className="rounded-2xl p-5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}><Users size={22} style={{ color: palette.gold, margin: "0 auto 8px" }} /><div style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>No groups yet</div><div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Create a group or join one with an invite code.</div></div>
-          ) : joined.map((g) => (
-            <button key={g.id} type="button" onClick={() => { setCommunityLobbyTab("mine"); setActiveGroupId(g.id); }} className={`w-full flex items-center gap-3 rounded-2xl p-3.5 mb-2 text-left ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-              <Avatar name={g.name} size={40} src={g.avatar} /><div className="flex-1 min-w-0"><div className="truncate" style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{g.name}</div><div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "2px" }}>{g.role === "owner" ? "Owner" : "Member"}</div></div><ChevronRight size={16} style={{ color: palette.textFaint }} />
-            </button>
-          ))}
+      <>
+        <div className="flex gap-2 mb-4">
+          {[{ id: "global", label: "Global Feed" }, { id: "mine", label: "Groups" }].map((t) => {
+            const active = communityLobbyTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setCommunityLobbyTab(t.id); setActiveGroupId(null); if (t.id === "global" && !globalFeedLoaded) loadGlobalFeed(); }}
+                className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
+                style={{
+                  background: active ? palette.gold : palette.field,
+                  color: active ? palette.letterbox : palette.textMuted,
+                  border: `1px solid ${active ? palette.gold : palette.border}`,
+                  fontFamily: mono, fontSize: "12.5px", fontWeight: 700,
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
-      </div>
+
+        {communityLobbyTab === "global" ? renderGlobalFeed() : communityLobbyTab === "discover" ? (
+          <>
+            <div className="flex items-center rounded-lg px-3 mb-4" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+              <Search size={14} style={{ color: palette.textFaint, flexShrink: 0 }} />
+              <input
+                type="text"
+                value={discoverSearch}
+                onChange={(e) => setDiscoverSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") loadDiscoverGroups(); }}
+                placeholder="Search public groups or tags"
+                className="w-full bg-transparent py-3 px-2 outline-none"
+                style={{ color: palette.text, fontSize: "14px" }}
+              />
+              <button type="button" onClick={loadDiscoverGroups} className={TAP} style={{ color: palette.gold, fontSize: "11px", fontFamily: mono }}>
+                Search
+              </button>
+            </div>
+
+            {pendingJoinRequestsLoaded && pendingJoinRequests.length > 0 && (
+              <>
+                <span className="block mb-2 uppercase" style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10.5px", fontWeight: 700 }}>
+                  Your Pending Requests
+                </span>
+                {pendingJoinRequests.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between rounded-xl px-3.5 py-2.5 mb-2"
+                    style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+                    <span style={{ color: palette.text, fontSize: "13px" }}>{req.name}</span>
+                    <button type="button" onClick={() => checkJoinRequestStatus(req)} className={`px-3 py-1.5 rounded-lg ${TAP}`}
+                      style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}>
+                      Check Status
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {!discoverLoaded ? (
+              <p className="text-xs" style={{ color: palette.textFaint }}>Loading public groups\u2026</p>
+            ) : discoverGroups.length === 0 ? (
+              <p className="text-xs" style={{ color: palette.textFaint }}>No public groups found.</p>
+            ) : (
+              discoverGroups.map((g) => {
+                const alreadyIn = myGroups.some((m) => m.id === g.id);
+                const requested = pendingJoinRequests.some((r) => r.id === g.id);
+                return (
+                  <div key={g.id} className="rounded-2xl px-4 py-3.5 mb-2.5" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={g.name} size={40} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <div style={{ color: palette.text, fontSize: "14px", fontWeight: 600 }} className="truncate">{g.name}</div>
+                          {g.memberCount != null && g.memberCount >= 20 && (
+                            <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.green, border: `1px solid ${palette.green}55`, borderRadius: "999px", padding: "1px 6px", textTransform: "uppercase" }}>
+                              Popular
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ color: palette.textFaint, fontSize: "11px" }} className="truncate">
+                          {g.description || "Public trading group"}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {g.memberCount != null && (
+                            <span className="flex items-center gap-1" style={{ fontSize: "9.5px", fontFamily: mono, color: palette.textFaint, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "1px 6px" }}>
+                              <Users size={9} />
+                              {g.memberCount}
+                            </span>
+                          )}
+                          {Array.isArray(g.tags) && g.tags.map((tag) => (
+                            <span key={tag} style={{ fontSize: "9.5px", fontFamily: mono, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px" }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => requestToJoinGroup(g)}
+                        disabled={alreadyIn || requested}
+                        className={`px-3 py-1.5 rounded-lg flex-shrink-0 ${TAP}`}
+                        style={{
+                          background: alreadyIn || requested ? palette.field : palette.gold,
+                          color: alreadyIn || requested ? palette.textFaint : palette.letterbox,
+                          border: `1px solid ${alreadyIn || requested ? palette.border : palette.gold}`,
+                          fontFamily: mono, fontSize: "11px", fontWeight: 700,
+                        }}
+                      >
+                        {alreadyIn ? "Joined" : requested ? "Requested" : "Request"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </>
+        ) : (
+        <>
+        {!addingGroup ? (
+          <div className="flex gap-2 mb-5">
+            <button
+              type="button"
+              onClick={() => setAddingGroup(true)}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 ${TAP}`}
+              style={{
+                background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                color: palette.letterbox,
+                fontFamily: mono, fontSize: "13px", fontWeight: 700,
+                boxShadow: `0 6px 16px ${palette.gold}3A`,
+              }}
+            >
+              <Plus size={16} />
+              Start a Group
+            </button>
+          </div>
+        ) : (
+          <div
+            className="rounded-2xl p-4 mb-5"
+            style={{ background: palette.surface, border: `1px solid ${palette.gold}55`, boxShadow: palette.shadow }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Users size={15} style={{ color: palette.gold }} />
+              <span style={{ fontFamily: display, fontSize: "13px", fontWeight: 700, color: palette.text }}>
+                New Private Group
+              </span>
+            </div>
+            <input
+              type="text"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="Group name, e.g. Gold Scalpers"
+              maxLength={40}
+              className="w-full rounded-xl px-3.5 py-2.5 mb-2 bg-transparent outline-none"
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "14px" }}
+            />
+            <input
+              type="text"
+              value={newGroupDesc}
+              onChange={(e) => setNewGroupDesc(e.target.value)}
+              placeholder="Short description (optional)"
+              maxLength={100}
+              className="w-full rounded-xl px-3.5 py-2.5 mb-2 bg-transparent outline-none"
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "13px" }}
+            />
+            <input
+              type="text"
+              value={newGroupCode}
+              onChange={(e) => { setNewGroupCode(e.target.value); if (groupCodeError) setGroupCodeError(""); }}
+              placeholder="Entry code (4+ characters)"
+              maxLength={40}
+              className="w-full rounded-xl px-3.5 py-2.5 mb-2 bg-transparent outline-none"
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "14px" }}
+            />
+            <div className="flex gap-2 mb-2">
+              {[{ v: false, label: "Private" }, { v: true, label: "Public" }].map((opt) => (
+                <button
+                  key={String(opt.v)}
+                  type="button"
+                  onClick={() => setNewGroupPublic(opt.v)}
+                  className={`flex-1 rounded-xl py-2 ${TAP}`}
+                  style={{
+                    background: newGroupPublic === opt.v ? palette.gold : palette.field,
+                    color: newGroupPublic === opt.v ? palette.letterbox : palette.textMuted,
+                    border: `1px solid ${newGroupPublic === opt.v ? palette.gold : palette.border}`,
+                    fontFamily: mono, fontSize: "12px", fontWeight: 700,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={newGroupTags}
+              onChange={(e) => setNewGroupTags(e.target.value)}
+              placeholder="Tags, comma separated (e.g. gold, scalping)"
+              className="w-full rounded-xl px-3.5 py-2.5 mb-1 bg-transparent outline-none"
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "13px" }}
+            />
+            {groupCodeError && <p className="text-xs mb-2" style={{ color: palette.red }}>{groupCodeError}</p>}
+            <p className="text-xs mb-3" style={{ color: palette.textFaint }}>
+              {newGroupPublic
+                ? "Public groups appear in Discover — anyone can find and request to join. You still approve each request."
+                : "Not listed anywhere — share this code directly with who you want to invite."}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={createCommunityGroup}
+                disabled={!newGroupName.trim() || newGroupCode.trim().length < 4 || creatingGroup}
+                className={`flex-1 rounded-xl py-2.5 ${TAP}`}
+                style={{
+                  background: newGroupName.trim() && newGroupCode.trim().length >= 4 ? palette.gold : palette.border,
+                  color: newGroupName.trim() && newGroupCode.trim().length >= 4 ? palette.letterbox : palette.textFaint,
+                  fontFamily: mono, fontSize: "13px", fontWeight: 700,
+                }}
+              >
+                {creatingGroup ? "Creating…" : "Create Group"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupDesc(""); setNewGroupCode(""); setGroupCodeError(""); }}
+                className={`px-4 rounded-xl ${TAP}`}
+                style={{ background: "transparent", border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "13px" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {joined.length > 0 && (
+          <>
+            <span className="block mb-2 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
+              Your Circles
+            </span>
+            <div className="mb-5">
+              {joined.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setActiveGroupId(g.id)}
+                  className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-2.5 text-left ${TAP}`}
+                  style={{
+                    background: `linear-gradient(135deg, ${palette.surface}, ${palette.field}88)`,
+                    border: `1px solid ${palette.border}`,
+                    boxShadow: palette.shadow,
+                  }}
+                >
+                  <Avatar name={g.name} size={44} src={groupAvatarMap[g.id]} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div style={{ color: palette.text, fontSize: "14.5px", fontWeight: 700 }} className="truncate">
+                        {g.name}
+                      </div>
+                      {g.role === "owner" && (
+                        <span style={{ flexShrink: 0, fontSize: "8.5px", fontFamily: mono, fontWeight: 700, color: palette.gold, border: `1px solid ${palette.gold}55`, borderRadius: "999px", padding: "1px 6px", textTransform: "uppercase" }}>
+                          Owner
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ color: palette.textFaint, fontSize: "11.5px" }} className="truncate">
+                      {g.description || "Private trading group"}
+                    </div>
+                  </div>
+                  <span
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{ width: "26px", height: "26px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold }}
+                  >
+                    <ChevronRight size={14} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="rounded-2xl p-4" style={{ background: "transparent", border: `1px dashed ${palette.border}` }}>
+          <span className="block mb-2 uppercase" style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10.5px", fontWeight: 700 }}>
+            Have an Entry Code?
+          </span>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={joinCodeInput}
+              onChange={(e) => { setJoinCodeInput(e.target.value); if (joinCodeError) setJoinCodeError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") joinGroupByCode(); }}
+              placeholder="Paste code to join"
+              className="flex-1 rounded-xl px-3.5 py-2.5 bg-transparent outline-none"
+              style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "13.5px" }}
+            />
+            <button
+              type="button"
+              onClick={joinGroupByCode}
+              disabled={!joinCodeInput.trim() || joiningGroup}
+              className={`flex-shrink-0 rounded-xl px-4 ${TAP}`}
+              style={{
+                background: joinCodeInput.trim() ? palette.gold : palette.border,
+                color: joinCodeInput.trim() ? palette.letterbox : palette.textFaint,
+                fontFamily: mono, fontSize: "13px", fontWeight: 700,
+              }}
+            >
+              {joiningGroup ? "…" : "Join"}
+            </button>
+          </div>
+          {joinCodeError && <p className="text-xs mt-2" style={{ color: palette.red }}>{joinCodeError}</p>}
+        </div>
+        </>
+        )}
+      </>
     );
   } else {
-    // ---------- MOBILE GROUP ----------
+    // ---------- MOBILE CHAT ----------
     body = renderChatPanel({ height: "100%" });
   }
+}
+
   return (
     <div
       className="w-full flex justify-center"

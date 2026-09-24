@@ -4586,6 +4586,7 @@ const [communitySearchLoading, setCommunitySearchLoading] = useState(false);
 const [communitySearchResults, setCommunitySearchResults] = useState(null);
 const [globalFeed, setGlobalFeed] = useState([]);
 const [globalFeedLoaded, setGlobalFeedLoaded] = useState(false);
+const [communityMobileFeedOpen, setCommunityMobileFeedOpen] = useState(false);
 const [globalFeedNext, setGlobalFeedNext] = useState(null);
 const [globalFeedComposerOpen, setGlobalFeedComposerOpen] = useState(false);
 const [globalPostText, setGlobalPostText] = useState("");
@@ -7240,6 +7241,13 @@ if (!isSignal && !communityMsgText.trim()) return;
       setCommunityApiError(err.message || "Couldn't load the global feed.");
     }
   };
+
+  // Desktop opens on the Global Feed, so fetch it as soon as the Community tab is shown.
+  useEffect(() => {
+    if (activeTab === "community" && isDesktop && session?.token && communityUsername && communityLobbyTab === "global" && !globalFeedLoaded) {
+      loadGlobalFeed();
+    }
+  }, [activeTab, isDesktop, session?.token, communityUsername, communityLobbyTab, globalFeedLoaded]);
 
   const uploadGlobalPostImage = async (file) => {
     if (!file) return;
@@ -19394,9 +19402,68 @@ if (activeTab === "community") {
     );
   };
 
+  // ---------- Create / join group controls (shared by desktop sidebar + mobile lobby) ----------
+  const renderGroupActions = () => {
+    const fieldStyle = { background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" };
+    return (
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => { setAddingGroup((v) => !v); setGroupCodeError(""); }}
+          className={`w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 mb-2 ${TAP}`}
+          style={{ background: addingGroup ? `${palette.gold}22` : palette.field, border: `1px solid ${addingGroup ? palette.gold : palette.border}`, color: addingGroup ? palette.gold : palette.textMuted, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}
+        >
+          <Plus size={13} />{addingGroup ? "Cancel" : "Create a group"}
+        </button>
+        {addingGroup && (
+          <div className="rounded-xl p-3 mb-2 space-y-2" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+            <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Group name" maxLength={60} className="w-full rounded-lg px-3 py-2 outline-none" style={fieldStyle} />
+            <input value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)} placeholder="Description (optional)" maxLength={200} className="w-full rounded-lg px-3 py-2 outline-none" style={fieldStyle} />
+            <input value={newGroupCode} onChange={(e) => setNewGroupCode(e.target.value)} placeholder="Invite code (4+ characters)" className="w-full rounded-lg px-3 py-2 outline-none" style={{ ...fieldStyle, fontFamily: mono }} />
+            <input value={newGroupTags} onChange={(e) => setNewGroupTags(e.target.value)} placeholder="Tags, comma separated (optional)" className="w-full rounded-lg px-3 py-2 outline-none" style={fieldStyle} />
+            <label className="flex items-center gap-2" style={{ color: palette.textMuted, fontSize: "11.5px" }}>
+              <input type="checkbox" checked={newGroupPublic} onChange={(e) => setNewGroupPublic(e.target.checked)} />
+              Make this group public
+            </label>
+            {groupCodeError && <div style={{ color: palette.red, fontSize: "11px" }}>{groupCodeError}</div>}
+            <button
+              type="button"
+              disabled={creatingGroup}
+              onClick={createCommunityGroup}
+              className={`w-full rounded-lg py-2 ${TAP}`}
+              style={{ background: palette.gold, color: palette.letterbox, fontFamily: mono, fontSize: "11.5px", fontWeight: 800, opacity: creatingGroup ? 0.6 : 1 }}
+            >
+              {creatingGroup ? "Creating…" : "Create group"}
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            value={joinCodeInput}
+            onChange={(e) => { setJoinCodeInput(e.target.value); setJoinCodeError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && joinCodeInput.trim() && !joiningGroup) joinGroupByCode(); }}
+            placeholder="Have an invite code?"
+            className="flex-1 min-w-0 rounded-lg px-3 py-2 outline-none"
+            style={{ ...fieldStyle, fontFamily: mono }}
+          />
+          <button
+            type="button"
+            disabled={joiningGroup || !joinCodeInput.trim()}
+            onClick={joinGroupByCode}
+            className={`rounded-lg px-3 ${TAP}`}
+            style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 800, opacity: joiningGroup || !joinCodeInput.trim() ? 0.5 : 1 }}
+          >
+            {joiningGroup ? "…" : "Join"}
+          </button>
+        </div>
+        {joinCodeError && <div className="mt-1.5" style={{ color: palette.red, fontSize: "11px" }}>{joinCodeError}</div>}
+      </div>
+    );
+  };
+
   // ---------- Community sidebar ----------
   const renderSidebar = () => (
-    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
+    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-y-auto" style={{ width: "312px", minHeight: 0, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
       <div className="p-3.5">
         <form onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }}>
           <div className="flex items-center gap-2 rounded-xl px-3" style={{ height: "40px", background: palette.field, border: `1px solid ${palette.border}` }}>
@@ -19410,6 +19477,47 @@ if (activeTab === "community") {
             />
           </div>
         </form>
+      </div>
+      <div className="px-3.5 pb-3">
+        <button
+          type="button"
+          onClick={() => { setActiveGroupId(null); setCommunityLobbyTab("global"); if (!globalFeedLoaded) loadGlobalFeed(); }}
+          className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 mb-3 ${TAP}`}
+          style={{ background: communityLobbyTab === "global" && !activeGroupId ? `${palette.gold}18` : "transparent", border: `1px solid ${communityLobbyTab === "global" && !activeGroupId ? `${palette.gold}55` : palette.border}`, color: palette.text }}
+        >
+          <Newspaper size={15} style={{ color: palette.gold }} />
+          <span style={{ fontSize: "12.5px", fontWeight: 800 }}>Global Feed</span>
+        </button>
+        <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>My Groups</div>
+        {renderGroupActions()}
+        {myGroups.length === 0 ? (
+          <div className="rounded-xl p-4 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+            <Users size={18} style={{ color: palette.gold, margin: "0 auto 6px" }} />
+            <div style={{ color: palette.text, fontSize: "12px", fontWeight: 700 }}>No groups yet</div>
+            <div style={{ color: palette.textFaint, fontSize: "10.5px", marginTop: "3px" }}>Create a group or join one with an invite code.</div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {myGroups.map((g) => {
+              const active = activeGroupId === g.id;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => { setCommunityLobbyTab("mine"); setActiveGroupId(g.id); }}
+                  className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left ${TAP}`}
+                  style={{ background: active ? `${palette.gold}18` : "transparent", border: `1px solid ${active ? `${palette.gold}55` : "transparent"}` }}
+                >
+                  <Avatar name={g.name} size={32} src={g.avatar} />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{g.name}</div>
+                    <div style={{ color: palette.textFaint, fontSize: "9.5px", marginTop: "1px" }}>{g.role === "owner" ? "Owner" : "Member"}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="px-3.5 pb-3">
         <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</div>
@@ -19504,7 +19612,7 @@ if (activeTab === "community") {
       <div className="flex gap-4 flex-1" style={{ minHeight: 0, height: "100%" }}>
         {renderSidebar()}
         <div className="flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-          {communityLobbyTab === "search" ? renderCommunitySearch() : activeGroupId ? renderChatPanel({ background: palette.bg, height: "100%" }) : (
+          {communityLobbyTab === "search" ? renderCommunitySearch() : activeGroupId ? renderChatPanel({ background: palette.bg, height: "100%" }) : communityLobbyTab === "global" ? renderGlobalFeed() : (
             <div className="flex flex-col items-center justify-center h-full text-center px-8" style={{ background: palette.bg }}>
               <span className="flex items-center justify-center rounded-full mb-4" style={{ width: "64px", height: "64px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}><Users size={28} style={{ color: palette.gold }} /></span>
               <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text, marginBottom: "6px" }}>Pick a group to start</div>
@@ -19516,21 +19624,31 @@ if (activeTab === "community") {
     );
   } else if (communityLobbyTab === "search") {
     // ---------- MOBILE COMMUNITY SEARCH ----------
-    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>{renderCommunitySearch()}</div>;
+    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}><button type="button" onClick={() => { setCommunityLobbyTab("mine"); }} className={`flex items-center gap-1.5 px-3 py-2.5 ${TAP}`} style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}><ChevronLeft size={14} />Groups</button><div className="flex-1 min-h-0">{renderCommunitySearch()}</div></div>;
+  } else if (communityMobileFeedOpen && !activeGroupId) {
+    // ---------- MOBILE GLOBAL FEED ----------
+    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}><button type="button" onClick={() => { setCommunityMobileFeedOpen(false); }} className={`flex items-center gap-1.5 px-3 py-2.5 ${TAP}`} style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}><ChevronLeft size={14} />Groups</button><div className="flex-1 min-h-0">{renderGlobalFeed()}</div></div>;
   } else if (!activeGroupId) {
     // ---------- MOBILE GROUP LOBBY ----------
     const joined = myGroups;
     body = (
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto">
-          <button type="button" onClick={() => { setCommunityLobbyTab("global"); if (!globalFeedLoaded) loadGlobalFeed(); }} className={`w-full flex items-center gap-3 rounded-2xl p-4 mb-4 ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.gold}44`, color: palette.text }}>
+          <form className="mb-3" onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }}>
+            <div className="flex items-center gap-2 rounded-xl px-3" style={{ height: "40px", background: palette.field, border: `1px solid ${palette.border}` }}>
+              <Search size={15} style={{ color: palette.textFaint }} />
+              <input value={communitySearch} onChange={(e) => setCommunitySearch(e.target.value)} placeholder="Search people & posts" className="flex-1 min-w-0 bg-transparent outline-none" style={{ color: palette.text, fontSize: "12px" }} />
+            </div>
+          </form>
+          <button type="button" onClick={() => { setCommunityLobbyTab("global"); setCommunityMobileFeedOpen(true); if (!globalFeedLoaded) loadGlobalFeed(); }} className={`w-full flex items-center gap-3 rounded-2xl p-4 mb-4 ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.gold}44`, color: palette.text }}>
             <span className="flex items-center justify-center rounded-xl" style={{ width: "42px", height: "42px", background: `${palette.gold}14`, color: palette.gold }}><Newspaper size={19} /></span><div className="flex-1 text-left"><div style={{ fontSize: "14px", fontWeight: 800 }}>Global Feed</div><div style={{ color: palette.textFaint, fontSize: "10.5px", marginTop: "2px" }}>See posts from everyone on Tredzi</div></div><ChevronRight size={16} style={{ color: palette.gold }} />
           </button>
           <div className="flex items-center justify-between mb-3"><span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>My Groups</span></div>
+          {renderGroupActions()}
           {joined.length === 0 ? (
             <div className="rounded-2xl p-5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}><Users size={22} style={{ color: palette.gold, margin: "0 auto 8px" }} /><div style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>No groups yet</div><div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Create a group or join one with an invite code.</div></div>
           ) : joined.map((g) => (
-            <button key={g.id} type="button" onClick={() => { setCommunityLobbyTab("mine"); setActiveGroupId(g.id); }} className={`w-full flex items-center gap-3 rounded-2xl p-3.5 mb-2 text-left ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+            <button key={g.id} type="button" onClick={() => { setCommunityLobbyTab("mine"); setCommunityMobileFeedOpen(false); setActiveGroupId(g.id); }} className={`w-full flex items-center gap-3 rounded-2xl p-3.5 mb-2 text-left ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
               <Avatar name={g.name} size={40} src={g.avatar} /><div className="flex-1 min-w-0"><div className="truncate" style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700 }}>{g.name}</div><div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "2px" }}>{g.role === "owner" ? "Owner" : "Member"}</div></div><ChevronRight size={16} style={{ color: palette.textFaint }} />
             </button>
           ))}

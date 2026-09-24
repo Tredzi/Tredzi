@@ -19420,7 +19420,7 @@ if (activeTab === "community") {
     // ---------- MOBILE GROUP ----------
     body = renderChatPanel({ height: "100%" });
   }
-}
+
   return (
     <div
       className="w-full flex justify-center"

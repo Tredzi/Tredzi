@@ -4601,6 +4601,108 @@ const [groupJoinRequestsLoaded, setGroupJoinRequestsLoaded] = useState(false);
 const [newGroupPublic, setNewGroupPublic] = useState(false);
 const [newGroupTags, setNewGroupTags] = useState("");
 
+
+const searchCommunity = async (value) => {
+  const q = String(value || "").trim();
+  if (!q || !session?.token) return;
+  setCommunitySearch(q);
+  setCommunitySearchLoading(true);
+  setCommunityLobbyTab("search");
+  setActiveGroupId(null);
+  try {
+    const data = await communityApi(`/community/search?q=${encodeURIComponent(q)}`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    setCommunitySearchResults(data);
+  } catch (err) {
+    setCommunitySearchResults({
+      query: q,
+      profile: null,
+      posts: [],
+      relatedPosts: [],
+      error: err.message || "Search failed.",
+    });
+  } finally {
+    setCommunitySearchLoading(false);
+  }
+};
+
+const renderCommunitySearch = () => {
+  const result = communitySearchResults;
+  const profile = result?.profile || null;
+  const ownPosts = Array.isArray(result?.posts) ? result.posts : [];
+  const relatedPosts = Array.isArray(result?.relatedPosts) ? result.relatedPosts : [];
+  const postCard = (post, key) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => openCommunityMemberProfile(post.author)}
+      className={`w-full text-left rounded-2xl p-3.5 mb-2 ${TAP}`}
+      style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+    >
+      <div className="flex items-center gap-2.5">
+        <Avatar name={post.author} size={34} src={avatarForAuthor(post.author)} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate" style={{ color: palette.text, fontSize: "12.5px", fontWeight: 800 }}>{post.author}</div>
+          <div style={{ color: palette.textFaint, fontSize: "9.5px", marginTop: "2px" }}>{feedTimeAgo(post.ts)}</div>
+        </div>
+        {post.likeCount > 0 && <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>{post.likeCount} likes</span>}
+      </div>
+      {post.text && <div className="mt-2" style={{ color: palette.textMuted, fontSize: "12px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.text}</div>}
+      {post.image && <img src={post.image} alt="" className="mt-2 rounded-xl w-full" style={{ maxHeight: "260px", objectFit: "cover" }} />}
+    </button>
+  );
+
+  return (
+    <div className="h-full overflow-y-auto" style={{ background: palette.bg }}>
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Search size={15} style={{ color: palette.gold }} />
+          <span style={{ color: palette.text, fontFamily: mono, fontSize: "12px", fontWeight: 800 }}>Search</span>
+        </div>
+        {communitySearchLoading ? (
+          <div className="rounded-2xl p-5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "12px" }}>Searching…</div>
+        ) : result?.error ? (
+          <div className="rounded-2xl p-5" style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.red, fontSize: "12px" }}>{result.error}</div>
+        ) : !result || (!profile && ownPosts.length === 0 && relatedPosts.length === 0) ? (
+          <div className="rounded-2xl p-5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+            <div style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>No results</div>
+            <div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Try another username or keyword.</div>
+          </div>
+        ) : (
+          <>
+            {profile && (
+              <div className="mb-5">
+                <div className="mb-2" style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Profile</div>
+                <button type="button" onClick={() => openCommunityMemberProfile(profile.username)} className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+                  <Avatar name={profile.username} size={46} src={profile.avatar || avatarForAuthor(profile.username)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 800 }}>{profile.username}</div>
+                    {profile.bio && <div className="mt-1" style={{ color: palette.textMuted, fontSize: "11px", lineHeight: 1.4 }}>{profile.bio}</div>}
+                  </div>
+                  <ChevronRight size={16} style={{ color: palette.textFaint }} />
+                </button>
+              </div>
+            )}
+            {ownPosts.length > 0 && (
+              <div className="mb-5">
+                <div className="mb-2" style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>{profile ? `${profile.username}'s posts` : "Posts"}</div>
+                {ownPosts.map((p, i) => postCard(p, `own-${p.id || i}`))}
+              </div>
+            )}
+            {relatedPosts.length > 0 && (
+              <div>
+                <div className="mb-2" style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Related posts</div>
+                {relatedPosts.map((p, i) => postCard(p, `related-${p.id || i}`))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const renameCommunityGroup = async () => {
   const membership = myGroups.find((g) => g.id === activeGroupId);
   if (!membership) return;
@@ -7252,39 +7354,6 @@ if (!isSignal && !communityMsgText.trim()) return;
     }
   };
 
-  const searchCommunity = async (value) => {
-    const q = String(value || "").trim();
-    if (!q || !session?.token) return;
-    setCommunitySearch(q);
-    setCommunitySearchLoading(true);
-    setCommunityLobbyTab("search");
-    try {
-      const data = await communityApi(`/community/search?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${session.token}` } });
-      setCommunitySearchResults(data);
-    } catch (err) {
-      setCommunitySearchResults({ query: q, profile: null, posts: [], relatedPosts: [], error: err.message || "Search failed." });
-    } finally { setCommunitySearchLoading(false); }
-  };
-
-  const renderCommunitySearch = () => {
-    const result = communitySearchResults;
-    const postCard = (post, key) => <article key={key} className="rounded-2xl overflow-hidden" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-      <div className="flex items-center gap-2.5 px-3.5 py-3"><Avatar name={post.author} size={34} src={post.avatar || avatarForAuthor(post.author)} /><button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{post.author}</button><span className="ml-auto" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>{new Date(post.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span></div>
-      <div className="px-3.5 py-3.5">{post.text && <div style={{ color: palette.text, fontSize: "13px", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{post.text}</div>}{post.image && <img src={post.image} alt="Post" className="w-full rounded-xl" style={{ maxHeight: "520px", objectFit: "cover", marginTop: post.text ? "10px" : 0, border: `1px solid ${palette.border}` }} />}</div>
-    </article>;
-    return <div className="flex flex-col h-full" style={{ background: palette.bg }}>
-      <div className="px-4 py-3.5" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface }}><div style={{ fontFamily: display, fontSize: "16px", fontWeight: 800, color: palette.text }}>Search</div><div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "2px" }}>Results for “{communitySearch}”</div></div>
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ minHeight: 0 }}><div className="max-w-2xl mx-auto flex flex-col gap-4">
-        {communitySearchLoading ? <div className="py-12 text-center" style={{ color: palette.textFaint, fontSize: "12px" }}>Searching…</div> : result?.error ? <div className="rounded-2xl p-5 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.red, fontSize: "12px" }}>{result.error}</div> : !result ? <div className="py-12 text-center" style={{ color: palette.textFaint, fontSize: "12px" }}>Search for a trader, post, or topic.</div> : <>
-          {result.profile && <button type="button" onClick={() => openCommunityMemberProfile(result.profile.username)} className={`w-full text-left rounded-2xl p-4 ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}><div style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "9px" }}>Profile</div><div className="flex items-center gap-3"><Avatar name={result.profile.username} size={46} src={result.profile.avatar || avatarForAuthor(result.profile.username)} /><div className="min-w-0 flex-1"><div className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 800 }}>{result.profile.username}</div><div className="truncate" style={{ color: palette.textMuted, fontSize: "10.5px", marginTop: "3px" }}>{result.profile.bio || "Tredzi trader"}</div></div></div></button>}
-          {result.posts?.length > 0 && <section><div className="px-1 mb-2" style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Posts by {result.profile?.username || communitySearch}</div><div className="flex flex-col gap-3">{result.posts.map((post) => postCard(post, `own-${post.id}`))}</div></section>}
-          {result.relatedPosts?.length > 0 && <section><div className="px-1 mb-2" style={{ color: palette.textFaint, fontFamily: mono, fontSize: "9.5px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Related posts</div><div className="flex flex-col gap-3">{result.relatedPosts.map((post) => postCard(post, `related-${post.id}`))}</div></section>}
-          {!result.profile && !result.posts?.length && !result.relatedPosts?.length && <div className="rounded-2xl p-8 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}><Search size={24} style={{ color: palette.gold, margin: "0 auto 10px" }} /><div style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>No results found</div><div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Try another username or keyword.</div></div>}
-        </>}
-      </div></div>
-    </div>;
-  };
-
   const renderGlobalFeed = () => (
     <div className="flex flex-col h-full" style={{ background: palette.bg }}>
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface }}>
@@ -9465,15 +9534,6 @@ const hiddenTabIds = settings.hiddenTabs || [];
     (t) => !mobileNavPrimaryTabs.some((p) => p.id === t.id)
   );
   const activeInMobileOverflow = mobileNavOverflowTabs.some((t) => t.id === activeTab);
-
-  // ---------- Community sidebar ----------
-  const renderSidebar = () => (
-    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
-      <div className="p-3.5"><form onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }} className="flex items-center rounded-xl px-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><Search size={14} style={{ color: palette.textFaint, flexShrink: 0 }} /><input type="text" value={communitySearch} onChange={(e) => setCommunitySearch(e.target.value)} placeholder="Search" className="w-full bg-transparent py-2.5 px-2 outline-none" style={{ color: palette.text, fontSize: "12px" }} /></form></div>
-      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Flame size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</span></div><div className="flex flex-wrap gap-1.5">{["#XAUUSD", "#Gold", "#OrderFlow", "#VolumeProfile"].map((tag) => <button key={tag} type="button" onClick={() => searchCommunity(tag)} className={`px-2 py-1 rounded-lg ${TAP}`} style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "9px" }}>{tag}</button>)}</div></div></div>
-      <div className="px-3.5 pb-3"><div className="rounded-xl p-3" style={{ background: palette.field, border: `1px solid ${palette.border}` }}><div className="flex items-center gap-2 mb-2.5"><Search size={14} style={{ color: palette.gold }} /><span style={{ color: palette.text, fontFamily: mono, fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Explore</span></div><div className="flex flex-col gap-1">{["Trade Ideas", "Charts", "Education", "Journal"].map((item) => <button key={item} type="button" onClick={() => searchCommunity(item)} className={`w-full text-left rounded-lg px-2.5 py-2 ${TAP}`} style={{ color: palette.textMuted, background: "transparent", fontSize: "10.5px" }}>{item}</button>)}</div></div></div>
-    </div>
-  );
 
   let body = null;
 
@@ -19334,6 +19394,43 @@ if (activeTab === "community") {
     );
   };
 
+  // ---------- Community sidebar ----------
+  const renderSidebar = () => (
+    <div className="flex flex-col flex-shrink-0 rounded-2xl overflow-hidden" style={{ width: "312px", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, background: palette.surface }}>
+      <div className="p-3.5">
+        <form onSubmit={(e) => { e.preventDefault(); searchCommunity(communitySearch); }}>
+          <div className="flex items-center gap-2 rounded-xl px-3" style={{ height: "40px", background: palette.field, border: `1px solid ${palette.border}` }}>
+            <Search size={15} style={{ color: palette.textFaint }} />
+            <input
+              value={communitySearch}
+              onChange={(e) => setCommunitySearch(e.target.value)}
+              placeholder="Search"
+              className="flex-1 min-w-0 bg-transparent outline-none"
+              style={{ color: palette.text, fontSize: "12px" }}
+            />
+          </div>
+        </form>
+      </div>
+      <div className="px-3.5 pb-3">
+        <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</div>
+        <div className="space-y-1">
+          {[["#XAUUSD", "XAUUSD"], ["#Gold", "Gold"], ["#OrderFlow", "OrderFlow"], ["#VolumeProfile", "VolumeProfile"]].map(([label, q]) => (
+            <button key={q} type="button" onClick={() => searchCommunity(q)} className={`w-full text-left rounded-xl px-3 py-2.5 ${TAP}`} style={{ background: "transparent", color: palette.textMuted, fontSize: "11.5px" }}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="px-3.5 pb-3">
+        <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Explore</div>
+        <div className="space-y-1">
+          {[["Trade Ideas", "trade ideas"], ["Charts", "charts"], ["Education", "education"], ["Journal", "journal"]].map(([label, q]) => (
+            <button key={label} type="button" onClick={() => searchCommunity(q)} className={`w-full text-left rounded-xl px-3 py-2.5 ${TAP}`} style={{ background: "transparent", color: palette.textMuted, fontSize: "11.5px" }}>{label}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+
     // ---------- ONBOARDING (unchanged) ----------
     body = (
       <>
@@ -19406,7 +19503,7 @@ if (activeTab === "community") {
       <div className="flex gap-4 flex-1" style={{ minHeight: 0, height: "100%" }}>
         {renderSidebar()}
         <div className="flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-          {communityLobbyTab === "search" ? renderCommunitySearch() : communityLobbyTab === "global" ? renderGlobalFeed() : activeGroupId ? renderChatPanel({ background: palette.bg, height: "100%" }) : (
+          {communityLobbyTab === "search" ? renderCommunitySearch() : activeGroupId ? renderChatPanel({ background: palette.bg, height: "100%" }) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-8" style={{ background: palette.bg }}>
               <span className="flex items-center justify-center rounded-full mb-4" style={{ width: "64px", height: "64px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}><Users size={28} style={{ color: palette.gold }} /></span>
               <div style={{ fontFamily: display, fontSize: "17px", fontWeight: 700, color: palette.text, marginBottom: "6px" }}>Pick a group to start</div>
@@ -19419,9 +19516,6 @@ if (activeTab === "community") {
   } else if (communityLobbyTab === "search") {
     // ---------- MOBILE COMMUNITY SEARCH ----------
     body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>{renderCommunitySearch()}</div>;
-  } else if (communityLobbyTab === "global") {
-    // ---------- MOBILE GLOBAL FEED ----------
-    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>{renderGlobalFeed()}</div>;
   } else if (!activeGroupId) {
     // ---------- MOBILE GROUP LOBBY ----------
     const joined = myGroups;
@@ -19446,6 +19540,7 @@ if (activeTab === "community") {
     // ---------- MOBILE GROUP ----------
     body = renderChatPanel({ height: "100%" });
   }
+
   return (
     <div
       className="w-full flex justify-center"

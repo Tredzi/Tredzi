@@ -4527,6 +4527,22 @@ const [seenStoryIds, setSeenStoryIds] = useState(() => {
 });
 const [pinnedMessageId, setPinnedMessageId] = useState(null);
 const [replyingTo, setReplyingTo] = useState(null); // { id, author, preview }
+// --- Typing indicator + online presence ---
+const [typingUsers, setTypingUsers] = useState([]); // usernames currently typing (excludes me)
+const typingPingRef = useRef(0); // last time (ms) we told the server we're typing
+// --- Message reactions (chat + signals) ---
+const [reactionPickerFor, setReactionPickerFor] = useState(null); // message id with the emoji picker open
+const REACTION_EMOJIS = ["👍", "🔥", "😂", "😮", "🎯", "❤️"];
+// --- Signal threads (replying to a signal opens a mini conversation under it) ---
+const [openThreadId, setOpenThreadId] = useState(null); // signal message id whose thread panel is open
+const [threadReplies, setThreadReplies] = useState({}); // { [signalId]: [{id, author, text, ts}] }
+const [threadLoading, setThreadLoading] = useState({}); // { [signalId]: bool }
+const [threadDraft, setThreadDraft] = useState("");
+// --- Followers (Instagram-style) ---
+const [followBusy, setFollowBusy] = useState(false);
+const [followListOpen, setFollowListOpen] = useState(null); // { username, kind: "followers"|"following" }
+const [followListData, setFollowListData] = useState([]);
+const [followListLoading, setFollowListLoading] = useState(false);
 const [openRoleMenuFor, setOpenRoleMenuFor] = useState(null); // username whose role menu is open
 const [communityLobbyTab, setCommunityLobbyTab] = useState("mine"); // "mine" | "discover"
 const [discoverGroups, setDiscoverGroups] = useState([]);
@@ -4742,6 +4758,40 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeGroupId]);
 
+// --- Presence heartbeat: keeps this member's green online dot alive while
+// they have a group open. Fires immediately, then every 20s. ---
+useEffect(() => {
+  if (activeTab !== "community" || !activeGroupId) return;
+  sendCommunityHeartbeat();
+  const id = setInterval(sendCommunityHeartbeat, 20000);
+  return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab, activeGroupId]);
+
+// --- Typing indicator: poll who else is typing, every 2s, only while the
+// chat sub-view is actually open. ---
+useEffect(() => {
+  if (activeTab !== "community" || !activeGroupId || communityPanelTab !== "chat") {
+    setTypingUsers([]);
+    return;
+  }
+  const membership = myGroups.find((g) => g.id === activeGroupId);
+  if (!membership) return;
+  let cancelled = false;
+  const poll = async () => {
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/typing`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      if (!cancelled) setTypingUsers(data.typing || []);
+    } catch (err) {}
+  };
+  poll();
+  const id = setInterval(poll, 2500);
+  return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab, activeGroupId, communityPanelTab]);
+
 // Username -> profile photo, for showing everyone's real avatar in chat
 // (not just group members you happen to have loaded avatars for locally).
 // Own username always prefers the live communityAvatar so a just-uploaded
@@ -4755,6 +4805,7 @@ const memberAvatarByUsername = useMemo(() => {
   return map;
 }, [groupMembersList, communityUsername, communityAvatar]);
 const avatarForAuthor = (author) => memberAvatarByUsername[author] || undefined;
+const isAuthorOnline = (author) => !!groupMembersList.find((m) => m.username === author)?.isOnline;
 
 // ---------- Stories (their own table — separate from feed posts) ----------
 const storiesByAuthor = useMemo(() => {
@@ -6863,6 +6914,146 @@ if (!isSignal && !communityMsgText.trim()) return;
       setGroupMessages(data.messages || []);
     } catch (err) {
       setCommunityApiError(err.message);
+    }
+  };
+
+  // --- Typing indicator: called on every keystroke in the chat box, throttled to
+  // one ping per ~2s so it doesn't spam the worker. ---
+  const pingTyping = () => {
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    const now = Date.now();
+    if (now - typingPingRef.current < 2000) return;
+    typingPingRef.current = now;
+    communityApi(`/groups/${activeGroupId}/typing`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    }).catch(() => {});
+  };
+
+  // --- Heartbeat: keeps this member's green "online" dot alive for others. ---
+  const sendCommunityHeartbeat = () => {
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    communityApi(`/groups/${activeGroupId}/heartbeat`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${membership.token}` },
+    }).catch(() => {});
+  };
+
+  // --- Message reactions: toggle an emoji on a chat message or signal. ---
+  const toggleMessageReaction = async (messageId, emoji) => {
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    setReactionPickerFor(null);
+    // Optimistic update so the tap feels instant.
+    setGroupMessages((cur) => cur.map((m) => {
+      if (m.id !== messageId) return m;
+      const mine = m.myReactions || [];
+      const alreadyMine = mine.includes(emoji);
+      const reactions = { ...(m.reactions || {}) };
+      reactions[emoji] = Math.max(0, (reactions[emoji] || 0) + (alreadyMine ? -1 : 1));
+      if (reactions[emoji] === 0) delete reactions[emoji];
+      return { ...m, reactions, myReactions: alreadyMine ? mine.filter((e) => e !== emoji) : [...mine, emoji] };
+    }));
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/messages/${messageId}/react`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${membership.token}` },
+        body: JSON.stringify({ emoji }),
+      });
+      setGroupMessages((cur) => cur.map((m) => m.id === messageId ? { ...m, reactions: data.reactions || {}, myReactions: data.mine || [] } : m));
+    } catch (err) {
+      setCommunityApiError(err.message);
+    }
+  };
+
+  // --- Signal threads: load / open / reply. ---
+  const openSignalThread = async (signalId) => {
+    setOpenThreadId(signalId);
+    setThreadDraft("");
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    setThreadLoading((cur) => ({ ...cur, [signalId]: true }));
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/messages/${signalId}/thread`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      setThreadReplies((cur) => ({ ...cur, [signalId]: data.replies || [] }));
+    } catch (err) {
+      setCommunityApiError(err.message);
+    } finally {
+      setThreadLoading((cur) => ({ ...cur, [signalId]: false }));
+    }
+  };
+
+  const sendThreadReply = async (signalId) => {
+    if (!threadDraft.trim() || !activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    try {
+      await communityApi(`/groups/${activeGroupId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${membership.token}` },
+        body: JSON.stringify({ author: communityUsername || "Anonymous", type: "chat", text: threadDraft.trim(), replyTo: signalId }),
+      });
+      setThreadDraft("");
+      const data = await communityApi(`/groups/${activeGroupId}/messages/${signalId}/thread`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      setThreadReplies((cur) => ({ ...cur, [signalId]: data.replies || [] }));
+      setGroupMessages((cur) => cur.map((m) => m.id === signalId ? { ...m, replyCount: (m.replyCount || 0) + 1 } : m));
+    } catch (err) {
+      setCommunityApiError(err.message);
+    }
+  };
+
+  // --- Follow / unfollow (Instagram-style). ---
+  const toggleFollowMember = async (username) => {
+    if (!activeGroupId || followBusy) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    const currentlyFollowing = !!groupMembersList.find((m) => m.username === username)?.isFollowedByMe
+      || !!selectedCommunityMember?.isFollowedByMe;
+    setFollowBusy(true);
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/follow/${encodeURIComponent(username)}`, {
+        method: currentlyFollowing ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      setGroupMembersList((cur) => cur.map((m) => m.username === username
+        ? { ...m, isFollowedByMe: data.isFollowing, followerCount: data.followerCount }
+        : m));
+      setSelectedCommunityMember((cur) => cur && cur.username === username
+        ? { ...cur, isFollowedByMe: data.isFollowing, followerCount: data.followerCount }
+        : cur);
+    } catch (err) {
+      setCommunityApiError(err.message);
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const openFollowList = async (username, kind) => {
+    setFollowListOpen({ username, kind });
+    setFollowListData([]);
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    setFollowListLoading(true);
+    try {
+      const data = await communityApi(`/groups/${activeGroupId}/follow-list/${encodeURIComponent(username)}?kind=${kind}`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      setFollowListData(data[kind] || []);
+    } catch (err) {
+      setCommunityApiError(err.message);
+    } finally {
+      setFollowListLoading(false);
     }
   };
 
@@ -16581,7 +16772,7 @@ if (activeTab === "community") {
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5" style={{ marginTop: "1px" }}>
-                      <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} />
+                      <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />
                       <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "10.5px", fontWeight: 600, fontFamily: sans, background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       {authorRole && (
                         <span style={{ color: palette.textFaint, fontSize: "9px", fontFamily: mono, border: `1px solid ${palette.border}`, borderRadius: "4px", padding: "0 4px" }}>
@@ -16630,23 +16821,134 @@ if (activeTab === "community") {
 
                   {m.text && <div style={{ color: palette.textMuted, fontSize: "12.5px", marginTop: "10px", lineHeight: 1.45, fontFamily: sans }}>{m.text}</div>}
 
-                  <button
-                    type="button"
-                    onClick={() => shadowSignalToTrade(m)}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl w-full ${TAP}`}
-                    style={{
-                      marginTop: "10px",
-                      padding: "8px",
-                      background: palette.field,
-                      border: `1px solid ${palette.border}`,
-                      color: palette.textMuted,
-                      fontFamily: sans, fontSize: "11.5px", fontWeight: 600,
-                    }}
-                    aria-label="Log this trade in your journal"
-                  >
-                    <BookOpen size={12} />
-                    Shadow to My Journal
-                  </button>
+                  {Object.keys(m.reactions || {}).length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap" style={{ marginTop: "10px" }}>
+                      {Object.entries(m.reactions).map(([emoji, count]) => {
+                        const mine = (m.myReactions || []).includes(emoji);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => toggleMessageReaction(m.id, emoji)}
+                            className={TAP}
+                            style={{
+                              fontSize: "11px", fontFamily: mono, fontWeight: 700,
+                              color: mine ? palette.gold : palette.textMuted,
+                              background: mine ? `${palette.gold}14` : palette.field,
+                              border: `1px solid ${mine ? `${palette.gold}44` : palette.border}`,
+                              borderRadius: "999px", padding: "1px 7px",
+                            }}
+                          >
+                            {emoji} {count}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2" style={{ marginTop: "10px" }}>
+                    <button
+                      type="button"
+                      onClick={() => shadowSignalToTrade(m)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl ${TAP}`}
+                      style={{
+                        padding: "8px",
+                        background: palette.field,
+                        border: `1px solid ${palette.border}`,
+                        color: palette.textMuted,
+                        fontFamily: sans, fontSize: "11.5px", fontWeight: 600,
+                      }}
+                      aria-label="Log this trade in your journal"
+                    >
+                      <BookOpen size={12} />
+                      Shadow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? null : m.id)}
+                      className={`flex items-center justify-center rounded-xl ${TAP}`}
+                      style={{ padding: "8px 10px", background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted }}
+                      aria-label="Add reaction"
+                    >
+                      <span style={{ fontSize: "13px" }}>🙂</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openThreadId === m.id ? setOpenThreadId(null) : openSignalThread(m.id)}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl ${TAP}`}
+                      style={{
+                        padding: "8px 12px",
+                        background: openThreadId === m.id ? `${palette.gold}17` : palette.field,
+                        border: `1px solid ${openThreadId === m.id ? palette.gold + "55" : palette.border}`,
+                        color: openThreadId === m.id ? palette.gold : palette.textMuted,
+                        fontFamily: sans, fontSize: "11.5px", fontWeight: 600,
+                      }}
+                      aria-label="Discuss this signal"
+                    >
+                      💬 {m.replyCount > 0 ? m.replyCount : "Discuss"}
+                    </button>
+                  </div>
+
+                  {reactionPickerFor === m.id && (
+                    <div className="flex items-center gap-1.5 justify-center rounded-xl" style={{ marginTop: "8px", padding: "6px", background: palette.field, border: `1px solid ${palette.border}` }}>
+                      {REACTION_EMOJIS.map((emoji) => (
+                        <button key={emoji} type="button" onClick={() => toggleMessageReaction(m.id, emoji)} className={TAP} style={{ fontSize: "17px", background: "none", border: "none", padding: "3px" }}>
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {openThreadId === m.id && (
+                    <div className="rounded-xl" style={{ marginTop: "8px", background: palette.field, border: `1px solid ${palette.border}`, padding: "10px" }}>
+                      <div style={{ fontSize: "10px", color: palette.textFaint, fontFamily: mono, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
+                        Signal thread
+                      </div>
+                      {threadLoading[m.id] ? (
+                        <p className="text-xs" style={{ color: palette.textFaint }}>Loading replies…</p>
+                      ) : (threadReplies[m.id] || []).length === 0 ? (
+                        <p className="text-xs" style={{ color: palette.textFaint }}>No replies yet — start the discussion.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2 mb-2">
+                          {(threadReplies[m.id] || []).map((rep) => (
+                            <div key={rep.id} className="flex items-start gap-2">
+                              <Avatar name={rep.author} size={20} src={avatarForAuthor(rep.author)} online={isAuthorOnline(rep.author)} />
+                              <div className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+                                <div className="flex items-center gap-1.5">
+                                  <span style={{ color: palette.text, fontSize: "11px", fontWeight: 700 }}>{rep.author}</span>
+                                  <span style={{ color: palette.textFaint, fontSize: "9px", fontFamily: mono }}>
+                                    {new Date(rep.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                </div>
+                                <p className="text-xs" style={{ color: palette.textMuted, whiteSpace: "pre-wrap" }}>{rep.text}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={threadDraft}
+                          onChange={(e) => setThreadDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendThreadReply(m.id); } }}
+                          placeholder="Reply in thread…"
+                          className="flex-1 rounded-lg px-2.5 py-1.5 bg-transparent outline-none"
+                          style={{ background: palette.surface, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => sendThreadReply(m.id)}
+                          disabled={!threadDraft.trim()}
+                          className={TAP}
+                          style={{ color: threadDraft.trim() ? palette.gold : palette.textFaint, background: "none", border: "none", padding: "4px" }}
+                          aria-label="Send reply"
+                        >
+                          <Send size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -17487,7 +17789,7 @@ if (activeTab === "community") {
                     )}
                     {!isMe && (
                       <span style={{ width: "28px", flexShrink: 0 }}>
-                        {!grouped && <Avatar name={m.author} size={28} src={avatarForAuthor(m.author)} />}
+                        {!grouped && <Avatar name={m.author} size={28} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />}
                       </span>
                     )}
                     <div style={{ maxWidth: isDesktop ? "62%" : "78%" }}>
@@ -17519,8 +17821,36 @@ if (activeTab === "community") {
                         )}
                         {m.text}
                       </div>
+                      {Object.keys(m.reactions || {}).length > 0 && (
+                        <div
+                          className="flex items-center gap-1 flex-wrap"
+                          style={{ marginTop: "4px", justifyContent: isMe ? "flex-end" : "flex-start" }}
+                        >
+                          {Object.entries(m.reactions).map(([emoji, count]) => {
+                            const mine = (m.myReactions || []).includes(emoji);
+                            return (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => toggleMessageReaction(m.id, emoji)}
+                                className={TAP}
+                                style={{
+                                  fontSize: "11px", fontFamily: mono, fontWeight: 700,
+                                  color: mine ? palette.gold : palette.textMuted,
+                                  background: mine ? `${palette.gold}14` : palette.field,
+                                  border: `1px solid ${mine ? `${palette.gold}44` : palette.border}`,
+                                  borderRadius: "999px", padding: "1px 7px",
+                                }}
+                                aria-label={`${emoji} reaction, ${count}`}
+                              >
+                                {emoji} {count}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                       <div
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 relative"
                         style={{ marginTop: "3px", justifyContent: isMe ? "flex-end" : "flex-start" }}
                       >
                         <span style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}>
@@ -17534,6 +17864,37 @@ if (activeTab === "community") {
                         >
                           Reply
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setReactionPickerFor(reactionPickerFor === m.id ? null : m.id)}
+                          className={TAP}
+                          style={{ color: reactionPickerFor === m.id ? palette.gold : palette.textFaint, fontSize: "9.5px", fontFamily: mono }}
+                          aria-label="Add reaction"
+                        >
+                          React
+                        </button>
+                        {reactionPickerFor === m.id && (
+                          <div
+                            className="flex items-center gap-1 rounded-full"
+                            style={{
+                              position: "absolute", bottom: "20px", [isMe ? "right" : "left"]: 0,
+                              background: palette.surface, border: `1px solid ${palette.border}`,
+                              boxShadow: palette.shadow, padding: "4px 6px", zIndex: 6,
+                            }}
+                          >
+                            {REACTION_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => toggleMessageReaction(m.id, emoji)}
+                                className={TAP}
+                                style={{ fontSize: "16px", background: "none", border: "none", padding: "2px" }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {isGroupOwner && (
                         <button
@@ -17589,6 +17950,23 @@ if (activeTab === "community") {
             padding: isDesktop ? "12px 16px 16px" : "8px 12px 12px",
           }}
         >
+          {typingUsers.length > 0 && (
+            <div className="flex items-center gap-1.5 px-1" style={{ marginBottom: "6px" }}>
+              <span className="flex gap-0.5" aria-hidden="true">
+                <style>{`@keyframes typingDot{0%,60%,100%{opacity:.25}30%{opacity:1}}`}</style>
+                {[0, 1, 2].map((i) => (
+                  <span key={i} style={{ width: "4px", height: "4px", borderRadius: "999px", background: palette.gold, display: "inline-block", animation: `typingDot 1.1s ${i * 0.15}s infinite` }} />
+                ))}
+              </span>
+              <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: sans, fontStyle: "italic" }}>
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]} is typing…`
+                  : typingUsers.length === 2
+                  ? `${typingUsers[0]} and ${typingUsers[1]} are typing…`
+                  : `${typingUsers.length} people are typing…`}
+              </span>
+            </div>
+          )}
           {replyingTo && (
             <div
               className="flex items-center justify-between rounded-lg px-3 py-2 mb-2"
@@ -17610,7 +17988,7 @@ if (activeTab === "community") {
             <input
               type="text"
               value={communityMsgText}
-              onChange={(e) => setCommunityMsgText(e.target.value)}
+              onChange={(e) => { setCommunityMsgText(e.target.value); pingTyping(); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendCommunityMessage(); } }}
               placeholder="Message"
               className={isDesktop ? "flex-1 bg-transparent py-3 outline-none" : "flex-1 bg-transparent py-3.5 outline-none"}
@@ -17663,8 +18041,35 @@ if (activeTab === "community") {
                 </div>
                 <div className="p-5">
                   <div className="flex items-center gap-3 mb-5">
-                    <Avatar name={member.username} size={58} src={avatarForAuthor(member.username)} ring />
+                    <Avatar name={member.username} size={58} src={avatarForAuthor(member.username)} ring online={isAuthorOnline(member.username)} />
                     <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="truncate" style={{ color: palette.text, fontSize: "18px", fontWeight: 800 }}>{member.username}</span>{isMe && <span style={{ color: palette.blue, fontSize: "9px", fontFamily: mono, fontWeight: 700 }}>YOU</span>}</div><div style={{ color: palette.textMuted, fontSize: "11.5px", marginTop: "3px" }}>{joinedText} · {role}</div></div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-5">
+                    <button type="button" onClick={() => openFollowList(member.username, "followers")} className={`flex-1 rounded-xl py-2 text-center ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                      <div style={{ color: palette.text, fontSize: "15px", fontWeight: 800 }}>{member.followerCount || 0}</div>
+                      <div style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, textTransform: "uppercase" }}>Followers</div>
+                    </button>
+                    <button type="button" onClick={() => openFollowList(member.username, "following")} className={`flex-1 rounded-xl py-2 text-center ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
+                      <div style={{ color: palette.text, fontSize: "15px", fontWeight: 800 }}>{member.followingCount || 0}</div>
+                      <div style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, textTransform: "uppercase" }}>Following</div>
+                    </button>
+                    {!isMe && (
+                      <button
+                        type="button"
+                        onClick={() => toggleFollowMember(member.username)}
+                        disabled={followBusy}
+                        className={`flex-1 rounded-xl py-2 text-center ${TAP}`}
+                        style={{
+                          background: member.isFollowedByMe ? palette.field : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                          border: `1px solid ${member.isFollowedByMe ? palette.border : "transparent"}`,
+                          color: member.isFollowedByMe ? palette.textMuted : palette.letterbox,
+                          fontFamily: sans, fontSize: "12.5px", fontWeight: 700,
+                          opacity: followBusy ? 0.6 : 1,
+                        }}
+                      >
+                        {member.isFollowedByMe ? "Following" : "Follow"}
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-2.5 mb-5">
                     {[
@@ -17684,6 +18089,43 @@ if (activeTab === "community") {
             </div>
           );
         })()}
+
+        {followListOpen && (
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.76)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 115 }} onClick={() => setFollowListOpen(null)}>
+            <div className="w-full rounded-2xl overflow-hidden" style={{ maxWidth: "360px", maxHeight: "70vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <span style={{ color: palette.text, fontSize: "13.5px", fontWeight: 700, textTransform: "capitalize" }}>
+                  {followListOpen.username} · {followListOpen.kind}
+                </span>
+                <button type="button" onClick={() => setFollowListOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", background: palette.field, color: palette.textMuted }} aria-label="Close">
+                  <X size={13} />
+                </button>
+              </div>
+              <div className="p-3" style={{ overflowY: "auto" }}>
+                {followListLoading ? (
+                  <p className="text-xs px-1" style={{ color: palette.textFaint }}>Loading…</p>
+                ) : followListData.length === 0 ? (
+                  <p className="text-xs px-1" style={{ color: palette.textFaint }}>
+                    {followListOpen.kind === "followers" ? "No followers yet." : "Not following anyone yet."}
+                  </p>
+                ) : (
+                  followListData.map((row) => (
+                    <button
+                      key={row.username}
+                      type="button"
+                      onClick={() => { setFollowListOpen(null); openCommunityMemberProfile(row.username); }}
+                      className={`flex items-center gap-2.5 w-full rounded-xl px-2 py-2 mb-1 ${TAP}`}
+                      style={{ background: "none", border: "none", textAlign: "left" }}
+                    >
+                      <Avatar name={row.username} size={30} src={avatarForAuthor(row.username)} online={isAuthorOnline(row.username)} />
+                      <span style={{ color: palette.text, fontSize: "13px", fontWeight: 600 }}>{row.username}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {storyDraft && (
           <div className="fixed inset-0 flex items-center justify-center" style={{ background: "#000000", zIndex: 135 }}>
@@ -21124,13 +21566,13 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
         border: `1px solid ${mem.isOwner ? palette.gold + "55" : (memberIsAdmin || memberIsSignal) ? palette.green + "55" : palette.border}`,
       }}>
       <div className="flex items-center gap-2">
-        <Avatar name={mem.username} size={26} src={mem.avatar} />
+        <Avatar name={mem.username} size={26} src={mem.avatar} online={mem.isOnline} />
         <div>
           <div style={{ color: palette.text, fontSize: "13px", fontWeight: mem.isOwner || memberIsAdmin ? 600 : 400 }}>
             {mem.username}
           </div>
           <div style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
-            Joined {new Date(mem.joinedAt).toLocaleDateString()}
+            {mem.isOnline ? <span style={{ color: palette.green }}>Online</span> : `Joined ${new Date(mem.joinedAt).toLocaleDateString()}`}
           </div>
         </div>
       </div>

@@ -4477,7 +4477,7 @@ const [qaReplyDrafts, setQaReplyDrafts] = useState({});
 const [qaOpenId, setQaOpenId] = useState(null);
 const [communityPanelTab, setCommunityPanelTab] = useState("chat");
 const [communityChatSubView, setCommunityChatSubView] = useState("chat"); // "chat" | "signal"
-const [communityFeedSubView, setCommunityFeedSubView] = useState("feed"); // "feed" | "ideas" | "wall"
+const [communityFeedSubView, setCommunityFeedSubView] = useState("feed"); // "feed" | "wall"
 const [communityOpenTabDropdown, setCommunityOpenTabDropdown] = useState(null); // group id currently showing its dropdown, or null
 const [signalStatsOpen, setSignalStatsOpen] = useState(false);
 const [leaderboardMetric, setLeaderboardMetric] = useState("winRate");
@@ -4989,28 +4989,6 @@ useEffect(() => {
       if (!cancelled) setCommunityApiError(err.message);
     } finally {
       if (!cancelled) setGroupPostsLoaded(true);
-    }
-  })();
-  return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeGroupId, communityPanelTab]);
-
-useEffect(() => {
-  if (!activeGroupId || communityPanelTab !== "ideas") return;
-  const membership = myGroups.find((g) => g.id === activeGroupId);
-  if (!membership) return;
-  let cancelled = false;
-  setGroupIdeasLoaded(false);
-  (async () => {
-    try {
-      const data = await communityApi(`/groups/${activeGroupId}/ideas`, {
-        headers: { Authorization: `Bearer ${membership.token}` },
-      });
-      if (!cancelled) setGroupIdeas(data.ideas || []);
-    } catch (err) {
-      if (!cancelled) setCommunityApiError(err.message);
-    } finally {
-      if (!cancelled) setGroupIdeasLoaded(true);
     }
   })();
   return () => { cancelled = true; };
@@ -5582,6 +5560,7 @@ const loadFeedComments = async (postId) => {
     setFeedComments((cur) => ({ ...cur, [postId]: data.comments || [] }));
   } catch (err) {
     setFeedComments((cur) => ({ ...cur, [postId]: cur[postId] || [] }));
+    setCommunityApiError(err.message || "Couldn't load comments.");
   } finally {
     setFeedCommentsLoading((cur) => ({ ...cur, [postId]: false }));
   }
@@ -5598,7 +5577,8 @@ const postFeedComment = async (postId) => {
       body: JSON.stringify({ text }),
     });
     setCommentDrafts((cur) => ({ ...cur, [postId]: "" }));
-    setGroupFeed((cur) => cur.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || (feedComments[postId]?.length || 0)) + 1 } : p)));
+    setCommunityApiError("");
+    setGroupFeed((cur) => cur.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p)));
     loadFeedComments(postId);
   } catch (err) {
     setCommunityApiError(err.message || "Couldn't post that comment.");
@@ -7203,6 +7183,22 @@ if (!isSignal && !communityMsgText.trim()) return;
       });
     } catch (err) {
       // Non-critical — leave the optimistic like count as-is.
+    }
+  };
+
+  const deleteProfilePost = async (postId) => {
+    if (!session?.token) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this post?")) return;
+    try {
+      await communityApi(`/profile/posts/${postId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setProfilePosts((cur) => cur.filter((p) => p.id !== postId));
+      setProfilePostOpen(null);
+      setProfileData((cur) => (cur ? { ...cur, postCount: Math.max(0, (cur.postCount || 1) - 1) } : cur));
+    } catch (err) {
+      setProfileError(err.message || "Couldn't delete that post.");
     }
   };
 
@@ -16610,7 +16606,7 @@ if (activeTab === "community") {
               subs: [{ id: "chat", label: "Messages", icon: "hash" }, { id: "signal", label: "Signals", icon: "zap" }],
               subState: communityChatSubView, setSubState: setCommunityChatSubView },
             { id: "feed", label: "Feed", icon: "image",
-              subs: [{ id: "feed", label: "Posts", icon: "grid" }, { id: "ideas", label: "Ideas", icon: "bulb" }, { id: "wall", label: "Wall", icon: "note" }],
+              subs: [{ id: "feed", label: "Posts", icon: "grid" }, { id: "wall", label: "Wall", icon: "note" }],
               subState: communityFeedSubView, setSubState: setCommunityFeedSubView },
             { id: "posts", label: "Announcements", icon: "megaphone" },
             { id: "qa", label: "Q&A", icon: "help" },
@@ -17263,95 +17259,6 @@ if (activeTab === "community") {
     )}
   </>
 
-        ) : communityPanelTab === "ideas" ? (
-          <>
-            <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
-              <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                <input type="text" value={newIdeaPair} onChange={(e) => setNewIdeaPair(e.target.value.toUpperCase())} placeholder="Pair (e.g. XAUUSD)"
-                  className="w-full rounded-xl px-3 py-2 bg-transparent outline-none mb-2.5"
-                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "12.5px" }} />
-                <textarea value={newIdeaText} onChange={(e) => setNewIdeaText(e.target.value)}
-                  placeholder="What's the setup? Bias, key levels, invalidation…" rows={2}
-                  className="w-full bg-transparent outline-none mb-2"
-                  style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
-                {newIdeaImage && (
-                  <div className="relative inline-block mb-2">
-                    <img src={newIdeaImage} alt="Idea attachment" className="rounded-lg" style={{ width: "96px", height: "96px", objectFit: "cover", border: `1px solid ${palette.border}` }} />
-                    <button type="button" onClick={() => setNewIdeaImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "18px", height: "18px", background: palette.red, color: "#FFFFFF" }} aria-label="Remove image">
-                      <X size={11} />
-                    </button>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => ideaImageInputRef.current && ideaImageInputRef.current.click()}
-                    disabled={ideaImageUploading}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${TAP}`}
-                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "11.5px", fontFamily: mono }}
-                  >
-                    <Camera size={13} />
-                    {ideaImageUploading ? "Uploading…" : "Add photo"}
-                  </button>
-                  <button type="button" onClick={createGroupIdea}
-                    disabled={!newIdeaPair.trim() && !newIdeaText.trim() && !newIdeaImage}
-                    className={`px-4 py-1.5 rounded-lg ${TAP}`}
-                    style={{
-                      background: (newIdeaPair.trim() || newIdeaText.trim() || newIdeaImage) ? palette.gold : palette.border,
-                      color: (newIdeaPair.trim() || newIdeaText.trim() || newIdeaImage) ? palette.letterbox : palette.textFaint,
-                      fontFamily: mono, fontSize: "12px", fontWeight: 700,
-                    }}>
-                    Share idea
-                  </button>
-                </div>
-                <input ref={ideaImageInputRef} type="file" accept="image/*" onChange={handleIdeaImageChange} style={{ display: "none" }} />
-              </div>
-
-              {!groupIdeasLoaded ? (
-                <p className="text-xs" style={{ color: palette.textFaint }}>Loading ideas…</p>
-              ) : groupIdeas.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center py-10">
-                  <span className="flex items-center justify-center rounded-full mb-3" style={{ width: "48px", height: "48px", background: `${palette.gold}14`, border: `1px solid ${palette.gold}33` }}>
-                    <Lightbulb size={20} style={{ color: palette.gold }} />
-                  </span>
-                  <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "240px" }}>
-                    No trade ideas yet. Share your analysis above — separate from live Signal calls, this is for reasoning and discussion.
-                  </p>
-                </div>
-              ) : (
-                groupIdeas.map((idea) => {
-                  const canDelete = idea.author === communityUsername || isGroupOwner;
-                  return (
-                    <div key={idea.id} className="rounded-2xl p-3.5 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar name={idea.author} size={22} src={avatarForAuthor(idea.author)} />
-                          <button type="button" onClick={() => openCommunityMemberProfile(idea.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "11.5px", fontWeight: 700, fontFamily: sans, background: "none", border: "none", padding: 0 }}>{idea.author}</button>
-                          <span style={{ color: palette.textFaint, fontSize: "10px", fontFamily: mono }}>
-                            {new Date(idea.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                        {canDelete && (
-                          <button type="button" onClick={() => deleteGroupIdea(idea.id)} className={TAP} style={{ color: palette.textFaint, flexShrink: 0 }} aria-label="Delete idea">
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                      {idea.pair && (
-                        <div className="mb-2">
-                          <span style={{ fontFamily: display, fontSize: "15px", fontWeight: 800, color: palette.text }}>{idea.pair}</span>
-                        </div>
-                      )}
-                      {idea.text && <p className="text-sm mb-2" style={{ color: palette.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{idea.text}</p>}
-                      {idea.image && <img src={idea.image} alt="Idea attachment" className="rounded-xl w-full" style={{ maxHeight: "320px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
-                    </div>
-                  );
-                })
-              )}
-              <p className="text-xs text-center mt-2" style={{ color: palette.textFaint }}>Ideas are shared with this group.</p>
-            </div>
-          </>
-
         ) : communityPanelTab === "qa" ? (
           <>
             <div className="flex-1 px-4 py-4" style={{ overflowY: "auto", minHeight: 0, background: palette.bg }}>
@@ -17824,6 +17731,7 @@ if (activeTab === "community") {
                               <Send size={15} />
                             </button>
                           </div>
+                          {communityApiError && <p className="text-xs mt-1.5" style={{ color: palette.red }}>{communityApiError}</p>}
                         </div>
                       )}
                     </div>
@@ -18214,7 +18122,7 @@ if (activeTab === "community") {
           const p = profileData && String(profileData.username).toLowerCase() === String(viewingName || "").toLowerCase() ? profileData : null;
           const chip = { color: palette.gold, background: `${palette.gold}14`, border: `1px solid ${palette.gold}33`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 700 };
           const pill = (primary, busy) => ({
-            height: "32px", padding: "0 18px", borderRadius: "999px", whiteSpace: "nowrap",
+            height: "32px", padding: "0 18px", borderRadius: isDesktop ? "8px" : "999px", whiteSpace: "nowrap",
             fontSize: "12.5px", fontWeight: 700, fontFamily: sans,
             background: primary ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` : palette.field,
             border: `1px solid ${primary ? "transparent" : palette.border}`,
@@ -18226,12 +18134,16 @@ if (activeTab === "community") {
           // avatar beside the stats/bio, no phone-frame chrome), not a mobile screen stretched wide.
           const shell = (children) => (
             isDesktop ? (
-              <div className="fixed inset-0 flex items-start justify-center overflow-y-auto" style={{ background: "rgba(5,7,12,0.72)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 108, padding: "48px 24px" }} onClick={closeProfileBack}>
-                <div className="relative w-full flex-shrink-0" style={{ maxWidth: "935px" }} onClick={(e) => e.stopPropagation()}>
-                  <button type="button" onClick={closeProfileBack} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-14px", right: "-14px", width: "34px", height: "34px", background: palette.surface, border: `1px solid ${palette.border}`, color: palette.textMuted, boxShadow: palette.shadow, zIndex: 1 }} aria-label="Close profile">
-                    <X size={16} />
+              <div className="fixed inset-0 flex flex-col" style={{ background: palette.bg, zIndex: 108 }}>
+                <div className="flex items-center gap-3 px-6 flex-shrink-0" style={{ height: "56px", borderBottom: `1px solid ${palette.border}`, background: palette.surface }}>
+                  <button type="button" onClick={closeProfileBack} className={`flex items-center gap-1.5 ${TAP}`} style={{ background: "none", border: "none", color: palette.textMuted, fontSize: "13px", fontWeight: 600, fontFamily: sans }} aria-label="Back">
+                    <ChevronLeft size={18} /> Back
                   </button>
-                  <div className="rounded-2xl overflow-hidden" style={{ background: palette.bg, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+                  <span aria-hidden="true" style={{ width: "1px", height: "18px", background: palette.border }} />
+                  <span className="truncate" style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>{p ? p.username : (viewingName || "Profile")}</span>
+                </div>
+                <div className="flex-1" style={{ overflowY: "auto", minHeight: 0 }}>
+                  <div className="mx-auto w-full" style={{ maxWidth: "935px", padding: "0 20px" }}>
                     {children}
                   </div>
                 </div>
@@ -18280,9 +18192,17 @@ if (activeTab === "community") {
           ];
           const avatarBlock = (
             <div className="relative flex-shrink-0">
-              <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
-                <Avatar name={p.username} size={isDesktop ? 150 : 80} src={avatarSrc} online={p.isOnline} />
-              </span>
+              {isDesktop ? (
+                <span className="inline-flex rounded-full" style={{ padding: "3px", background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` }}>
+                  <span className="inline-flex rounded-full" style={{ padding: "4px", background: palette.bg }}>
+                    <Avatar name={p.username} size={150} src={avatarSrc} online={p.isOnline} />
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
+                  <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} />
+                </span>
+              )}
               {isMe && (
                 <>
                   <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
@@ -18371,7 +18291,7 @@ if (activeTab === "community") {
               {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
             </div>
           );
-          const postsGridGap = isDesktop ? "24px" : "2px";
+          const postsGridGap = isDesktop ? "4px" : "2px";
           const postsGrid = !profilePostsLoaded ? (
             <p className="text-xs px-4 py-5" style={{ color: palette.textFaint }}>Loading posts…</p>
           ) : profilePosts.length === 0 ? (
@@ -18390,21 +18310,23 @@ if (activeTab === "community") {
             </div>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: postsGridGap, paddingTop: isDesktop ? "24px" : "2px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: postsGridGap, paddingTop: isDesktop ? "0" : "2px" }}>
                 {profilePosts.map((post) => {
                   const positive = post.pnl && !post.pnl.trim().startsWith("-");
                   return (
-                    <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={`group ${TAP}`} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", borderRadius: isDesktop ? "6px" : "0", background: palette.field, textAlign: "left", display: "block" }}>
+                    <button key={post.id} type="button" onClick={() => setProfilePostOpen(post)} className={`group ${TAP}`} aria-label="Open post" style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", padding: 0, border: "none", borderRadius: "0", background: palette.field, textAlign: "left", display: "block" }}>
                       {post.image ? (
                         <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
-                        <span style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", padding: "10px", color: palette.text, fontSize: "11.5px", lineHeight: 1.4 }}>{post.text}</span>
+                        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: isDesktop ? "18px" : "10px", background: `linear-gradient(rgba(5,7,12,0.45), rgba(5,7,12,0.45)), ${avatarStyleFor(post.author).bg}`, color: "#FFFFFF", fontSize: isDesktop ? "14px" : "11.5px", fontWeight: 600, lineHeight: 1.4 }}>
+                          <span style={{ display: "-webkit-box", WebkitLineClamp: isDesktop ? 6 : 5, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{post.text}</span>
+                        </span>
                       )}
                       {post.pnl && (
                         <span style={{ position: "absolute", left: "5px", bottom: "5px", background: "rgba(5,7,12,0.72)", color: positive ? palette.green : palette.red, fontSize: "10.5px", fontWeight: 700, fontFamily: mono, padding: "2px 7px", borderRadius: "999px" }}>{post.pnl}</span>
                       )}
                       {isDesktop && (
-                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100" style={{ background: "rgba(5,7,12,0.45)", transition: "opacity 0.15s", color: "#fff", fontSize: "13px", fontWeight: 700, fontFamily: mono }}>
+                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100" style={{ background: "rgba(5,7,12,0.5)", transition: "opacity 0.15s", color: "#fff", fontSize: "16px", fontWeight: 700, fontFamily: sans }}>
                           👍 {post.likeCount || 0}
                         </span>
                       )}
@@ -18420,8 +18342,8 @@ if (activeTab === "community") {
             </>
           );
           const statsPanel = (
-            <div className="px-4 pt-4" style={{ paddingLeft: isDesktop ? 0 : undefined, paddingRight: isDesktop ? 0 : undefined }}>
-              <div className="grid grid-cols-3 gap-2.5 mb-3.5">
+            <div className="px-4 pt-4" style={{ paddingLeft: isDesktop ? 0 : undefined, paddingRight: isDesktop ? 0 : undefined, paddingTop: isDesktop ? "32px" : undefined }}>
+              <div className="grid gap-2.5 mb-3.5" style={{ gridTemplateColumns: `repeat(${isDesktop ? 5 : 3}, minmax(0, 1fr))` }}>
                 {statTiles.map(([label, value, color]) => (
                   <div key={label} className="rounded-xl p-3 text-center" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
                     <div style={{ color: palette.textFaint, fontSize: "10.5px", marginBottom: "5px" }}>{label}</div>
@@ -18432,22 +18354,35 @@ if (activeTab === "community") {
               <div className="rounded-2xl p-3.5" style={{ background: palette.field, border: `1px solid ${palette.border}` }}>
                 <div style={{ color: palette.textMuted, fontSize: "11px", marginBottom: "7px" }}>Equity curve (across every group)</div>
                 {curvePoints ? (
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "110px", display: "block" }}>
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: isDesktop ? "220px" : "110px", display: "block" }}>
                     <polyline points={curvePoints} fill="none" stroke={palette.green} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
                   </svg>
                 ) : (
-                  <div className="flex items-center justify-center" style={{ height: "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
+                  <div className="flex items-center justify-center" style={{ height: isDesktop ? "220px" : "110px", color: palette.textFaint, fontSize: "11px" }}>No public curve available</div>
                 )}
               </div>
               {!isMe && !stats.statsPublic && <p className="text-xs mt-3" style={{ color: palette.textFaint }}>{p.username} hasn't shared public performance stats.</p>}
             </div>
           );
-          const tabBar = (
+          const tabBar = isDesktop ? (
+            <div className="flex justify-center" role="tablist" aria-label="Profile sections" style={{ gap: "64px", borderTop: `1px solid ${palette.border}` }}>
+              {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
+                const on = profileSubTab === id;
+                return (
+                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex items-center gap-2 ${TAP}`} style={{ position: "relative", height: "52px", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12px", fontWeight: 700, fontFamily: sans, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                    <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: "-1px", height: "2px", background: palette.text, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
+                    <Icon size={14} style={{ color: on ? palette.gold : palette.textFaint }} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
             <div className="flex" role="tablist" aria-label="Profile sections" style={{ borderTop: `1px solid ${palette.border}`, borderBottom: `1px solid ${palette.border}` }}>
               {[["posts", "Posts", LayoutGrid], ["stats", "Stats", TrendingUp]].map(([id, label, Icon]) => {
                 const on = profileSubTab === id;
                 return (
-                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: isDesktop ? "11.5px" : "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans, letterSpacing: isDesktop ? "0.06em" : "normal", textTransform: isDesktop ? "uppercase" : "none" }}>
+                  <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setProfileSubTab(id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 ${TAP}`} style={{ position: "relative", background: "none", border: "none", color: on ? palette.text : palette.textFaint, fontSize: "12.5px", fontWeight: on ? 700 : 600, fontFamily: sans }}>
                     <Icon size={15} style={{ color: on ? palette.gold : palette.textFaint }} />
                     {label}
                     <span aria-hidden="true" style={{ position: "absolute", left: "25%", right: "25%", bottom: "-1px", height: "2px", borderRadius: "2px 2px 0 0", background: palette.gold, opacity: on ? 1 : 0, transition: "opacity 0.15s" }} />
@@ -18458,13 +18393,17 @@ if (activeTab === "community") {
           );
 
           if (isDesktop) {
+            // Instagram-web layout: big ringed avatar left; username + actions, then
+            // "N posts · N followers · N following", then bio on the right. Trading stats
+            // sit underneath as circular "highlights", then the tab bar and a tight 3-column grid.
+            const hasAnyStat = statTiles.some(([, v]) => v !== "—");
             return shell(
-              <div style={{ maxHeight: "calc(100vh - 96px)", overflowY: "auto" }}>
-                <div className="flex items-start gap-10 px-10" style={{ paddingTop: "48px", paddingBottom: "28px" }}>
-                  {avatarBlock}
-                  <div className="min-w-0 flex-1" style={{ paddingTop: "6px" }}>
-                    <div className="flex items-center gap-4 flex-wrap">
-                      {nameRow}
+              <div style={{ paddingBottom: "64px" }}>
+                <div className="flex items-start" style={{ gap: "80px", padding: "44px 24px 36px 40px" }}>
+                  <div style={{ width: "160px", flexShrink: 0 }}>{avatarBlock}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span style={{ color: palette.text, fontSize: "22px", fontWeight: 600, marginRight: "6px" }}>{p.username}</span>
                       {actionButton}
                       {isMe && (
                         <button type="button" onClick={() => setProfileComposerOpen(true)} className={`flex items-center gap-1.5 ${TAP}`} style={pill(true, false)}>
@@ -18472,13 +18411,38 @@ if (activeTab === "community") {
                         </button>
                       )}
                     </div>
-                    <div className="mt-4">{statsRow}</div>
-                    <div style={{ maxWidth: "420px" }}>{bioBlock}</div>
+                    <div className="flex items-center gap-10" style={{ marginTop: "20px", fontSize: "15px", color: palette.textMuted }}>
+                      <span><span style={{ color: palette.text, fontWeight: 800 }}>{p.postCount || 0}</span> {p.postCount === 1 ? "post" : "posts"}</span>
+                      {[[p.followerCount, "followers", "followers"], [p.followingCount, "following", "following"]].map(([value, label, kind]) => (
+                        <button key={kind} type="button" onClick={() => openFollowList(p.username, kind)} className={TAP} style={{ background: "none", border: "none", padding: 0, fontSize: "15px", color: palette.textMuted, fontFamily: sans }}>
+                          <span style={{ color: palette.text, fontWeight: 800 }}>{value || 0}</span> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: "14px" }}>
+                      {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
+                      {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
+                    </div>
+                    <div style={{ maxWidth: "440px" }}>{bioBlock}</div>
                   </div>
                 </div>
+
+                {hasAnyStat && (
+                  <div className="flex items-start" style={{ gap: "36px", padding: "0 40px 44px" }}>
+                    {statTiles.map(([label, value, color]) => (
+                      <button key={label} type="button" onClick={() => setProfileSubTab("stats")} className={`flex flex-col items-center ${TAP}`} style={{ background: "none", border: "none", padding: 0, width: "84px" }} aria-label={`${label}: ${value}`}>
+                        <span className="flex items-center justify-center rounded-full" style={{ width: "84px", height: "84px", padding: "3px", background: `linear-gradient(135deg, ${palette.gold}66, ${palette.border})` }}>
+                          <span className="flex items-center justify-center rounded-full w-full h-full" style={{ background: palette.surface, color, fontSize: "17px", fontWeight: 800, fontFamily: display }}>{value}</span>
+                        </span>
+                        <span style={{ marginTop: "8px", color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {tabBar}
-                <div style={{ padding: "0 40px 40px" }}>
-                  {profileSubTab === "posts" ? postsGrid : statsPanel}
+                <div>
+                  {profileSubTab === "posts" ? <div style={{ paddingTop: "4px" }}>{postsGrid}</div> : statsPanel}
                 </div>
               </div>
             );
@@ -18571,44 +18535,82 @@ if (activeTab === "community") {
           </div>
         )}
 
-        {profilePostOpen && (
-          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.82)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
-            <div className="w-full rounded-2xl overflow-hidden" style={{ maxWidth: "420px", maxHeight: "86vh", display: "flex", flexDirection: "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}` }}>
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Avatar name={profilePostOpen.author} size={30} src={profileData?.avatar || avatarForAuthor(profilePostOpen.author)} />
-                  <div className="min-w-0">
-                    <div className="truncate" style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>{profilePostOpen.author}</div>
-                    <div style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>{feedTimeAgo(profilePostOpen.ts)}</div>
-                  </div>
+        {profilePostOpen && (() => {
+          const po = profilePostOpen;
+          const poPositive = po.pnl && !po.pnl.trim().startsWith("-");
+          const poLiked = likedProfilePostIds.includes(po.id);
+          const canDeletePost = po.author === communityUsername;
+          const split = isDesktop && !!po.image;
+          const header = (
+            <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${palette.border}` }}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar name={po.author} size={32} src={profileData?.avatar || avatarForAuthor(po.author)} />
+                <div className="min-w-0">
+                  <div className="truncate" style={{ color: palette.text, fontSize: "13px", fontWeight: 700 }}>{po.author}</div>
+                  <div style={{ color: palette.textFaint, fontSize: "10.5px", fontFamily: mono }}>{feedTimeAgo(po.ts)}</div>
                 </div>
-                <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", background: palette.field, color: palette.textMuted }} aria-label="Close post">
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {canDeletePost && (
+                  <button type="button" onClick={() => deleteProfilePost(po.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: palette.field, color: palette.textMuted }} aria-label="Delete post">
+                    <Trash2 size={13} />
+                  </button>
+                )}
+                <button type="button" onClick={() => setProfilePostOpen(null)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "28px", height: "28px", background: palette.field, color: palette.textMuted }} aria-label="Close post">
                   <X size={13} />
                 </button>
               </div>
-              <div style={{ overflowY: "auto" }}>
-                {profilePostOpen.image && <img src={profilePostOpen.image} alt="Post attachment" style={{ width: "100%", display: "block", maxHeight: "60vh", objectFit: "contain", background: palette.letterbox }} />}
-                <div className="p-4">
-                  {profilePostOpen.text && <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{profilePostOpen.text}</p>}
-                  <div className="flex items-center gap-2 mt-3">
-                    {profilePostOpen.pnl && (
-                      <span style={{ background: !profilePostOpen.pnl.trim().startsWith("-") ? `${palette.green}1c` : `${palette.red}1c`, color: !profilePostOpen.pnl.trim().startsWith("-") ? palette.green : palette.red, fontSize: "11.5px", fontWeight: 700, padding: "4px 11px", borderRadius: "999px", fontFamily: mono }}>{profilePostOpen.pnl}</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => likeProfilePost(profilePostOpen.id)}
-                      disabled={likedProfilePostIds.includes(profilePostOpen.id)}
-                      className={`flex items-center gap-1 ${TAP}`}
-                      style={{ background: "none", border: "none", padding: 0, color: likedProfilePostIds.includes(profilePostOpen.id) ? palette.gold : palette.textFaint, fontSize: "12px", fontFamily: mono }}
-                    >
-                      👍 {profilePostOpen.likeCount || 0}
-                    </button>
-                  </div>
-                </div>
+            </div>
+          );
+          const caption = po.text ? <p style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{po.text}</p> : null;
+          const actions = (
+            <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderTop: split ? `1px solid ${palette.border}` : "none" }}>
+              <button
+                type="button"
+                onClick={() => likeProfilePost(po.id)}
+                disabled={poLiked}
+                className={`flex items-center gap-1.5 ${TAP}`}
+                style={{ background: poLiked ? `${palette.gold}14` : palette.field, border: `1px solid ${poLiked ? `${palette.gold}44` : palette.border}`, borderRadius: "999px", padding: "5px 12px", color: poLiked ? palette.gold : palette.textMuted, fontSize: "12.5px", fontFamily: mono, fontWeight: 700 }}
+              >
+                👍 {po.likeCount || 0}
+              </button>
+              {po.pnl && (
+                <span style={{ background: poPositive ? `${palette.green}1c` : `${palette.red}1c`, color: poPositive ? palette.green : palette.red, fontSize: "11.5px", fontWeight: 700, padding: "5px 12px", borderRadius: "999px", fontFamily: mono }}>{po.pnl}</span>
+              )}
+            </div>
+          );
+          return (
+            <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.82)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 120 }} onClick={() => setProfilePostOpen(null)}>
+              <div
+                className="w-full rounded-2xl overflow-hidden"
+                style={{ maxWidth: split ? "1040px" : "460px", height: split ? "min(86vh, 720px)" : "auto", maxHeight: "90vh", display: "flex", flexDirection: split ? "row" : "column", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {split ? (
+                  <>
+                    <div className="flex items-center justify-center" style={{ flex: 1, minWidth: 0, background: palette.letterbox }}>
+                      <img src={po.image} alt="Post attachment" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
+                    </div>
+                    <div className="flex flex-col" style={{ width: "360px", flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${palette.border}` }}>
+                      {header}
+                      <div className="flex-1 p-4" style={{ overflowY: "auto", minHeight: 0 }}>{caption}</div>
+                      {actions}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {header}
+                    <div style={{ overflowY: "auto" }}>
+                      {po.image && <img src={po.image} alt="Post attachment" style={{ width: "100%", display: "block", maxHeight: "60vh", objectFit: "contain", background: palette.letterbox }} />}
+                      {caption && <div className="px-4 pt-4">{caption}</div>}
+                      {actions}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {profileComposerOpen && (
           <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(5,7,12,0.82)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 122 }} onClick={() => !profilePostSubmitting && setProfileComposerOpen(false)}>

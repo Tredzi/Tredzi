@@ -17420,7 +17420,9 @@ if (activeTab === "community") {
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5" style={{ marginTop: "1px" }}>
-                      <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />
+                      <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }} aria-label={`Open ${m.author}'s profile`}>
+                        <Avatar name={m.author} size={14} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />
+                      </button>
                       <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.textMuted, fontSize: "10.5px", fontWeight: 600, fontFamily: sans, background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       {authorRole && (
                         <span style={{ color: palette.textFaint, fontSize: "9px", fontFamily: mono, border: `1px solid ${palette.border}`, borderRadius: "4px", padding: "0 4px" }}>
@@ -18349,7 +18351,11 @@ if (activeTab === "community") {
                     )}
                     {!isMe && (
                       <span style={{ width: "28px", flexShrink: 0 }}>
-                        {!grouped && <Avatar name={m.author} size={28} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />}
+                        {!grouped && (
+                          <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }} aria-label={`Open ${m.author}'s profile`}>
+                            <Avatar name={m.author} size={28} src={avatarForAuthor(m.author)} online={isAuthorOnline(m.author)} />
+                          </button>
+                        )}
                       </span>
                     )}
                     <div style={{ maxWidth: isDesktop ? "62%" : "78%" }}>

@@ -6765,7 +6765,6 @@ useEffect(() => {
         body: JSON.stringify({ currentPassword: currentPasswordInput, newPassword: newPasswordInput }),
       });
       setChangePasswordMsg("Password updated.");
-      setCommunityPassword(newPasswordInput);
       setCurrentPasswordInput("");
       setNewPasswordInput("");
       setShowChangePassword(false);
@@ -6854,7 +6853,6 @@ useEffect(() => {
 
   useEffect(() => {
     if (session?.token) fetchAccountProfile(session.token);
-    else { setCommunityPassword(""); setShowPasswordPlain(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.token]);
 

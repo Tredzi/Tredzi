@@ -20117,9 +20117,7 @@ if (activeTab === "community") {
           return (
 <main
   key={activeTab}
-  // Nav-hide-on-scroll is handled locally by the Community "Global Feed" panel's
-  // own scroll container (see renderGlobalFeed) — intentionally not wired up here
-  // so other tabs don't get the vanish-on-scroll behavior.
+  onScroll={communityFullBleed ? undefined : handleMobileNavScroll}
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "" : "px-0")
@@ -20136,7 +20134,7 @@ if (activeTab === "community") {
                 paddingLeft: communityFullBleed && isDesktop ? "12px" : undefined,
                 paddingRight: communityFullBleed && isDesktop ? "12px" : undefined,
                 paddingTop: communityFullBleed ? (isDesktop ? "2px" : 0) : undefined,
-                paddingBottom: communityFullBleed ? (isDesktop ? "6px" : 0) : (!isDesktop ? MOBILE_NAV_SPACE : undefined),
+                paddingBottom: communityFullBleed ? (isDesktop ? "6px" : MOBILE_NAV_SPACE) : (!isDesktop ? MOBILE_NAV_SPACE : undefined),
               }}
             >
               {communityFullBleed || !isDesktop ? (
@@ -20423,14 +20421,15 @@ if (activeTab === "community") {
 
       {moreMenuOpen && (
         <div
-          className="fixed inset-0 flex items-end justify-center z-50"
-          style={{ background: "rgba(5,7,12,0.75)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
+          className="fixed inset-0 flex items-end justify-center"
+          style={{ zIndex: 70, background: "rgba(5,7,12,0.75)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
           onClick={() => setMoreMenuOpen(false)}
         >
           <div
-            className="w-full sheet-in"
+            className="w-full sheet-in flex flex-col"
             style={{
               maxWidth: "440px",
+              maxHeight: "calc(80vh - env(safe-area-inset-bottom, 0px))",
               background: palette.surface,
               border: `1px solid ${palette.border}`,
               borderTopLeftRadius: "22px",
@@ -20440,10 +20439,10 @@ if (activeTab === "community") {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-center pt-3 pb-1">
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
               <span style={{ width: "36px", height: "4px", borderRadius: "999px", background: palette.border }} />
             </div>
-            <div className="flex items-center justify-between px-5 pt-2 pb-3">
+            <div className="flex items-center justify-between px-5 pt-2 pb-3 flex-shrink-0">
               <span style={{ fontFamily: display, fontSize: "15px", fontWeight: 700, color: palette.text }}>
                 More
               </span>
@@ -20457,7 +20456,7 @@ if (activeTab === "community") {
                 <X size={15} />
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2 px-4 pb-6">
+            <div className="grid grid-cols-4 gap-2 px-4 pb-6" style={{ overflowY: "auto" }}>
               {mobileNavOverflowTabs.map((tab) => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id;

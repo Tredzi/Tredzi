@@ -4585,6 +4585,10 @@ const [communitySearchResults, setCommunitySearchResults] = useState(null);
 const [globalFeed, setGlobalFeed] = useState([]);
 const [globalFeedLoaded, setGlobalFeedLoaded] = useState(false);
 const [communityMobileFeedOpen, setCommunityMobileFeedOpen] = useState(false);
+const [mobileNavHidden, setMobileNavHidden] = useState(false);
+useEffect(() => { setMobileNavHidden(false); }, [activeTab]);
+const lastNavScrollYRef = useRef(0);
+const [lightboxPost, setLightboxPost] = useState(null); // global-feed post being viewed full-screen, or null
 const [globalFeedPending, setGlobalFeedPending] = useState([]);
 const [globalFeedNewCount, setGlobalFeedNewCount] = useState(0);
 const [globalFeedNext, setGlobalFeedNext] = useState(null);
@@ -7428,7 +7432,7 @@ if (!isSignal && !communityMsgText.trim()) return;
           <RotateCcw size={15} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto relative" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto relative" style={{ minHeight: 0, paddingBottom: !isDesktop ? MOBILE_NAV_SPACE : undefined }} onScroll={handleMobileNavScroll}>
         {globalFeedNewCount > 0 && (
           <div className="sticky top-2 z-10 flex justify-center pointer-events-none">
             <button
@@ -7488,7 +7492,11 @@ if (!isSignal && !communityMsgText.trim()) return;
                       {mine && <button type="button" onClick={() => deleteGlobalFeedPost(post.id)} className={`flex items-center justify-center rounded-full ml-auto flex-shrink-0 ${TAP}`} style={{ width: "26px", height: "26px", color: palette.textFaint }} aria-label="Delete post"><Trash2 size={13} /></button>}
                     </div>
                     {post.text && <div className="mt-0.5" style={{ color: palette.text, fontSize: "14.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.text}</div>}
-                    {post.image && <img src={post.image} alt="Community post" className="w-full mt-2.5 rounded-2xl" style={{ maxHeight: "440px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
+                    {post.image && (
+                      <button type="button" onClick={() => setLightboxPost(post)} className={`block w-full mt-2.5 ${TAP}`} style={{ background: "none", border: "none", padding: 0 }} aria-label="Open photo">
+                        <img src={post.image} alt="Community post" className="w-full rounded-2xl" style={{ maxHeight: "440px", objectFit: "cover" }} />
+                      </button>
+                    )}
                     <div className="flex items-center gap-6 mt-2 -ml-2">
                       <button type="button" onClick={() => likeGlobalFeedPost(post.id)} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full ${TAP}`} style={{ color: post.liked ? palette.red : palette.textFaint, background: "transparent" }}>
                         <Heart size={16} fill={post.liked ? "currentColor" : "none"} /><span style={{ fontSize: "12px", fontWeight: 700 }}>{post.likeCount || 0}</span>
@@ -9625,6 +9633,20 @@ const persistNotepadNotes = async (next) => {
     } catch (err) {
       setNotepadMsg("Couldn't create the file, please try again.");
     }
+  };
+
+  // Scroll-aware bottom nav (mobile only): hides on scroll-down, reappears on
+  // scroll-up or near the top — matches the Facebook / X app-shell behavior.
+  const MOBILE_NAV_SPACE = "calc(60px + env(safe-area-inset-bottom, 0px))";
+  const handleMobileNavScroll = (e) => {
+    if (isDesktop) return;
+    const y = e.currentTarget.scrollTop;
+    const last = lastNavScrollYRef.current;
+    const delta = y - last;
+    if (y < 24) setMobileNavHidden(false);
+    else if (delta > 6) setMobileNavHidden(true);
+    else if (delta < -6) setMobileNavHidden(false);
+    lastNavScrollYRef.current = y;
   };
 
 const hiddenTabIds = settings.hiddenTabs || [];
@@ -19069,6 +19091,38 @@ if (activeTab === "community") {
           );
         })()}
 
+        {lightboxPost && (() => {
+          const po = globalFeed.find((p) => p.id === lightboxPost.id) || lightboxPost;
+          return (
+            <div className="fixed inset-0 flex flex-col" style={{ background: "#000", zIndex: 150 }} onClick={() => setLightboxPost(null)}>
+              <div className="flex items-center gap-3 px-4 flex-shrink-0" style={{ height: "52px", paddingTop: "env(safe-area-inset-top, 0px)" }} onClick={(e) => e.stopPropagation()}>
+                <button type="button" onClick={() => setLightboxPost(null)} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", color: "#FFFFFF" }} aria-label="Close">
+                  <X size={20} />
+                </button>
+                <Avatar name={po.author} size={30} src={po.avatar || avatarForAuthor(po.author)} />
+                <div className="flex-1 min-w-0">
+                  <div style={{ color: "#FFFFFF", fontSize: "13px", fontWeight: 800 }}>{po.author}</div>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>{feedTimeAgo(po.ts)}</div>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <img src={po.image} alt="Post" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              </div>
+              <div className="flex-shrink-0 px-4 pt-3" style={{ paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
+                {po.text && <div style={{ color: "#FFFFFF", fontSize: "14px", lineHeight: 1.5, marginBottom: "10px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{po.text}</div>}
+                <div className="flex items-center gap-6 -ml-2">
+                  <button type="button" onClick={() => likeGlobalFeedPost(po.id)} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full ${TAP}`} style={{ background: "none", border: "none", color: po.liked ? palette.red : "#FFFFFF" }}>
+                    <Heart size={20} fill={po.liked ? "currentColor" : "none"} /><span style={{ fontSize: "13px", fontWeight: 700 }}>{po.likeCount || 0}</span>
+                  </button>
+                  <button type="button" onClick={() => { setLightboxPost(null); openGlobalFeedComments(po.id); }} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full ${TAP}`} style={{ background: "none", border: "none", color: "#FFFFFF" }}>
+                    <MessageCircle size={20} /><span style={{ fontSize: "13px", fontWeight: 700 }}>{po.commentCount || 0}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {profilePostOpen && (() => {
           const po = profilePostOpen;
           const canDeletePost = po.author === communityUsername;
@@ -20057,6 +20111,7 @@ if (activeTab === "community") {
           return (
 <main
   key={activeTab}
+  onScroll={communityFullBleed ? undefined : handleMobileNavScroll}
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "" : "px-0")
@@ -20073,7 +20128,7 @@ if (activeTab === "community") {
                 paddingLeft: communityFullBleed && isDesktop ? "12px" : undefined,
                 paddingRight: communityFullBleed && isDesktop ? "12px" : undefined,
                 paddingTop: communityFullBleed ? (isDesktop ? "2px" : 0) : undefined,
-                paddingBottom: communityFullBleed ? (isDesktop ? "6px" : 0) : undefined,
+                paddingBottom: communityFullBleed ? (isDesktop ? "6px" : 0) : (!isDesktop ? MOBILE_NAV_SPACE : undefined),
               }}
             >
               {communityFullBleed || !isDesktop ? (
@@ -20093,19 +20148,26 @@ if (activeTab === "community") {
           className={isDesktop ? "flex flex-col order-first" : "flex items-stretch"}
           style={{
             flexShrink: 0,
-            borderTop: isDesktop ? "none" : `1px solid ${palette.border}`,
-            borderRight: isDesktop ? `1px solid ${palette.border}` : "none",
+            border: "none",
             background: isDesktop
               ? `linear-gradient(180deg, ${palette.surface} 0%, ${palette.bg} 100%)`
-              : palette.surface,
-            boxShadow: palette.navShadow,
+              : `${palette.surface}F2`,
+            backdropFilter: isDesktop ? undefined : "blur(10px)",
+            WebkitBackdropFilter: isDesktop ? undefined : "blur(10px)",
+            boxShadow: isDesktop ? palette.navShadow : "0 -6px 18px rgba(0,0,0,0.18)",
             paddingBottom: isDesktop ? "20px" : "env(safe-area-inset-bottom)",
             paddingTop: isDesktop ? 0 : 0,
             width: isDesktop ? "252px" : "auto",
             height: isDesktop ? "100%" : "auto",
             overflowY: isDesktop ? "auto" : "visible",
             overflowX: "hidden",
-            transition: THEME_TRANSITION,
+            position: isDesktop ? "static" : "fixed",
+            left: isDesktop ? "auto" : 0,
+            right: isDesktop ? "auto" : 0,
+            bottom: isDesktop ? "auto" : 0,
+            zIndex: isDesktop ? "auto" : 60,
+            transform: isDesktop ? "none" : mobileNavHidden ? "translateY(100%)" : "translateY(0)",
+            transition: `${THEME_TRANSITION}, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)`,
           }}
         >
           <div className={isDesktop ? "flex flex-col px-4 pt-6 gap-1" : "flex flex-1 items-stretch"}>

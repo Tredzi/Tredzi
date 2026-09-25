@@ -4598,6 +4598,7 @@ const [globalFeedComments, setGlobalFeedComments] = useState({});
 const [globalFeedCommentsOpenId, setGlobalFeedCommentsOpenId] = useState(null);
 const [globalFeedCommentsLoading, setGlobalFeedCommentsLoading] = useState({});
 const [globalFeedCommentDrafts, setGlobalFeedCommentDrafts] = useState({});
+const [groupJoinRequests, setGroupJoinRequests] = useState([]);
 const [groupJoinRequestsLoaded, setGroupJoinRequestsLoaded] = useState(false);
 const [newGroupPublic, setNewGroupPublic] = useState(false);
 const [newGroupTags, setNewGroupTags] = useState("");
@@ -19619,17 +19620,9 @@ if (activeTab === "community") {
         )}
       </div>
       <div className="px-3.5 pb-3">
-        <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trending</div>
-        <div className="space-y-1">
-          {[["#XAUUSD", "XAUUSD"], ["#Gold", "Gold"], ["#OrderFlow", "OrderFlow"], ["#VolumeProfile", "VolumeProfile"]].map(([label, q]) => (
-            <button key={q} type="button" onClick={() => searchCommunity(q)} className={`w-full text-left rounded-xl px-3 py-2.5 ${TAP}`} style={{ background: "transparent", color: palette.textMuted, fontSize: "11.5px" }}>{label}</button>
-          ))}
-        </div>
-      </div>
-      <div className="px-3.5 pb-3">
         <div className="px-1 mb-2" style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Explore</div>
         <div className="space-y-1">
-          {[["Trade Ideas", "trade ideas"], ["Charts", "charts"], ["Education", "education"], ["Journal", "journal"]].map(([label, q]) => (
+          {[["XAUUSD", "XAUUSD"], ["Gold", "Gold"], ["OrderFlow", "OrderFlow"], ["VolumeProfile", "VolumeProfile"], ["Trade Ideas", "trade ideas"], ["Charts", "charts"], ["Education", "education"], ["Journal", "journal"]].map(([label, q]) => (
             <button key={label} type="button" onClick={() => searchCommunity(q)} className={`w-full text-left rounded-xl px-3 py-2.5 ${TAP}`} style={{ background: "transparent", color: palette.textMuted, fontSize: "11.5px" }}>{label}</button>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -4411,8 +4411,6 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [changePasswordError, setChangePasswordError] = useState("");
   const [changePasswordMsg, setChangePasswordMsg] = useState("");
   const [changePasswordBusy, setChangePasswordBusy] = useState(false);
-  const [communityPassword, setCommunityPassword] = useState("");
-  const [showPasswordPlain, setShowPasswordPlain] = useState(false);
   const [accountProfileError, setAccountProfileError] = useState("");
 
   // --- Onboarding carousel state ---
@@ -4587,6 +4585,8 @@ const [communitySearchResults, setCommunitySearchResults] = useState(null);
 const [globalFeed, setGlobalFeed] = useState([]);
 const [globalFeedLoaded, setGlobalFeedLoaded] = useState(false);
 const [communityMobileFeedOpen, setCommunityMobileFeedOpen] = useState(false);
+const [globalFeedPending, setGlobalFeedPending] = useState([]);
+const [globalFeedNewCount, setGlobalFeedNewCount] = useState(0);
 const [globalFeedNext, setGlobalFeedNext] = useState(null);
 const [globalFeedComposerOpen, setGlobalFeedComposerOpen] = useState(false);
 const [globalPostText, setGlobalPostText] = useState("");
@@ -6818,7 +6818,6 @@ useEffect(() => {
       // guessing one from the email — guessed names were never checked for
       // uniqueness against other accounts.
       await persistCommunityUsername(data.username || "");
-      setCommunityPassword(data.password || authPassword);
       if (data.avatar) {
         setCommunityAvatar(data.avatar);
         try { await window.storage.set(COMMUNITY_AVATAR_KEY, data.avatar, false); } catch (err) {}
@@ -6846,7 +6845,6 @@ useEffect(() => {
         setCommunityAvatar(data.avatar);
         try { await window.storage.set(COMMUNITY_AVATAR_KEY, data.avatar, false); } catch (err) {}
       }
-      if (data.password) setCommunityPassword(data.password);
     } catch (err) {
       // Most likely cause: the backend hasn't been redeployed with the
       // /auth/me route (and migration_profile.sql) yet.
@@ -7236,11 +7234,50 @@ if (!isSignal && !communityMsgText.trim()) return;
       setGlobalFeed((cur) => before ? [...cur, ...(data.posts || [])] : (data.posts || []));
       setGlobalFeedNext(data.nextCursor || null);
       setGlobalFeedLoaded(true);
+      setGlobalFeedNewCount(0);
     } catch (err) {
       setGlobalFeedLoaded(true);
       setCommunityApiError(err.message || "Couldn't load the global feed.");
     }
   };
+
+  // Live-update poll: while the feed is open, quietly check for posts newer than what's
+  // on screen (from other people — your own posts already appear instantly on submit).
+  // Rather than yanking the list around under the person's thumb, new posts wait behind
+  // a "New posts" pill, same pattern X and Facebook use.
+  const pollGlobalFeedForNew = async () => {
+    if (!session?.token || !globalFeedLoaded) return;
+    const newest = globalFeed[0]?.ts;
+    if (!newest) return;
+    try {
+      const data = await communityApi(`/feed?since=${newest}`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      const fresh = (data.posts || []).filter((p) => p.author !== communityUsername && !globalFeed.some((g) => g.id === p.id));
+      if (fresh.length > 0) {
+        setGlobalFeedPending((cur) => {
+          const merged = [...fresh, ...cur.filter((p) => !fresh.some((f) => f.id === p.id))];
+          setGlobalFeedNewCount(merged.length);
+          return merged;
+        });
+      }
+    } catch (err) {
+      // Silent — this is a background poll, not a user-initiated action.
+    }
+  };
+
+  const revealPendingGlobalPosts = () => {
+    setGlobalFeed((cur) => [...globalFeedPending, ...cur]);
+    setGlobalFeedPending([]);
+    setGlobalFeedNewCount(0);
+  };
+
+  useEffect(() => {
+    const feedIsOpen = activeTab === "community" && communityLobbyTab === "global" && !activeGroupId && (isDesktop || communityMobileFeedOpen);
+    if (!feedIsOpen || !session?.token) return;
+    const interval = setInterval(pollGlobalFeedForNew, 12000);
+    return () => clearInterval(interval);
+  }, [activeTab, communityLobbyTab, activeGroupId, isDesktop, communityMobileFeedOpen, session?.token, globalFeed, globalFeedLoaded, globalFeedPending]);
 
   // Desktop opens on the Global Feed, so fetch it as soon as the Community tab is shown.
   useEffect(() => {
@@ -7392,7 +7429,19 @@ if (!isSignal && !communityMsgText.trim()) return;
           <RotateCcw size={15} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto relative" style={{ minHeight: 0 }}>
+        {globalFeedNewCount > 0 && (
+          <div className="sticky top-2 z-10 flex justify-center pointer-events-none">
+            <button
+              type="button"
+              onClick={revealPendingGlobalPosts}
+              className={`pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full ${TAP}`}
+              style={{ background: palette.gold, color: palette.letterbox, fontSize: "12.5px", fontWeight: 800, boxShadow: `0 4px 14px ${palette.gold}55` }}
+            >
+              <ChevronUp size={14} />{globalFeedNewCount === 1 ? "1 new post" : `${globalFeedNewCount} new posts`}
+            </button>
+          </div>
+        )}
         <div className="max-w-xl mx-auto">
           <div className="flex items-start gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
             <Avatar name={communityUsername || "?"} size={40} src={communityAvatar || undefined} />
@@ -7431,7 +7480,7 @@ if (!isSignal && !communityMsgText.trim()) return;
               {globalFeed.map((post) => {
                 const mine = post.author === communityUsername;
                 const comments = globalFeedComments[post.id] || [];
-                return <article key={post.id} className="flex items-start gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                return <article key={post.id} className="flex items-start gap-3 px-4 py-3 transition-colors" style={{ borderBottom: `1px solid ${palette.border}` }} onMouseEnter={(e) => { e.currentTarget.style.background = palette.field; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                   <button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={`flex-shrink-0 ${TAP}`} style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }}><Avatar name={post.author} size={40} src={post.avatar || avatarForAuthor(post.author)} /></button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -19679,7 +19728,7 @@ if (activeTab === "community") {
     body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}><button type="button" onClick={() => { setCommunityLobbyTab("mine"); }} className={`flex items-center gap-1.5 px-3 py-2.5 ${TAP}`} style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}><ChevronLeft size={14} />Groups</button><div className="flex-1 min-h-0">{renderCommunitySearch()}</div></div>;
   } else if (communityMobileFeedOpen && !activeGroupId) {
     // ---------- MOBILE GLOBAL FEED ----------
-    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}><button type="button" onClick={() => { setCommunityMobileFeedOpen(false); }} className={`flex items-center gap-1.5 px-3 py-2.5 ${TAP}`} style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}><ChevronLeft size={14} />Groups</button><div className="flex-1 min-h-0">{renderGlobalFeed()}</div></div>;
+    body = <div className="flex flex-col flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>{renderGlobalFeed()}</div>;
   } else if (!activeGroupId) {
     // ---------- MOBILE GROUP LOBBY ----------
     const joined = myGroups;
@@ -20520,57 +20569,19 @@ if (activeTab === "community") {
               className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5"
               style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
             >
+              <span style={{ color: palette.text, fontFamily: mono, fontSize: "13px", letterSpacing: "0.1em" }}>••••••••</span>
               <button
                 type="button"
-                onClick={() => setShowPasswordPlain((v) => !v)}
-                className={`flex-1 text-left ${TAP}`}
-                style={{ color: palette.text, fontFamily: mono, fontSize: "13px", letterSpacing: showPasswordPlain ? "normal" : "0.1em" }}
-                aria-label={showPasswordPlain ? "Hide password" : "Show password"}
+                onClick={() => { setShowChangePassword((v) => !v); setChangePasswordError(""); setChangePasswordMsg(""); }}
+                className={TAP}
+                style={{ color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}
               >
-                {communityPassword
-                  ? (showPasswordPlain ? communityPassword : "•".repeat(Math.max(8, communityPassword.length)))
-                  : "••••••••"}
+                {showChangePassword ? "Cancel" : "Change"}
               </button>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {communityPassword && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordPlain((v) => !v)}
-                    className={TAP}
-                    style={{ color: palette.textFaint, fontFamily: mono, fontSize: "11px" }}
-                  >
-                    {showPasswordPlain ? "Hide" : "Show"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => { setShowChangePassword((v) => !v); setChangePasswordError(""); setChangePasswordMsg(""); }}
-                  className={TAP}
-                  style={{ color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}
-                >
-                  {showChangePassword ? "Cancel" : "Change"}
-                </button>
-              </div>
             </div>
-            {!communityPassword && (
-              <p className="text-xs mt-1.5" style={{ color: accountProfileError ? palette.red : palette.textFaint }}>
-                {accountProfileError ? (
-                  <>
-                    {accountProfileError}{" "}
-                    <button
-                      type="button"
-                      onClick={() => fetchAccountProfile(session?.token)}
-                      className={TAP}
-                      style={{ color: palette.gold, fontFamily: mono, fontWeight: 700, textDecoration: "underline" }}
-                    >
-                      Retry
-                    </button>
-                  </>
-                ) : (
-                  "Loading…"
-                )}
-              </p>
-            )}
+            <p className="text-xs mt-1.5" style={{ color: palette.textFaint }}>
+              For your security, we never store or show your actual password — only you know it.
+            </p>
 
             {showChangePassword && (
               <div className="rounded-xl p-3 mt-2" style={{ background: palette.field, border: `1px solid ${palette.gold}55` }}>

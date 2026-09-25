@@ -20117,7 +20117,9 @@ if (activeTab === "community") {
           return (
 <main
   key={activeTab}
-  onScroll={communityFullBleed ? undefined : handleMobileNavScroll}
+  // Nav-hide-on-scroll is handled locally by the Community "Global Feed" panel's
+  // own scroll container (see renderGlobalFeed) — intentionally not wired up here
+  // so other tabs don't get the vanish-on-scroll behavior.
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "" : "px-0")

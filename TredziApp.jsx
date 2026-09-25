@@ -7269,18 +7269,33 @@ if (!isSignal && !communityMsgText.trim()) return;
 
   const createGlobalFeedPost = async () => {
     if (!session?.token || globalPostSubmitting) return;
-    if (!globalPostText.trim() && !globalPostImage) return;
+    const text = globalPostText.trim();
+    const image = globalPostImage;
+    if (!text && !image) return;
     setGlobalPostSubmitting(true);
     try {
-      await communityApi("/feed", {
+      const data = await communityApi("/feed", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ text: globalPostText.trim(), image: globalPostImage }),
+        body: JSON.stringify({ text, image }),
       });
+      // Drop it straight into the feed instead of waiting on a refetch, so it appears instantly.
+      const optimisticPost = {
+        id: data.id,
+        author: communityUsername,
+        avatar: communityAvatar || undefined,
+        text: text || null,
+        image: image || null,
+        likeCount: 0,
+        liked: false,
+        commentCount: 0,
+        ts: data.ts || Date.now(),
+      };
+      setGlobalFeed((cur) => [optimisticPost, ...cur]);
+      setGlobalFeedLoaded(true);
       setGlobalPostText("");
       setGlobalPostImage(null);
       setGlobalFeedComposerOpen(false);
-      await loadGlobalFeed();
     } catch (err) {
       setCommunityApiError(err.message || "Couldn't share that.");
     } finally {
@@ -7364,47 +7379,84 @@ if (!isSignal && !communityMsgText.trim()) return;
 
   const renderGlobalFeed = () => (
     <div className="flex flex-col h-full" style={{ background: palette.bg }}>
-      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${palette.border}`, background: palette.surface }}>
-        <div>
-          <div className="flex items-center gap-2">
-            <Newspaper size={15} style={{ color: palette.gold }} />
-            <span style={{ fontFamily: display, fontSize: "16px", fontWeight: 800, color: palette.text }}>Global Feed</span>
-          </div>
-          <div style={{ color: palette.textFaint, fontSize: "10px", marginTop: "2px" }}>Posts from the Tredzi community</div>
+      <div className="sticky top-0 z-10 flex items-center gap-3 px-4" style={{ height: "52px", borderBottom: `1px solid ${palette.border}`, background: `${palette.bg}F2`, backdropFilter: "blur(8px)" }}>
+        {!isDesktop && (
+          <button type="button" onClick={() => setCommunityMobileFeedOpen(false)} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", color: palette.text, marginLeft: "-6px" }} aria-label="Back to groups">
+            <ChevronLeft size={19} />
+          </button>
+        )}
+        <div className="flex-1 min-w-0">
+          <div style={{ fontFamily: display, fontSize: "16.5px", fontWeight: 800, color: palette.text, letterSpacing: "-0.01em" }}>Global Feed</div>
         </div>
-        <button type="button" onClick={() => loadGlobalFeed()} className={`px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontFamily: mono, fontSize: "10px" }}>Refresh</button>
+        <button type="button" onClick={() => loadGlobalFeed()} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "32px", height: "32px", color: palette.textMuted }} aria-label="Refresh feed">
+          <RotateCcw size={15} />
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ minHeight: 0 }}>
-        <div className="max-w-2xl mx-auto">
-          <div className="rounded-2xl p-3.5 mb-4" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-            {!globalFeedComposerOpen ? (
-              <button type="button" onClick={() => setGlobalFeedComposerOpen(true)} className={`w-full text-left rounded-xl px-3.5 py-3 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textFaint, fontSize: "12.5px" }}>Share something with everyone on Tredzi…</button>
-            ) : (
-              <>
-                <textarea value={globalPostText} onChange={(e) => setGlobalPostText(e.target.value)} placeholder="What's happening in the market?" rows={3} className="w-full bg-transparent outline-none mb-2" style={{ color: palette.text, fontSize: "13px", resize: "none" }} />
-                {globalPostImage && <div className="relative inline-block mb-2"><img src={globalPostImage} alt="Post attachment" className="rounded-lg" style={{ width: "112px", height: "112px", objectFit: "cover", border: `1px solid ${palette.border}` }} /><button type="button" onClick={() => setGlobalPostImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "18px", height: "18px", background: palette.red, color: "#FFFFFF" }}><X size={11} /></button></div>}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2"><input ref={globalPostImageInputRef} type="file" accept="image/*" onChange={handleGlobalPostImageChange} className="hidden" /><button type="button" onClick={() => globalPostImageInputRef.current && globalPostImageInputRef.current.click()} disabled={globalPostImageUploading} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: "11px", fontFamily: mono }}><Camera size={13} />{globalPostImageUploading ? "Attaching…" : "Photo"}</button><button type="button" onClick={() => { setGlobalFeedComposerOpen(false); setGlobalPostText(""); setGlobalPostImage(null); }} className={`px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: "transparent", border: `1px solid ${palette.border}`, color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>Cancel</button></div>
-                  <button type="button" onClick={createGlobalFeedPost} disabled={(!globalPostText.trim() && !globalPostImage) || globalPostSubmitting} className={`px-4 py-1.5 rounded-lg ${TAP}`} style={{ background: (globalPostText.trim() || globalPostImage) ? palette.gold : palette.border, color: (globalPostText.trim() || globalPostImage) ? palette.letterbox : palette.textFaint, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}>{globalPostSubmitting ? "Posting…" : "Post"}</button>
-                </div>
-              </>
-            )}
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+        <div className="max-w-xl mx-auto">
+          <div className="flex items-start gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
+            <Avatar name={communityUsername || "?"} size={40} src={communityAvatar || undefined} />
+            <div className="flex-1 min-w-0 pt-1.5">
+              {!globalFeedComposerOpen ? (
+                <button type="button" onClick={() => setGlobalFeedComposerOpen(true)} className={`w-full text-left ${TAP}`} style={{ background: "none", border: "none", padding: 0, color: palette.textFaint, fontSize: "15px" }}>What's happening in the market?</button>
+              ) : (
+                <>
+                  <textarea autoFocus value={globalPostText} onChange={(e) => setGlobalPostText(e.target.value)} placeholder="What's happening in the market?" rows={3} className="w-full bg-transparent outline-none mb-2" style={{ color: palette.text, fontSize: "15px", resize: "none" }} />
+                  {globalPostImage && <div className="relative inline-block mb-2.5"><img src={globalPostImage} alt="Post attachment" className="rounded-xl" style={{ width: "120px", height: "120px", objectFit: "cover", border: `1px solid ${palette.border}` }} /><button type="button" onClick={() => setGlobalPostImage(null)} className={`absolute flex items-center justify-center rounded-full ${TAP}`} style={{ top: "-6px", right: "-6px", width: "20px", height: "20px", background: palette.red, color: "#FFFFFF" }}><X size={12} /></button></div>}
+                  <div className="flex items-center justify-between gap-2 pt-2" style={{ borderTop: `1px solid ${palette.border}` }}>
+                    <div className="flex items-center gap-1">
+                      <input ref={globalPostImageInputRef} type="file" accept="image/*" onChange={handleGlobalPostImageChange} className="hidden" />
+                      <button type="button" onClick={() => globalPostImageInputRef.current && globalPostImageInputRef.current.click()} disabled={globalPostImageUploading} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "34px", height: "34px", color: palette.gold }} aria-label="Attach photo"><Camera size={17} /></button>
+                      <button type="button" onClick={() => { setGlobalFeedComposerOpen(false); setGlobalPostText(""); setGlobalPostImage(null); }} className={`px-3 py-1.5 rounded-full ${TAP}`} style={{ background: "transparent", color: palette.textFaint, fontSize: "12px", fontWeight: 700 }}>Cancel</button>
+                    </div>
+                    <button type="button" onClick={createGlobalFeedPost} disabled={(!globalPostText.trim() && !globalPostImage) || globalPostSubmitting} className={`px-4 py-1.5 rounded-full ${TAP}`} style={{ background: (globalPostText.trim() || globalPostImage) ? palette.gold : palette.border, color: (globalPostText.trim() || globalPostImage) ? palette.letterbox : palette.textFaint, fontSize: "13px", fontWeight: 800 }}>{globalPostSubmitting ? "Posting…" : "Post"}</button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          {!globalFeedLoaded ? <div className="py-12 text-center" style={{ color: palette.textFaint, fontSize: "12px" }}>Loading global feed…</div> : globalFeed.length === 0 ? (
-            <div className="rounded-2xl p-8 text-center" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}><Newspaper size={24} style={{ color: palette.gold, margin: "0 auto 10px" }} /><div style={{ color: palette.text, fontSize: "14px", fontWeight: 700 }}>No posts yet</div><div style={{ color: palette.textFaint, fontSize: "11px", marginTop: "4px" }}>Be the first trader to share something with the community.</div></div>
+          {!globalFeedLoaded ? (
+            <div>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-start gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <div className="rounded-full animate-pulse flex-shrink-0" style={{ width: "40px", height: "40px", background: palette.field }} />
+                  <div className="flex-1 pt-1"><div className="rounded animate-pulse mb-2" style={{ width: "30%", height: "10px", background: palette.field }} /><div className="rounded animate-pulse mb-1.5" style={{ width: "85%", height: "10px", background: palette.field }} /><div className="rounded animate-pulse" style={{ width: "55%", height: "10px", background: palette.field }} /></div>
+                </div>
+              ))}
+            </div>
+          ) : globalFeed.length === 0 ? (
+            <div className="px-4 py-14 text-center"><Newspaper size={26} style={{ color: palette.gold, margin: "0 auto 12px" }} /><div style={{ color: palette.text, fontSize: "15px", fontWeight: 800 }}>No posts yet</div><div style={{ color: palette.textFaint, fontSize: "12px", marginTop: "4px" }}>Be the first trader to share something with the community.</div></div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div>
               {globalFeed.map((post) => {
                 const mine = post.author === communityUsername;
                 const comments = globalFeedComments[post.id] || [];
-                return <article key={post.id} className="rounded-2xl overflow-hidden" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}><Avatar name={post.author} size={34} src={post.avatar || avatarForAuthor(post.author)} /><div className="flex-1 min-w-0"><button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontSize: "12.5px", fontWeight: 700 }}>{post.author}</button><div style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono, marginTop: "2px" }}>{new Date(post.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>{mine && <button type="button" onClick={() => deleteGlobalFeedPost(post.id)} className={`flex items-center justify-center rounded-full ${TAP}`} style={{ width: "26px", height: "26px", color: palette.textFaint }} aria-label="Delete post"><Trash2 size={13} /></button>}</div>
-                  <div className="px-3.5 py-3.5">{post.text && <div style={{ color: palette.text, fontSize: "13px", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{post.text}</div>}{post.image && <img src={post.image} alt="Community post" className="w-full rounded-xl" style={{ maxHeight: "520px", objectFit: "cover", marginTop: post.text ? "10px" : 0, border: `1px solid ${palette.border}` }} />}</div>
-                  <div className="flex items-center gap-1 px-3 py-2" style={{ borderTop: `1px solid ${palette.border}` }}><button type="button" onClick={() => likeGlobalFeedPost(post.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ color: post.liked ? palette.gold : palette.textMuted, background: post.liked ? `${palette.gold}12` : "transparent", fontFamily: mono, fontSize: "10.5px" }}><Heart size={13} fill={post.liked ? "currentColor" : "none"} />{post.likeCount || 0}</button><button type="button" onClick={() => openGlobalFeedComments(post.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${TAP}`} style={{ color: globalFeedCommentsOpenId === post.id ? palette.gold : palette.textMuted, background: globalFeedCommentsOpenId === post.id ? `${palette.gold}12` : "transparent", fontFamily: mono, fontSize: "10.5px" }}><MessageCircle size={13} />{post.commentCount || 0}</button></div>
-                  {globalFeedCommentsOpenId === post.id && <div className="px-3.5 pb-3.5" style={{ borderTop: `1px solid ${palette.border}` }}>{globalFeedCommentsLoading[post.id] ? <div className="py-3 text-xs" style={{ color: palette.textFaint }}>Loading comments…</div> : comments.length > 0 ? <div className="flex flex-col gap-2 py-3">{comments.map((c) => <div key={c.id} className="rounded-xl px-3 py-2" style={{ background: palette.field }}><span style={{ color: palette.text, fontSize: "11px", fontWeight: 700 }}>{c.author}</span><span style={{ color: palette.textMuted, fontSize: "11px", marginLeft: "7px" }}>{c.text}</span></div>)}</div> : <div className="py-3 text-xs" style={{ color: palette.textFaint }}>No comments yet.</div>}<div className="flex items-center gap-2"><input value={globalFeedCommentDrafts[post.id] || ""} onChange={(e) => setGlobalFeedCommentDrafts((cur) => ({ ...cur, [post.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postGlobalFeedComment(post.id); } }} placeholder="Write a comment…" className="flex-1 rounded-xl px-3 py-2 outline-none" style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "11.5px" }} /><button type="button" onClick={() => postGlobalFeedComment(post.id)} disabled={!(globalFeedCommentDrafts[post.id] || "").trim()} className={`flex items-center justify-center rounded-xl ${TAP}`} style={{ width: "36px", height: "36px", background: palette.gold, color: palette.letterbox }}><Send size={14} /></button></div></div>}
+                return <article key={post.id} className="flex items-start gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={`flex-shrink-0 ${TAP}`} style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }}><Avatar name={post.author} size={40} src={post.avatar || avatarForAuthor(post.author)} /></button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => openCommunityMemberProfile(post.author)} className={TAP} style={{ background: "none", border: "none", padding: 0, color: palette.text, fontSize: "14px", fontWeight: 800 }}>{post.author}</button>
+                      <span style={{ color: palette.textFaint, fontSize: "12.5px" }}>· {feedTimeAgo(post.ts)}</span>
+                      {mine && <button type="button" onClick={() => deleteGlobalFeedPost(post.id)} className={`flex items-center justify-center rounded-full ml-auto flex-shrink-0 ${TAP}`} style={{ width: "26px", height: "26px", color: palette.textFaint }} aria-label="Delete post"><Trash2 size={13} /></button>}
+                    </div>
+                    {post.text && <div className="mt-0.5" style={{ color: palette.text, fontSize: "14.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.text}</div>}
+                    {post.image && <img src={post.image} alt="Community post" className="w-full mt-2.5 rounded-2xl" style={{ maxHeight: "440px", objectFit: "cover", border: `1px solid ${palette.border}` }} />}
+                    <div className="flex items-center gap-6 mt-2 -ml-2">
+                      <button type="button" onClick={() => likeGlobalFeedPost(post.id)} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full ${TAP}`} style={{ color: post.liked ? palette.red : palette.textFaint, background: "transparent" }}>
+                        <Heart size={16} fill={post.liked ? "currentColor" : "none"} /><span style={{ fontSize: "12px", fontWeight: 700 }}>{post.likeCount || 0}</span>
+                      </button>
+                      <button type="button" onClick={() => openGlobalFeedComments(post.id)} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full ${TAP}`} style={{ color: globalFeedCommentsOpenId === post.id ? palette.gold : palette.textFaint, background: "transparent" }}>
+                        <MessageCircle size={16} /><span style={{ fontSize: "12px", fontWeight: 700 }}>{post.commentCount || 0}</span>
+                      </button>
+                    </div>
+                    {globalFeedCommentsOpenId === post.id && <div className="mt-2 pt-3" style={{ borderTop: `1px solid ${palette.border}` }}>
+                      {globalFeedCommentsLoading[post.id] ? <div className="pb-3 text-xs" style={{ color: palette.textFaint }}>Loading comments…</div> : comments.length > 0 ? <div className="flex flex-col gap-2 pb-3">{comments.map((c) => <div key={c.id} className="rounded-xl px-3 py-2" style={{ background: palette.field }}><span style={{ color: palette.text, fontSize: "11.5px", fontWeight: 700 }}>{c.author}</span><span style={{ color: palette.textMuted, fontSize: "11.5px", marginLeft: "7px" }}>{c.text}</span></div>)}</div> : <div className="pb-3 text-xs" style={{ color: palette.textFaint }}>No comments yet — start the conversation.</div>}
+                      <div className="flex items-center gap-2"><input value={globalFeedCommentDrafts[post.id] || ""} onChange={(e) => setGlobalFeedCommentDrafts((cur) => ({ ...cur, [post.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postGlobalFeedComment(post.id); } }} placeholder="Write a comment…" className="flex-1 rounded-full px-3.5 py-2 outline-none" style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" }} /><button type="button" onClick={() => postGlobalFeedComment(post.id)} disabled={!(globalFeedCommentDrafts[post.id] || "").trim()} className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`} style={{ width: "36px", height: "36px", background: palette.gold, color: palette.letterbox, opacity: (globalFeedCommentDrafts[post.id] || "").trim() ? 1 : 0.5 }}><Send size={14} /></button></div>
+                    </div>}
+                  </div>
                 </article>;
               })}
-              {globalFeedNext && <button type="button" onClick={() => loadGlobalFeed(globalFeedNext)} className={`w-full rounded-xl py-2.5 mt-1 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontFamily: mono, fontSize: "11px", fontWeight: 700 }}>Load more</button>}
+              {globalFeedNext && <div className="px-4 py-4"><button type="button" onClick={() => loadGlobalFeed(globalFeedNext)} className={`w-full rounded-full py-2.5 ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.gold, fontSize: "12.5px", fontWeight: 700 }}>Show more posts</button></div>}
             </div>
           )}
         </div>
@@ -19848,7 +19900,7 @@ if (activeTab === "community") {
       >
         <div className="flex flex-col flex-1" style={{ minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
-        {!(!isDesktop && activeTab === "community" && !!activeGroupId) && (
+        {!(!isDesktop && activeTab === "community" && (!!activeGroupId || communityMobileFeedOpen)) && (
         <header
           className={isDesktop ? "px-8 flex-shrink-0 flex items-center justify-between" : "px-5 pt-4 pb-3 flex-shrink-0 flex items-center justify-between"}
           style={{ height: isDesktop ? "76px" : "auto", borderBottom: isDesktop ? "none" : `1px solid ${palette.border}`, transition: THEME_TRANSITION }}

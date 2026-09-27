@@ -13453,6 +13453,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           <StatChip label="Day-to-Day Volatility" value={consistency ? consistency.label : "N/A"} />
         </div>
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
+        <div>
         {insights.setupRows.length > 0 ? (
           <>
             <span
@@ -13517,7 +13519,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             Tag trades with a Setup on the Curve tab to see setup performance here.
           </p>
         )}
+        </div>
 
+        <div>
         {insights.moodRows.length > 0 && (
           <>
             <span
@@ -13580,6 +13584,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             ))}
           </>
         )}
+        </div>
+        </div>
       </>
     );
 
@@ -13801,25 +13807,32 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             >
               <div style={{ width: "100%", height: isDesktop ? 240 : 140 }}>
                 <ResponsiveContainer>
-                  <BarChart data={weekdayFreq} margin={{ top: 6, right: 8, bottom: 0, left: 0 }} barCategoryGap="30%">
-                    <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
+                  <BarChart
+                    data={[...weekdayFreq].sort((a, b) => b.count - a.count)}
+                    layout="vertical"
+                    margin={{ top: 6, right: 16, bottom: 0, left: 0 }}
+                    barCategoryGap="26%"
+                  >
+                    <CartesianGrid stroke={palette.border} strokeDasharray="3 3" horizontal={false} />
                     <XAxis
-                      dataKey="label"
+                      type="number"
                       stroke={palette.textFaint}
                       tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
                       tickLine={false}
                       axisLine={{ stroke: palette.border }}
-                    />
-                    <YAxis
-                      stroke={palette.textFaint}
-                      tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
-                      tickLine={false}
-                      axisLine={{ stroke: palette.border }}
-                      width={28}
                       allowDecimals={false}
                     />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      stroke={palette.textFaint}
+                      tick={{ fill: palette.textFaint, fontSize: 11, fontFamily: mono }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={36}
+                    />
                     <Tooltip {...barTooltipProps} formatter={(v) => [`${v}`, "Entries"]} />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={THIN_BAR_SIZE} fill={palette.goldBright} activeBar={false} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={isDesktop ? 16 : 12} fill={palette.goldBright} activeBar={false} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -13836,41 +13849,30 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         Session Breakdown
       </span>
       <div className={isDesktop ? "rounded-2xl p-6 mb-2" : "rounded-2xl p-4 mb-2"} style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-        <div style={{ width: "100%", height: isDesktop ? 280 : 180 }}>
+        <div style={{ width: "100%", height: isDesktop ? 240 : 140 }}>
           <ResponsiveContainer>
-            <BarChart data={sessionByDay} margin={{ top: 6, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
-              <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="label"
-                stroke={palette.textFaint}
-                tick={{ fill: palette.textFaint, fontSize: 9, fontFamily: mono }}
-                tickLine={false}
-                axisLine={{ stroke: palette.border }}
-                minTickGap={20}
-              />
-              <YAxis
-                stroke={palette.textFaint}
-                tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
-                tickLine={false}
-                axisLine={{ stroke: palette.border }}
-                width={28}
-                allowDecimals={false}
-              />
+            <PieChart>
+              <Pie
+                data={sessionFreq}
+                dataKey="count"
+                nameKey="label"
+                cx="50%"
+                cy="50%"
+                innerRadius={isDesktop ? 52 : 34}
+                outerRadius={isDesktop ? 86 : 56}
+                paddingAngle={2}
+              >
+                {sessionFreq.map((s) => (
+                  <Cell key={s.id} fill={s.color} />
+                ))}
+              </Pie>
               <Tooltip
-                cursor={{ fill: `${palette.gold}10` }}
                 contentStyle={{ background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "8px", fontFamily: mono, fontSize: "12px" }}
                 labelStyle={{ color: palette.textMuted }}
+                itemStyle={{ color: palette.text }}
+                formatter={(v, n) => [`${v} entr${v === 1 ? "y" : "ies"}`, n]}
               />
-              {MARKET_SESSIONS.map((s, idx) => (
-                <Bar
-                  key={s.id}
-                  dataKey={s.label}
-                  stackId="a"
-                  fill={s.color}
-                  radius={idx === MARKET_SESSIONS.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                />
-              ))}
-            </BarChart>
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
@@ -13905,15 +13907,16 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         )}
       </div>
       <p className="text-xs mb-6" style={{ color: palette.textFaint }}>
-        Daily entries stacked by session — bars show when you're most active. Progress strips show each session's share of all logged entries.
+        Share of all logged entries by session — hover a slice for the count, progress strips below break down the same totals.
       </p>
     </div>
   );
 })()}
         </div>
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
         {confidenceByDay.length > 1 && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13977,8 +13980,60 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
               Average confidence level logged per day (Low / Medium / High) \u2014 a dip here alongside a losing
               streak can be worth a closer look.
             </p>
-          </>
+          </div>
         )}
+
+        {trendBreakdown.length > 0 && (
+          <div>
+            <span
+              className="block mb-1.5 uppercase"
+              style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
+            >
+              Trend Breakdown
+            </span>
+            <div
+              className={isDesktop ? "rounded-2xl p-6 mb-6" : "rounded-2xl p-4 mb-6"}
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+            >
+              <div style={{ width: "100%", height: isDesktop ? 260 : 160 }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={trendBreakdown}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={72}
+                      paddingAngle={2}
+                    >
+                      {trendBreakdown.map((d, i) => (
+                        <Cell key={d.id} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: palette.field,
+                        border: `1px solid ${palette.border}`,
+                        borderRadius: "8px",
+                        fontFamily: mono,
+                        fontSize: "12px",
+                      }}
+                      labelStyle={{ color: palette.textMuted }}
+                      itemStyle={{ color: palette.text }}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontFamily: mono, fontSize: "11px", color: palette.textMuted }}
+                      formatter={(v) => <span style={{ color: palette.textMuted }}>{v}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
 
         <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
         {rrSeries.length > 0 && (
@@ -14082,57 +14137,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           </div>
         )}
         </div>
-
-        {trendBreakdown.length > 0 && (
-          <>
-            <span
-              className="block mb-1.5 uppercase"
-              style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
-            >
-              Trend Breakdown
-            </span>
-            <div
-              className={isDesktop ? "rounded-2xl p-6 mb-6" : "rounded-2xl p-4 mb-6"}
-              style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
-            >
-              <div style={{ width: "100%", height: isDesktop ? 300 : 200 }}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie
-                      data={trendBreakdown}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={72}
-                      paddingAngle={2}
-                    >
-                      {trendBreakdown.map((d, i) => (
-                        <Cell key={d.id} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: palette.field,
-                        border: `1px solid ${palette.border}`,
-                        borderRadius: "8px",
-                        fontFamily: mono,
-                        fontSize: "12px",
-                      }}
-                      labelStyle={{ color: palette.textMuted }}
-                      itemStyle={{ color: palette.text }}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontFamily: mono, fontSize: "11px", color: palette.textMuted }}
-                      formatter={(v) => <span style={{ color: palette.textMuted }}>{v}</span>}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </>
-        )}
 
         {setupRadarData.rows.length > 0 && (
           <>
@@ -14292,8 +14296,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           </>
         )}
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
         {mistakeFreq.length > 0 && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -14329,24 +14334,25 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 </ResponsiveContainer>
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {pairFreq.length > 0 && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
             >
               Most Journaled Pairs
             </span>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
+            <div className="grid grid-cols-2 gap-3 mb-2">
               {pairFreq.map((p) => (
                 <StatChip key={p.pair} label={p.pair} value={`${p.count} entr${p.count === 1 ? "y" : "ies"}`} />
               ))}
             </div>
-          </>
+          </div>
         )}
+        </div>
 
         <p className="text-xs mt-4" style={{ color: palette.textFaint }}>
           These charts read straight from your Journal tab rows, add or fill in more rows there to sharpen the

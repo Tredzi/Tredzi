@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile, Sparkles } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile, Sparkles, Sticker } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -304,6 +304,31 @@ function resizeImageFile(file, maxDim = SCREENSHOT_MAX_DIM) {
         let dataUrl = encodeAt(maxDim);
         if (dataUrlBytes(dataUrl) > SCREENSHOT_MAX_BYTES && maxDim > 800) {
           dataUrl = encodeAt(Math.round(maxDim * 0.75));
+        }
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error("Couldn't read that image"));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("Couldn't read that file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+const STICKER_MAX_DIM = 320;
+const STICKER_MAX_BYTES = 140_000; // headroom under the worker's 200,000-char stored limit
+
+function resizeStickerFile(file, maxDim = STICKER_MAX_DIM) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let dim = maxDim;
+        let dataUrl = drawScaled(img, dim).toDataURL("image/png");
+        while (dataUrlBytes(dataUrl) > STICKER_MAX_BYTES && dim > 96) {
+          dim = Math.round(dim * 0.8);
+          dataUrl = drawScaled(img, dim).toDataURL("image/png");
         }
         resolve(dataUrl);
       };
@@ -4391,6 +4416,15 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [communityMsgText, setCommunityMsgText] = useState("");
   const [communityMsgMode, setCommunityMsgMode] = useState("chat");
+  const [stickerPacks, setStickerPacks] = useState([]);
+  const [stickerPacksLoaded, setStickerPacksLoaded] = useState(false);
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [stickerManageMode, setStickerManageMode] = useState(false);
+  const [stickerActivePackId, setStickerActivePackId] = useState(null);
+  const [stickerNewPackName, setStickerNewPackName] = useState("");
+  const [stickerUploading, setStickerUploading] = useState(false);
+  const [stickerError, setStickerError] = useState("");
+  const stickerFileInputRef = useRef(null);
   const [signalPair, setSignalPair] = useState("");
   const [signalDirection, setSignalDirection] = useState("buy");
   const [signalEntry, setSignalEntry] = useState("");
@@ -7240,6 +7274,122 @@ if (!isSignal && !communityMsgText.trim()) return;
       setSignalEntry("");
       setSignalSL("");
       setSignalTP("");
+      setReplyingTo(null);
+      const data = await communityApi(`/groups/${activeGroupId}/messages`, {
+        headers: { Authorization: `Bearer ${membership.token}` },
+      });
+      setGroupMessages(data.messages || []);
+    } catch (err) {
+      setCommunityApiError(err.message);
+    }
+  };
+
+  // --- Sticker packs: personal, account-scoped (session token, not a group
+  // membership token) so the same stickers follow the user into any group. ---
+  const fetchStickerPacks = async () => {
+    if (!session?.token) return;
+    try {
+      const data = await communityApi("/stickers", {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setStickerPacks(data.packs || []);
+    } catch (err) {
+      // silent — sticker picker just shows empty, not worth a banner
+    } finally {
+      setStickerPacksLoaded(true);
+    }
+  };
+
+  const createStickerPack = async () => {
+    const name = stickerNewPackName.trim();
+    if (!name || !session?.token) return;
+    setStickerError("");
+    try {
+      const data = await communityApi("/stickers/packs", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ name }),
+      });
+      setStickerPacks((cur) => [...cur, { id: data.id, name: data.name, stickers: [] }]);
+      setStickerActivePackId(data.id);
+      setStickerNewPackName("");
+    } catch (err) {
+      setStickerError(err.message);
+    }
+  };
+
+  const deleteStickerPack = async (packId) => {
+    if (!session?.token) return;
+    setStickerPacks((cur) => cur.filter((p) => p.id !== packId));
+    if (stickerActivePackId === packId) setStickerActivePackId(null);
+    try {
+      await communityApi(`/stickers/packs/${packId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch (err) {
+      setStickerError(err.message);
+      fetchStickerPacks(); // resync on failure
+    }
+  };
+
+  const deleteSticker = async (stickerId, packId) => {
+    if (!session?.token) return;
+    setStickerPacks((cur) =>
+      cur.map((p) => (p.id === packId ? { ...p, stickers: p.stickers.filter((s) => s.id !== stickerId) } : p))
+    );
+    try {
+      await communityApi(`/stickers/${stickerId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch (err) {
+      setStickerError(err.message);
+      fetchStickerPacks();
+    }
+  };
+
+  const handleStickerFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !stickerActivePackId || !session?.token) return;
+    setStickerUploading(true);
+    setStickerError("");
+    try {
+      const image = await resizeStickerFile(file);
+      const data = await communityApi(`/stickers/packs/${stickerActivePackId}/stickers`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ image }),
+      });
+      setStickerPacks((cur) =>
+        cur.map((p) =>
+          p.id === stickerActivePackId ? { ...p, stickers: [...p.stickers, { id: data.id, image: data.image }] } : p
+        )
+      );
+    } catch (err) {
+      setStickerError(err.message);
+    } finally {
+      setStickerUploading(false);
+    }
+  };
+
+  const sendSticker = async (image) => {
+    if (!activeGroupId) return;
+    const membership = myGroups.find((g) => g.id === activeGroupId);
+    if (!membership) return;
+    setStickerPickerOpen(false);
+    try {
+      await communityApi(`/groups/${activeGroupId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${membership.token}` },
+        body: JSON.stringify({
+          author: communityUsername || "Anonymous",
+          type: "sticker",
+          stickerImage: image,
+          replyTo: replyingTo?.id || undefined,
+        }),
+      });
       setReplyingTo(null);
       const data = await communityApi(`/groups/${activeGroupId}/messages`, {
         headers: { Authorization: `Bearer ${membership.token}` },
@@ -18865,39 +19015,54 @@ if (activeTab === "community") {
                       {!isMe && !grouped && (
                         <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.gold, fontSize: "11.5px", fontWeight: 700, marginBottom: "3px", marginLeft: "3px", background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       )}
-                      <div
-                        className="rounded-2xl px-4 py-2.5"
-                        style={{
-                          background: bubbleColor,
-                          color: textColor,
-                          fontSize: "14px",
-                          lineHeight: 1.45,
-                          boxShadow: isMe ? `0 3px 10px ${palette.gold}33` : palette.shadow,
-                          borderTopRightRadius: isMe && grouped ? "6px" : "16px",
-                          borderTopLeftRadius: !isMe && grouped ? "6px" : "16px",
-                        }}
-                      >
-                        {m.replyToAuthor && (
-                          <div
-                            className="px-4 py-2"
-                            style={{
-                              margin: "-10px -16px 6px -16px",
-                              background: isMe ? "rgba(0,0,0,0.14)" : palette.field,
-                              borderLeft: `3px solid ${isMe ? palette.letterbox : palette.gold}`,
-                              borderTopLeftRadius: !isMe && grouped ? "6px" : "14px",
-                              borderTopRightRadius: isMe && grouped ? "6px" : "14px",
-                              borderBottomLeftRadius: "4px",
-                              borderBottomRightRadius: "4px",
-                            }}
-                          >
-                            <div style={{ fontSize: "10px", fontWeight: 700, color: isMe ? palette.letterbox : palette.gold, opacity: 0.9 }}>
-                              {m.replyToAuthor}
+                      {m.type === "sticker" ? (
+                        <div style={{ display: "inline-block" }}>
+                          {m.replyToAuthor && (
+                            <div
+                              className="px-3 py-1.5 rounded-lg mb-1"
+                              style={{ background: palette.field, borderLeft: `3px solid ${palette.gold}`, display: "inline-block", maxWidth: "160px" }}
+                            >
+                              <div style={{ fontSize: "10px", fontWeight: 700, color: palette.gold }}>{m.replyToAuthor}</div>
+                              <div className="truncate" style={{ fontSize: "11px", color: palette.textMuted }}>{m.replyToText}</div>
                             </div>
-                            <div className="truncate" style={{ fontSize: "11px", opacity: 0.85, color: isMe ? palette.letterbox : palette.textMuted }}>{m.replyToText}</div>
-                          </div>
-                        )}
-                        {m.text}
-                      </div>
+                          )}
+                          <img src={m.text} alt="Sticker" style={{ width: "120px", height: "120px", objectFit: "contain", display: "block" }} />
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-2xl px-4 py-2.5"
+                          style={{
+                            background: bubbleColor,
+                            color: textColor,
+                            fontSize: "14px",
+                            lineHeight: 1.45,
+                            boxShadow: isMe ? `0 3px 10px ${palette.gold}33` : palette.shadow,
+                            borderTopRightRadius: isMe && grouped ? "6px" : "16px",
+                            borderTopLeftRadius: !isMe && grouped ? "6px" : "16px",
+                          }}
+                        >
+                          {m.replyToAuthor && (
+                            <div
+                              className="px-4 py-2"
+                              style={{
+                                margin: "-10px -16px 6px -16px",
+                                background: isMe ? "rgba(0,0,0,0.14)" : palette.field,
+                                borderLeft: `3px solid ${isMe ? palette.letterbox : palette.gold}`,
+                                borderTopLeftRadius: !isMe && grouped ? "6px" : "14px",
+                                borderTopRightRadius: isMe && grouped ? "6px" : "14px",
+                                borderBottomLeftRadius: "4px",
+                                borderBottomRightRadius: "4px",
+                              }}
+                            >
+                              <div style={{ fontSize: "10px", fontWeight: 700, color: isMe ? palette.letterbox : palette.gold, opacity: 0.9 }}>
+                                {m.replyToAuthor}
+                              </div>
+                              <div className="truncate" style={{ fontSize: "11px", opacity: 0.85, color: isMe ? palette.letterbox : palette.textMuted }}>{m.replyToText}</div>
+                            </div>
+                          )}
+                          {m.text}
+                        </div>
+                      )}
                       {Object.keys(m.reactions || {}).length > 0 && (
                         <div
                           className="flex items-center gap-1 flex-wrap"
@@ -18935,7 +19100,7 @@ if (activeTab === "community") {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setReplyingTo({ id: m.id, author: m.author, preview: (m.text || "").slice(0, 60) })}
+                          onClick={() => setReplyingTo({ id: m.id, author: m.author, preview: m.type === "sticker" ? "🖼️ Sticker" : (m.text || "").slice(0, 60) })}
                           className={TAP}
                           style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}
                         >
@@ -19058,10 +19223,143 @@ if (activeTab === "community") {
               </button>
             </div>
           )}
+          <input ref={stickerFileInputRef} type="file" accept="image/*" onChange={handleStickerFileChange} style={{ display: "none" }} />
+          {stickerPickerOpen && (
+            <div
+              className="rounded-2xl mb-2"
+              style={{
+                background: palette.surface,
+                border: `1px solid ${palette.border}`,
+                boxShadow: palette.shadow,
+                padding: "10px",
+                maxHeight: "280px",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                  {stickerPacks.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setStickerActivePackId(p.id)}
+                      className={`flex-shrink-0 rounded-full px-2.5 py-1 ${TAP}`}
+                      style={{
+                        background: stickerActivePackId === p.id ? palette.gold : palette.field,
+                        color: stickerActivePackId === p.id ? palette.letterbox : palette.textMuted,
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStickerManageMode((v) => !v)}
+                  className={TAP}
+                  style={{ color: stickerManageMode ? palette.gold : palette.textFaint, fontSize: "11px", fontWeight: 700, flexShrink: 0, marginLeft: "8px" }}
+                >
+                  {stickerManageMode ? "Done" : "Manage"}
+                </button>
+              </div>
+
+              {stickerManageMode && (
+                <div className="flex items-center gap-1.5 mb-2">
+                  <input
+                    type="text"
+                    value={stickerNewPackName}
+                    onChange={(e) => setStickerNewPackName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") createStickerPack(); }}
+                    placeholder="New pack name"
+                    className="flex-1 bg-transparent outline-none rounded-lg px-2.5 py-1.5"
+                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={createStickerPack}
+                    disabled={!stickerNewPackName.trim()}
+                    className={TAP}
+                    style={{ background: palette.gold, color: palette.letterbox, borderRadius: "8px", padding: "6px 10px", fontSize: "11px", fontWeight: 700, opacity: !stickerNewPackName.trim() ? 0.5 : 1 }}
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
+
+              {stickerError && (
+                <p className="text-xs mb-2" style={{ color: palette.red }}>{stickerError}</p>
+              )}
+
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {!stickerActivePackId ? (
+                  <p className="text-xs text-center py-6" style={{ color: palette.textFaint }}>
+                    {stickerPacks.length === 0 ? "Tap Manage to create your first sticker pack." : "Pick a pack above."}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2">
+                    {(stickerPacks.find((p) => p.id === stickerActivePackId)?.stickers || []).map((s) => (
+                      <div key={s.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => (stickerManageMode ? deleteSticker(s.id, stickerActivePackId) : sendSticker(s.image))}
+                          className={TAP}
+                          style={{ width: "100%", aspectRatio: "1 / 1", background: "transparent", border: "none", padding: "4px" }}
+                        >
+                          <img src={s.image} alt="Sticker" style={{ width: "100%", height: "100%", objectFit: "contain", opacity: stickerManageMode ? 0.5 : 1 }} />
+                          {stickerManageMode && (
+                            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: palette.red }}>
+                              <Trash2 size={16} />
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                    {stickerManageMode && (
+                      <button
+                        type="button"
+                        onClick={() => stickerFileInputRef.current && stickerFileInputRef.current.click()}
+                        disabled={stickerUploading}
+                        className={`flex items-center justify-center rounded-lg ${TAP}`}
+                        style={{ aspectRatio: "1 / 1", background: palette.field, border: `1px dashed ${palette.border}`, color: palette.textMuted }}
+                      >
+                        {stickerUploading ? <Sparkles size={16} /> : <Plus size={18} />}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {stickerActivePackId && stickerManageMode && (
+                  <button
+                    type="button"
+                    onClick={() => deleteStickerPack(stickerActivePackId)}
+                    className={TAP}
+                    style={{ marginTop: "10px", color: palette.red, fontSize: "11px", fontWeight: 600, background: "none", border: "none", padding: 0 }}
+                  >
+                    Delete this pack
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <div
             className="flex items-center gap-2 rounded-2xl"
-            style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}
+            style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px" }}
           >
+            <button
+              type="button"
+              onClick={() => {
+                if (!stickerPacksLoaded) fetchStickerPacks();
+                setStickerPickerOpen((v) => !v);
+              }}
+              className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+              style={{ width: "32px", height: "32px", marginLeft: "4px", color: stickerPickerOpen ? palette.gold : palette.textFaint }}
+              aria-label="Stickers"
+            >
+              <Sticker size={18} />
+            </button>
             <input
               type="text"
               value={communityMsgText}

@@ -505,6 +505,11 @@ function SettingsSection({ icon: Icon, title, description, danger, children, def
         border: `1px solid ${danger ? `${palette.red}55` : palette.border}`,
         borderRadius: "16px",
         transition: THEME_TRANSITION,
+        breakInside: "avoid",
+        WebkitColumnBreakInside: "avoid",
+        display: "inline-block",
+        width: "100%",
+        verticalAlign: "top",
       }}
     >
       <button
@@ -10862,7 +10867,7 @@ rightContent={
                   </div>
                   <div className="text-right">
                     <div style={{ color: palette.textFaint, fontSize: "10px" }}>Risking</div>
-                    <div style={{ color: palette.gold, fontFamily: mono, fontSize: "16px", fontWeight: 700, marginTop: "3px" }}>
+                    <div style={{ color: palette.green, fontFamily: mono, fontSize: "16px", fontWeight: 700, marginTop: "3px" }}>
                       ${fmt(riskAmt)}
                     </div>
                   </div>
@@ -11935,7 +11940,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                       fontSize: "12px",
                     }}
                     labelStyle={{ color: palette.textMuted }}
-                    itemStyle={{ color: palette.goldBright }}
+                    itemStyle={{ color: netPnl >= 0 ? palette.green : palette.red }}
                     formatter={(v) => [`$${fmt(v)}`, "Equity"]}
                     labelFormatter={(l) => `Trade ${l}`}
                   />
@@ -20505,67 +20510,64 @@ if (activeTab === "community") {
 
 {settingsOpen && (
   <div
-    className="fixed inset-0 flex items-center justify-center z-50 p-4"
-    style={{ background: "rgba(5,7,12,0.85)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-    onClick={() => setSettingsOpen(false)}
+    className="fixed inset-0 z-50 flex flex-col"
+    style={{ background: palette.bg, transition: THEME_TRANSITION }}
   >
     <div
-      className="w-full modal-in rounded-2xl overflow-y-auto"
+      className={isDesktop ? "flex items-center justify-between px-8 flex-shrink-0" : "flex items-center justify-between px-5 pt-4 pb-3 flex-shrink-0"}
       style={{
-        maxWidth: isDesktop ? "600px" : "440px",
-        maxHeight: "85vh",
+        height: isDesktop ? "76px" : "auto",
+        borderBottom: `1px solid ${palette.border}`,
         background: palette.surface,
-        border: `1px solid ${palette.border}`,
         boxShadow: palette.shadow,
+        transition: THEME_TRANSITION,
+        zIndex: 2,
       }}
-      onClick={(e) => e.stopPropagation()}
     >
-      <div
-        className="flex items-center justify-between px-5 py-4"
-        style={{
-          borderBottom: `1px solid ${palette.border}`,
-          position: "sticky",
-          top: 0,
-          background: palette.surface,
-          zIndex: 2,
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          <span
-            className="flex items-center justify-center rounded-xl flex-shrink-0"
-            style={{
-              width: "34px",
-              height: "34px",
-              background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
-              boxShadow: `0 3px 10px ${palette.gold}44`,
-            }}
-          >
-            <Settings size={16} style={{ color: palette.letterbox }} strokeWidth={2.3} />
-          </span>
-          <div>
-<div style={{ fontFamily: display, fontSize: "15px", fontWeight: 700, color: palette.text, lineHeight: 1.15 }}>
+      <div className="flex items-center gap-2.5">
+        <span
+          className="flex items-center justify-center rounded-xl flex-shrink-0"
+          style={{
+            width: isDesktop ? "38px" : "34px",
+            height: isDesktop ? "38px" : "34px",
+            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+            boxShadow: `0 3px 10px ${palette.gold}44`,
+          }}
+        >
+          <Settings size={isDesktop ? 18 : 16} style={{ color: palette.letterbox }} strokeWidth={2.3} />
+        </span>
+        <div>
+<div style={{ fontFamily: display, fontSize: isDesktop ? "17px" : "15px", fontWeight: 700, color: palette.text, lineHeight: 1.15 }}>
   Settings
 </div>
-            <div
-              className="uppercase"
-              style={{ fontFamily: mono, fontSize: "10px", color: palette.textFaint, letterSpacing: "0.09em" }}
-            >
-              Customize Tredzi
-            </div>
+          <div
+            className="uppercase"
+            style={{ fontFamily: mono, fontSize: "10px", color: palette.textFaint, letterSpacing: "0.09em" }}
+          >
+            Customize Tredzi
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(false)}
-          className={`flex items-center justify-center rounded-full ${TAP}`}
-          style={{ width: "32px", height: "32px", color: palette.textFaint, background: palette.field, border: `1px solid ${palette.border}` }}
-          aria-label="Close settings"
-        >
-          <X size={16} />
-        </button>
       </div>
+      <button
+        type="button"
+        onClick={() => setSettingsOpen(false)}
+        className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+        style={{ width: "38px", height: "38px", color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+        aria-label="Close settings"
+      >
+        <X size={17} />
+      </button>
+    </div>
 
-      <div className="p-5">
+    <div className="flex-1 sheet-in" style={{ overflowY: "auto", background: palette.bg }}>
+      <div
+        className="mx-auto"
+        style={{
+          maxWidth: isDesktop ? "1080px" : "100%",
+          padding: isDesktop ? "28px 32px 56px" : "16px 16px 32px",
+        }}
+      >
+        <div style={isDesktop ? { columnCount: 2, columnGap: "20px" } : undefined}>
         {/* PROFILE */}
         {communityUsername && (
           <SettingsSection icon={Users} title="Profile" defaultOpen>
@@ -21752,6 +21754,7 @@ if (activeTab === "community") {
             </div>
           )}
         </SettingsSection>
+        </div>
       </div>
     </div>
   </div>

@@ -12994,7 +12994,36 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "journal", label: "Journal" },
     ];
 
-    const insightsSubNav = (
+    const insightsSubNav = isDesktop ? (
+      <div className="flex items-center gap-7 mb-8" style={{ borderBottom: `1px solid ${palette.border}` }}>
+        {INSIGHTS_SUB_TABS.map((s) => {
+          const active = insightsSubTab === s.id;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => selectInsightsSubTab(s.id)}
+              className={TAP}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: `2.5px solid ${active ? palette.gold : "transparent"}`,
+                color: active ? palette.text : palette.textFaint,
+                fontFamily: display,
+                fontSize: "14.5px",
+                fontWeight: active ? 700 : 500,
+                padding: "0 2px 14px 2px",
+                marginBottom: "-1px",
+                cursor: "pointer",
+                transition: "color 0.15s ease, border-color 0.15s ease",
+              }}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+    ) : (
       <div className="flex gap-2 mb-6" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
@@ -14206,7 +14235,39 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     );
 
     body = (
-      <>
+      <div className={isDesktop ? "insights-desktop-redesign" : ""}>
+        {isDesktop && (
+          <style>{`
+            .insights-desktop-redesign {
+              max-width: 1180px;
+              margin: 0 auto;
+            }
+            .insights-desktop-redesign span.block.uppercase {
+              font-family: ${display} !important;
+              font-size: 13.5px !important;
+              text-transform: none !important;
+              letter-spacing: 0 !important;
+              font-weight: 700 !important;
+              color: ${palette.text} !important;
+              margin-top: 32px !important;
+              margin-bottom: 14px !important;
+              display: block !important;
+            }
+            .insights-desktop-redesign > span.block.uppercase:first-child,
+            .insights-desktop-redesign > *:first-child span.block.uppercase:first-child {
+              margin-top: 0 !important;
+            }
+            .insights-desktop-redesign .rounded-2xl {
+              border-radius: 20px !important;
+              transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+            }
+            .insights-desktop-redesign .rounded-2xl:hover {
+              border-color: ${palette.gold}55 !important;
+              box-shadow: 0 16px 36px rgba(0,0,0,0.16) !important;
+              transform: translateY(-1px);
+            }
+          `}</style>
+        )}
         {insightsSubNav}
         {insightsSubTab === "overview" && overviewSection}
         {insightsSubTab === "behavior" && behaviorSection}
@@ -14238,7 +14299,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             )}
           </>
         )}
-      </>
+      </div>
     );
   }
 

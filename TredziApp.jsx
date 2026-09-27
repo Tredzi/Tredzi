@@ -2614,6 +2614,9 @@ function computePerformanceMetrics(trades) {
     expectancy: winRate * avgWin - (1 - winRate) * avgLoss,
     largestWin: wins.length ? Math.max(...wins.map((t) => t.pnl)) : 0,
     largestLoss: losses.length ? Math.min(...losses.map((t) => t.pnl)) : 0,
+    winRate,
+    avgWin,
+    avgLoss,
   };
 
   const tiers = {
@@ -13201,11 +13204,16 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         >
           Performance Overview
         </span>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <StatChip label="Win Rate" value={`${(perf.winRate * 100).toFixed(0)}%`} />
           {metricCard("pf", "Profit Factor", fmtRatio(perf.profitFactor), perf.tiers.profitFactor)}
           {metricCard("rf", "Recovery Factor", fmtRatio(perf.recoveryFactor), perf.tiers.recoveryFactor)}
           {metricCard("wl", "Win/Loss Ratio", fmtRatio(perf.winLossRatio), perf.tiers.winLossRatio)}
           {metricCard("exp", "Expectancy", fmtSigned(perf.expectancy), perf.tiers.expectancy)}
+          <StatChip label="Net Profit" value={fmtSigned(perf.netProfit)} />
+          <StatChip label="Max Drawdown" value={`-$${fmtMoney(perf.maxDD)}`} />
+          <StatChip label="Avg Win" value={fmtSigned(perf.avgWin)} />
+          <StatChip label="Avg Loss" value={fmtSigned(-perf.avgLoss)} />
           <StatChip label="Largest Win" value={fmtSigned(perf.largestWin)} />
           <StatChip label="Largest Loss" value={fmtSigned(perf.largestLoss)} />
         </div>
@@ -13971,6 +13979,109 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             </p>
           </>
         )}
+
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
+        {rrSeries.length > 0 && (
+          <div>
+            <span
+              className="block mb-1.5 uppercase"
+              style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
+            >
+              R-Multiple Over Time
+            </span>
+            <div
+              className={isDesktop ? "rounded-2xl p-6 mb-6" : "rounded-2xl p-4 mb-6"}
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+            >
+              <div style={{ width: "100%", height: isDesktop ? 240 : 140 }}>
+                <ResponsiveContainer>
+                  <LineChart data={rrSeries} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" hide />
+                    <YAxis
+                      stroke={palette.textFaint}
+                      tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
+                      tickLine={false}
+                      axisLine={{ stroke: palette.border }}
+                      width={32}
+                    />
+                    <ReferenceLine y={0} stroke={palette.textFaint} />
+                    <Tooltip
+                      contentStyle={{
+                        background: palette.field,
+                        border: `1px solid ${palette.border}`,
+                        borderRadius: "8px",
+                        fontFamily: mono,
+                        fontSize: "12px",
+                      }}
+                      labelStyle={{ color: palette.textMuted }}
+                      itemStyle={{ color: palette.goldBright }}
+                      formatter={(v) => [`${v.toFixed(2)}R`, "R-Multiple"]}
+                      labelFormatter={() => ""}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="rr"
+                      stroke={palette.gold}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <p className="text-xs mb-6" style={{ color: palette.textFaint }}>
+              Each logged trade's R-multiple, in order \u2014 climbing above the zero line more often than not
+              is what a positive edge looks like over time.
+            </p>
+          </div>
+        )}
+
+        {rrDist.length > 0 && (
+          <div>
+            <span
+              className="block mb-1.5 uppercase"
+              style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
+            >
+              R-Multiple Distribution
+            </span>
+            <div
+              className={isDesktop ? "rounded-2xl p-6 mb-6" : "rounded-2xl p-4 mb-6"}
+              style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
+            >
+              <div style={{ width: "100%", height: isDesktop ? 240 : 140 }}>
+                <ResponsiveContainer>
+                  <BarChart data={rrDist} margin={{ top: 6, right: 8, bottom: 0, left: 0 }} barCategoryGap="30%">
+                    <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      stroke={palette.textFaint}
+                      tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
+                      tickLine={false}
+                      axisLine={{ stroke: palette.border }}
+                    />
+                    <YAxis
+                      stroke={palette.textFaint}
+                      tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
+                      tickLine={false}
+                      axisLine={{ stroke: palette.border }}
+                      width={28}
+                      allowDecimals={false}
+                    />
+                    <Tooltip {...barTooltipProps} formatter={(v) => [`${v}`, "Trades"]} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={THIN_BAR_SIZE} fill={palette.goldBright} activeBar={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <p className="text-xs mb-6" style={{ color: palette.textFaint }}>
+              How many trades landed in each R-multiple range \u2014 a healthy edge usually skews toward the
+              right side of this chart.
+            </p>
+          </div>
+        )}
+        </div>
 
         {trendBreakdown.length > 0 && (
           <>

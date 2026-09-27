@@ -3978,7 +3978,6 @@ const resetPropFirmWizard = () => {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState("");
   const [coachRemaining, setCoachRemaining] = useState(null);
-  const coachMessagesEndRef = useRef(null);
 
   const [journalSubTab, setJournalSubTab] = useState("log");
   const [journalEntries, setJournalEntries] = useState([]);
@@ -5955,13 +5954,6 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
     if (!activeGroupId || communityPanelTab !== "chat") return;
     communityMessagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [activeGroupId, communityPanelTab, groupMessagesLoaded]);
-
-  // Keep the AI Coach panel pinned to the newest message — the panel itself
-  // has a fixed height with only the message list scrolling (see coachSection),
-  // so without this the list would silently overflow upward as replies come in.
-  useEffect(() => {
-    coachMessagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [coachMessages, coachLoading]);
 
 
   useEffect(() => {
@@ -13159,7 +13151,19 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ];
 
     const insightsSubNav = isDesktop ? (
-      <div className="flex items-center gap-7 mb-8" style={{ borderBottom: `1px solid ${palette.border}` }}>
+      <div
+        className="flex items-center gap-7 mb-8"
+        style={{
+          borderBottom: `1px solid ${palette.border}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: `${palette.bg}F2`,
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          paddingTop: "6px",
+        }}
+      >
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
           return (
@@ -13188,7 +13192,21 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         })}
       </div>
     ) : (
-      <div className="flex gap-2 mb-6" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div
+        className="flex gap-2 mb-6"
+        style={{
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: `${palette.bg}F2`,
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          paddingTop: "8px",
+          paddingBottom: "8px",
+        }}
+      >
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
           return (
@@ -13213,6 +13231,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         })}
       </div>
     );
+
 
     const metricCard = (key, label, valueText, tier) => (
       <div
@@ -14537,26 +14556,15 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         </p>
       </div>
     ) : (
-      <div
-        className="rounded-2xl flex flex-col"
-        style={{
-          background: palette.surface,
-          border: `1px solid ${palette.border}`,
-          // Fixed panel frame, same recipe on mobile and desktop: a set height so
-          // the box never grows/shrinks as messages come in, only the message
-          // list inside scrolls. calc() keeps it clear of the header/subnav above
-          // and (on mobile) the bottom tab bar + home-indicator safe area below.
-          height: isDesktop ? "600px" : "calc(100dvh - 300px)",
-          minHeight: isDesktop ? "600px" : "420px",
-          maxHeight: isDesktop ? "600px" : "720px",
-          overflow: "hidden",
-        }}
-      >
+      <div className="flex flex-col" style={{ minHeight: "420px" }}>
         <div
-          className="flex-1 flex flex-col gap-3 p-4"
+          className="rounded-2xl p-4 mb-3 flex-1 flex flex-col gap-3"
           style={{
+            background: palette.surface,
+            border: `1px solid ${palette.border}`,
+            minHeight: "320px",
+            maxHeight: "520px",
             overflowY: "auto",
-            minHeight: 0, // required so this flex child actually scrolls instead of pushing the panel taller
           }}
         >
           {coachMessages.length === 0 ? (
@@ -14594,70 +14602,60 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
               Thinking...
             </div>
           )}
-          <div ref={coachMessagesEndRef} />
         </div>
 
-        <div
-          className="flex-shrink-0"
-          style={{
-            borderTop: `1px solid ${palette.border}`,
-            padding: isDesktop ? "12px 16px" : "10px 12px",
-            paddingBottom: isDesktop ? "12px" : "calc(10px + env(safe-area-inset-bottom, 0px))",
-          }}
-        >
-          {coachError && (
-            <p className="text-xs mb-2" style={{ color: palette.red }}>
-              {coachError}
-            </p>
-          )}
+        {coachError && (
+          <p className="text-xs mb-2" style={{ color: palette.red }}>
+            {coachError}
+          </p>
+        )}
 
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={coachInput}
-              onChange={(e) => setCoachInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendCoachMessage();
-                }
-              }}
-              placeholder="Ask the Coach about your trades..."
-              disabled={coachLoading}
-              className="flex-1 rounded-lg px-3 py-2.5"
-              style={{
-                background: palette.field,
-                border: `1px solid ${palette.border}`,
-                color: palette.text,
-                fontFamily: mono,
-                fontSize: "13.5px",
-                outline: "none",
-              }}
-            />
-            <button
-              type="button"
-              onClick={sendCoachMessage}
-              disabled={coachLoading || !coachInput.trim()}
-              className={`rounded-lg px-4 py-2.5 flex items-center justify-center ${TAP}`}
-              style={{
-                background: palette.gold,
-                color: palette.letterbox,
-                opacity: coachLoading || !coachInput.trim() ? 0.6 : 1,
-              }}
-              aria-label="Send"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-
-          {coachRemaining !== null && (
-            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
-              {coachRemaining > 0
-                ? `${coachRemaining} message${coachRemaining === 1 ? "" : "s"} left today.`
-                : "Daily limit reached \u2014 resets at midnight UTC."}
-            </p>
-          )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={coachInput}
+            onChange={(e) => setCoachInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendCoachMessage();
+              }
+            }}
+            placeholder="Ask the Coach about your trades..."
+            disabled={coachLoading}
+            className="flex-1 rounded-lg px-3 py-2.5"
+            style={{
+              background: palette.field,
+              border: `1px solid ${palette.border}`,
+              color: palette.text,
+              fontFamily: mono,
+              fontSize: "13.5px",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={sendCoachMessage}
+            disabled={coachLoading || !coachInput.trim()}
+            className={`rounded-lg px-4 py-2.5 flex items-center justify-center ${TAP}`}
+            style={{
+              background: palette.gold,
+              color: palette.letterbox,
+              opacity: coachLoading || !coachInput.trim() ? 0.6 : 1,
+            }}
+            aria-label="Send"
+          >
+            <Send size={16} />
+          </button>
         </div>
+
+        {coachRemaining !== null && (
+          <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
+            {coachRemaining > 0
+              ? `${coachRemaining} message${coachRemaining === 1 ? "" : "s"} left today.`
+              : "Daily limit reached \u2014 resets at midnight UTC."}
+          </p>
+        )}
       </div>
     );
 

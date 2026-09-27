@@ -18328,9 +18328,7 @@ if (activeTab === "community") {
                 const isMe = m.author === communityUsername;
                 const prev = chatMessages[i - 1];
                 const grouped = prev && prev.author === m.author && m.ts - prev.ts < 3 * 60 * 1000;
-                const bubbleColor = isMe
-                  ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`
-                  : palette.surface;
+                const bubbleColor = isMe ? palette.gold : palette.surface;
                 const textColor = isMe ? palette.letterbox : palette.text;
                 const canDelete = isMe || isGroupOwner;
                 return (
@@ -18383,13 +18381,21 @@ if (activeTab === "community") {
                       >
                         {m.replyToAuthor && (
                           <div
-                            className="rounded-lg px-2.5 py-1.5 mb-1.5"
-                            style={{ background: isMe ? "rgba(0,0,0,0.12)" : palette.field, borderLeft: `2px solid ${palette.gold}` }}
+                            className="px-4 py-2"
+                            style={{
+                              margin: "-10px -16px 6px -16px",
+                              background: isMe ? "rgba(0,0,0,0.14)" : palette.field,
+                              borderLeft: `3px solid ${isMe ? palette.letterbox : palette.gold}`,
+                              borderTopLeftRadius: !isMe && grouped ? "6px" : "14px",
+                              borderTopRightRadius: isMe && grouped ? "6px" : "14px",
+                              borderBottomLeftRadius: "4px",
+                              borderBottomRightRadius: "4px",
+                            }}
                           >
                             <div style={{ fontSize: "10px", fontWeight: 700, color: isMe ? palette.letterbox : palette.gold, opacity: 0.9 }}>
                               {m.replyToAuthor}
                             </div>
-                            <div className="truncate" style={{ fontSize: "11px", opacity: 0.8 }}>{m.replyToText}</div>
+                            <div className="truncate" style={{ fontSize: "11px", opacity: 0.85, color: isMe ? palette.letterbox : palette.textMuted }}>{m.replyToText}</div>
                           </div>
                         )}
                         {m.text}

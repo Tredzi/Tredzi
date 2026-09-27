@@ -13210,6 +13210,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           <StatChip label="Largest Loss" value={fmtSigned(perf.largestLoss)} />
         </div>
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
+        <div>
         <span
           className="block mb-1.5 uppercase"
           style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13245,7 +13247,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             );
           })}
         </div>
+        </div>
 
+        <div>
         <span
           className="block mb-1.5 uppercase"
           style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13271,6 +13275,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
               }}
             />
           </div>
+        </div>
+        </div>
         </div>
       </>
     );
@@ -13337,8 +13343,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           )}
         </div>
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
         {disciplineTrend.length > 1 && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13380,11 +13387,11 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 </ResponsiveContainer>
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {noteTags.length > 0 && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13424,8 +13431,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 </ResponsiveContainer>
               </div>
             </div>
-          </>
+          </div>
         )}
+        </div>
 
         <span
           className="block mb-1.5 uppercase"
@@ -13770,8 +13778,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           </div>
         </div>
 
+        <div className={isDesktop ? "grid grid-cols-2 gap-5 items-start" : "contents"}>
         {weekdayFreq.some((d) => d.count > 0) && (
-          <>
+          <div>
             <span
               className="block mb-1.5 uppercase"
               style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
@@ -13807,14 +13816,14 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 </ResponsiveContainer>
               </div>
             </div>
-          </>
+          </div>
         )}
 
 {sessionByDay.length > 0 && (() => {
   const sessionFreq = journalSessionFrequency(journalRows);
   const totalEntries = sessionFreq.reduce((sum, s) => sum + s.count, 0);
   return (
-    <>
+    <div>
       <span className="block mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
         Session Breakdown
       </span>
@@ -13890,9 +13899,10 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       <p className="text-xs mb-6" style={{ color: palette.textFaint }}>
         Daily entries stacked by session — bars show when you're most active. Progress strips show each session's share of all logged entries.
       </p>
-    </>
+    </div>
   );
 })()}
+        </div>
 
         {confidenceByDay.length > 1 && (
           <>

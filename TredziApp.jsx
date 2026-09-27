@@ -3848,6 +3848,7 @@ export default function TredziApp() {
   const ActiveTabIcon = TABS.find((t) => t.id === activeTab)?.icon || Scale;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMobileSection, setSettingsMobileSection] = useState(null);
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
   const [pulseOpen, setPulseOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
@@ -20515,23 +20516,27 @@ if (activeTab === "community") {
 
 {settingsOpen && (() => {
   const settingsCategories = [
-    communityUsername && { id: "profile", label: "Profile", icon: Users },
-    { id: "accounts", label: "Accounts", icon: Building2 },
-    { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "navigation", label: "Navigation", icon: LayoutGrid },
-    { id: "trading-defaults", label: "Trading Defaults", icon: Scale },
-    { id: "risk-discipline", label: "Risk & Discipline", icon: ShieldAlert },
-    { id: "custom-tags", label: "Custom Tags", icon: Tags },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "sharing-reports", label: "Sharing & Reports", icon: Share2 },
-    { id: "journal-data", label: "Journal & Data", icon: Table2 },
-    { id: "help-tips", label: "Help & Tips", icon: Lightbulb },
-    { id: "backup", label: "Full Backup", icon: Download },
-    session && !communityUsername && { id: "community", label: "Community", icon: Users },
-    { id: "danger-zone", label: "Danger Zone", icon: AlertTriangle, danger: true },
+    communityUsername && { id: "profile", label: "Profile", icon: Users, group: "Account", subtitle: "Avatar, email, password" },
+    { id: "accounts", label: "Accounts", icon: Building2, group: "Account", subtitle: "Balances & active account" },
+    session && !communityUsername && { id: "community", label: "Community", icon: Users, group: "Account", subtitle: "Public profile & handle" },
+    { id: "appearance", label: "Appearance", icon: Palette, group: "Preferences", subtitle: "Theme & color palette" },
+    { id: "navigation", label: "Navigation", icon: LayoutGrid, group: "Preferences", subtitle: "Tabs & default screens" },
+    { id: "trading-defaults", label: "Trading Defaults", icon: Scale, group: "Trading", subtitle: "Balance, period, sizing" },
+    { id: "risk-discipline", label: "Risk & Discipline", icon: ShieldAlert, group: "Trading", subtitle: "Cooldowns & daily limits" },
+    { id: "custom-tags", label: "Custom Tags", icon: Tags, group: "Trading", subtitle: "Setup & mood tags" },
+    { id: "notifications", label: "Notifications", icon: Bell, group: "Data & Alerts", subtitle: "News alarm lead time" },
+    { id: "sharing-reports", label: "Sharing & Reports", icon: Share2, group: "Data & Alerts", subtitle: "Share card & trader alias" },
+    { id: "journal-data", label: "Journal & Data", icon: Table2, group: "Data & Alerts", subtitle: "Heatmap range & layout" },
+    { id: "backup", label: "Full Backup", icon: Download, group: "Data & Alerts", subtitle: "Export everything" },
+    { id: "help-tips", label: "Help & Tips", icon: Lightbulb, group: "Support", subtitle: "Guides & onboarding tour" },
+    { id: "danger-zone", label: "Danger Zone", icon: AlertTriangle, danger: true, group: "Danger Zone", subtitle: "Reset settings to defaults" },
   ].filter(Boolean);
   const mobileListMode = !isDesktop && !settingsMobileSection;
   const activeCategory = settingsCategories.find((c) => c.id === settingsMobileSection);
+  const settingsGroupOrder = ["Account", "Preferences", "Trading", "Data & Alerts", "Support", "Danger Zone"];
+  const settingsGroups = settingsGroupOrder
+    .map((name) => ({ name, items: settingsCategories.filter((c) => c.group === name) }))
+    .filter((g) => g.items.length > 0);
   return (
   <div
     className="fixed inset-0 z-50 flex flex-col"
@@ -20586,7 +20591,7 @@ if (activeTab === "community") {
       </div>
       <button
         type="button"
-        onClick={() => { setSettingsOpen(false); setSettingsMobileSection(null); }}
+        onClick={() => { setSettingsOpen(false); setSettingsMobileSection(null); setSettingsSearchQuery(""); }}
         className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
         style={{ width: "38px", height: "38px", color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
         aria-label="Close settings"
@@ -20604,49 +20609,109 @@ if (activeTab === "community") {
         }}
       >
         {mobileListMode && (
-          <div className="flex flex-col gap-2">
-            {settingsCategories.map((cat) => {
-              const CatIcon = cat.icon;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSettingsMobileSection(cat.id)}
-                  className={`w-full flex items-center gap-3 rounded-xl px-4 py-3.5 text-left ${TAP}`}
-                  style={{
-                    background: palette.field,
-                    border: `1px solid ${cat.danger ? `${palette.red}55` : palette.border}`,
-                  }}
-                >
-                  <span
-                    className="flex items-center justify-center rounded-lg flex-shrink-0"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      background: `${cat.danger ? palette.red : palette.gold}1E`,
-                      color: cat.danger ? palette.red : palette.gold,
-                    }}
-                  >
-                    <CatIcon size={15} strokeWidth={2.2} />
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: display,
-                      fontSize: "13.5px",
-                      fontWeight: 700,
-                      color: cat.danger ? palette.red : palette.text,
-                      flex: 1,
-                    }}
-                  >
-                    {cat.label}
-                  </span>
-                  <ChevronRight size={16} style={{ color: palette.textFaint, flexShrink: 0 }} />
+          <div className="flex flex-col">
+            <div
+              className="flex items-center gap-2 rounded-xl px-3.5 mb-5"
+              style={{ height: "40px", background: palette.field, border: `1px solid ${palette.border}` }}
+            >
+              <Search size={15} style={{ color: palette.textFaint, flexShrink: 0 }} />
+              <input
+                value={settingsSearchQuery}
+                onChange={(e) => setSettingsSearchQuery(e.target.value)}
+                placeholder="Search settings"
+                className="flex-1 bg-transparent outline-none"
+                style={{ color: palette.text, fontSize: "13.5px" }}
+              />
+              {settingsSearchQuery && (
+                <button type="button" onClick={() => setSettingsSearchQuery("")} className={TAP} style={{ color: palette.textFaint }} aria-label="Clear search">
+                  <X size={14} />
                 </button>
+              )}
+            </div>
+
+            {settingsGroups.map(({ name, items }) => {
+              const filteredItems = items.filter((cat) => {
+                const q = settingsSearchQuery.trim().toLowerCase();
+                if (!q) return true;
+                return cat.label.toLowerCase().includes(q) || (cat.subtitle || "").toLowerCase().includes(q);
+              });
+              if (filteredItems.length === 0) return null;
+              return (
+                <div key={name} className="mb-6">
+                  <div
+                    className="uppercase mb-2 px-1"
+                    style={{
+                      fontFamily: mono,
+                      fontSize: "10.5px",
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
+                      color: name === "Danger Zone" ? palette.red : palette.textFaint,
+                    }}
+                  >
+                    {name}
+                  </div>
+                  <div
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      background: palette.field,
+                      border: `1px solid ${name === "Danger Zone" ? `${palette.red}45` : palette.border}`,
+                    }}
+                  >
+                    {filteredItems.map((cat, i) => {
+                      const CatIcon = cat.icon;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setSettingsMobileSection(cat.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-left ${TAP}`}
+                          style={{
+                            background: "transparent",
+                            borderTop: i === 0 ? "none" : `1px solid ${palette.border}`,
+                          }}
+                        >
+                          <span
+                            className="flex items-center justify-center rounded-lg flex-shrink-0"
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              background: `${cat.danger ? palette.red : palette.gold}1E`,
+                              color: cat.danger ? palette.red : palette.gold,
+                            }}
+                          >
+                            <CatIcon size={14} strokeWidth={2.2} />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span
+                              className="block truncate"
+                              style={{
+                                fontFamily: display,
+                                fontSize: "13.5px",
+                                fontWeight: 600,
+                                color: cat.danger ? palette.red : palette.text,
+                              }}
+                            >
+                              {cat.label}
+                            </span>
+                            {cat.subtitle && (
+                              <span className="block truncate" style={{ fontSize: "11px", color: palette.textFaint, marginTop: "1px" }}>
+                                {cat.subtitle}
+                              </span>
+                            )}
+                          </span>
+                          <ChevronRight size={15} style={{ color: palette.textFaint, flexShrink: 0 }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
-        <div style={{ display: mobileListMode ? "none" : "block", ...(isDesktop ? { columnCount: 2, columnGap: "20px" } : {}) }}>
+        <div style={{ display: mobileListMode ? "none" : "block" }}>
+        <div className={isDesktop ? "flex items-start" : ""} style={isDesktop ? { gap: "20px" } : {}}>
+        <div className={isDesktop ? "flex flex-col" : ""} style={isDesktop ? { flex: "0 0 340px", minWidth: 0, position: "sticky", top: 0 } : {}}>
         {/* PROFILE */}
         {communityUsername && (
           <SettingsSection icon={Users} title="Profile" defaultOpen isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "profile"}>
@@ -21133,7 +21198,9 @@ if (activeTab === "community") {
             })}
           </div>
         </SettingsSection>
+        </div>
 
+        <div className={isDesktop ? "flex flex-col flex-1" : ""} style={isDesktop ? { minWidth: 0 } : {}}>
         {/* TRADING DEFAULTS */}
         <SettingsSection icon={Scale} title="Trading Defaults" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "trading-defaults"}>
           <SettingsSubLabel>Default Account Balance</SettingsSubLabel>
@@ -21833,6 +21900,8 @@ if (activeTab === "community") {
             </div>
           )}
         </SettingsSection>
+        </div>
+        </div>
         </div>
       </div>
     </div>

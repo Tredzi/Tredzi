@@ -494,8 +494,10 @@ function CurrencySelect({ label, value, onChange }) {
   );
 }
 
-function SettingsSection({ icon: Icon, title, description, danger, children, defaultOpen = false }) {
+function SettingsSection({ icon: Icon, title, description, danger, children, defaultOpen = false, isDesktop = true, hidden = false }) {
   const [open, setOpen] = useState(defaultOpen);
+  const locked = !isDesktop;
+  const isOpen = locked ? true : open;
   const accent = danger ? palette.red : palette.gold;
   return (
     <div
@@ -507,16 +509,16 @@ function SettingsSection({ icon: Icon, title, description, danger, children, def
         transition: THEME_TRANSITION,
         breakInside: "avoid",
         WebkitColumnBreakInside: "avoid",
-        display: "inline-block",
+        display: hidden ? "none" : "inline-block",
         width: "100%",
         verticalAlign: "top",
       }}
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={locked ? undefined : () => setOpen((v) => !v)}
         className="w-full flex items-center gap-2.5 p-4 text-left"
-        style={{ background: "transparent" }}
+        style={{ background: "transparent", cursor: locked ? "default" : "pointer" }}
       >
         {Icon && (
           <span
@@ -544,17 +546,19 @@ function SettingsSection({ icon: Icon, title, description, danger, children, def
         >
           {title}
         </span>
-        <ChevronDown
-          size={16}
-          style={{
-            color: palette.textFaint,
-            flexShrink: 0,
-            transform: open ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s ease",
-          }}
-        />
+        {!locked && (
+          <ChevronDown
+            size={16}
+            style={{
+              color: palette.textFaint,
+              flexShrink: 0,
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+            }}
+          />
+        )}
       </button>
-      {open && (
+      {isOpen && (
         <div className="px-4 pb-4">
           {description && (
             <p className="text-xs mb-3" style={{ color: palette.textFaint }}>
@@ -3843,6 +3847,7 @@ export default function TredziApp() {
   const [activeTab, setActiveTab] = useState("risk");
   const ActiveTabIcon = TABS.find((t) => t.id === activeTab)?.icon || Scale;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMobileSection, setSettingsMobileSection] = useState(null);
   const [pulseOpen, setPulseOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
@@ -20508,7 +20513,26 @@ if (activeTab === "community") {
         </div>
       )}
 
-{settingsOpen && (
+{settingsOpen && (() => {
+  const settingsCategories = [
+    communityUsername && { id: "profile", label: "Profile", icon: Users },
+    { id: "accounts", label: "Accounts", icon: Building2 },
+    { id: "appearance", label: "Appearance", icon: Palette },
+    { id: "navigation", label: "Navigation", icon: LayoutGrid },
+    { id: "trading-defaults", label: "Trading Defaults", icon: Scale },
+    { id: "risk-discipline", label: "Risk & Discipline", icon: ShieldAlert },
+    { id: "custom-tags", label: "Custom Tags", icon: Tags },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "sharing-reports", label: "Sharing & Reports", icon: Share2 },
+    { id: "journal-data", label: "Journal & Data", icon: Table2 },
+    { id: "help-tips", label: "Help & Tips", icon: Lightbulb },
+    { id: "backup", label: "Full Backup", icon: Download },
+    session && !communityUsername && { id: "community", label: "Community", icon: Users },
+    { id: "danger-zone", label: "Danger Zone", icon: AlertTriangle, danger: true },
+  ].filter(Boolean);
+  const mobileListMode = !isDesktop && !settingsMobileSection;
+  const activeCategory = settingsCategories.find((c) => c.id === settingsMobileSection);
+  return (
   <div
     className="fixed inset-0 z-50 flex flex-col"
     style={{ background: palette.bg, transition: THEME_TRANSITION }}
@@ -20525,32 +20549,44 @@ if (activeTab === "community") {
       }}
     >
       <div className="flex items-center gap-2.5">
-        <span
-          className="flex items-center justify-center rounded-xl flex-shrink-0"
-          style={{
-            width: isDesktop ? "38px" : "34px",
-            height: isDesktop ? "38px" : "34px",
-            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
-            boxShadow: `0 3px 10px ${palette.gold}44`,
-          }}
-        >
-          <Settings size={isDesktop ? 18 : 16} style={{ color: palette.letterbox }} strokeWidth={2.3} />
-        </span>
+        {!isDesktop && activeCategory ? (
+          <button
+            type="button"
+            onClick={() => setSettingsMobileSection(null)}
+            className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
+            style={{ width: "34px", height: "34px", color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}` }}
+            aria-label="Back to Settings"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        ) : (
+          <span
+            className="flex items-center justify-center rounded-xl flex-shrink-0"
+            style={{
+              width: isDesktop ? "38px" : "34px",
+              height: isDesktop ? "38px" : "34px",
+              background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+              boxShadow: `0 3px 10px ${palette.gold}44`,
+            }}
+          >
+            <Settings size={isDesktop ? 18 : 16} style={{ color: palette.letterbox }} strokeWidth={2.3} />
+          </span>
+        )}
         <div>
 <div style={{ fontFamily: display, fontSize: isDesktop ? "17px" : "15px", fontWeight: 700, color: palette.text, lineHeight: 1.15 }}>
-  Settings
+  {!isDesktop && activeCategory ? activeCategory.label : "Settings"}
 </div>
           <div
             className="uppercase"
             style={{ fontFamily: mono, fontSize: "10px", color: palette.textFaint, letterSpacing: "0.09em" }}
           >
-            Customize Tredzi
+            {!isDesktop && activeCategory ? "Settings" : "Customize Tredzi"}
           </div>
         </div>
       </div>
       <button
         type="button"
-        onClick={() => setSettingsOpen(false)}
+        onClick={() => { setSettingsOpen(false); setSettingsMobileSection(null); }}
         className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
         style={{ width: "38px", height: "38px", color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}
         aria-label="Close settings"
@@ -20567,10 +20603,53 @@ if (activeTab === "community") {
           padding: isDesktop ? "28px 32px 56px" : "16px 16px 32px",
         }}
       >
-        <div style={isDesktop ? { columnCount: 2, columnGap: "20px" } : undefined}>
+        {mobileListMode && (
+          <div className="flex flex-col gap-2">
+            {settingsCategories.map((cat) => {
+              const CatIcon = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSettingsMobileSection(cat.id)}
+                  className={`w-full flex items-center gap-3 rounded-xl px-4 py-3.5 text-left ${TAP}`}
+                  style={{
+                    background: palette.field,
+                    border: `1px solid ${cat.danger ? `${palette.red}55` : palette.border}`,
+                  }}
+                >
+                  <span
+                    className="flex items-center justify-center rounded-lg flex-shrink-0"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      background: `${cat.danger ? palette.red : palette.gold}1E`,
+                      color: cat.danger ? palette.red : palette.gold,
+                    }}
+                  >
+                    <CatIcon size={15} strokeWidth={2.2} />
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: display,
+                      fontSize: "13.5px",
+                      fontWeight: 700,
+                      color: cat.danger ? palette.red : palette.text,
+                      flex: 1,
+                    }}
+                  >
+                    {cat.label}
+                  </span>
+                  <ChevronRight size={16} style={{ color: palette.textFaint, flexShrink: 0 }} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ display: mobileListMode ? "none" : "block", ...(isDesktop ? { columnCount: 2, columnGap: "20px" } : {}) }}>
         {/* PROFILE */}
         {communityUsername && (
-          <SettingsSection icon={Users} title="Profile" defaultOpen>
+          <SettingsSection icon={Users} title="Profile" defaultOpen isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "profile"}>
             <div
               className="flex items-center gap-3 rounded-xl px-3 py-3 mb-3"
               style={{ background: palette.field, border: `1px solid ${palette.border}` }}
@@ -20714,7 +20793,7 @@ if (activeTab === "community") {
         )}
 
         {/* ACCOUNTS */}
-        <SettingsSection icon={Building2} title="Accounts" defaultOpen>
+        <SettingsSection icon={Building2} title="Accounts" defaultOpen isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "accounts"}>
           <SettingsSubLabel>Active Account</SettingsSubLabel>
 
           {!accountsLoaded ? (
@@ -20885,7 +20964,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* APPEARANCE */}
-        <SettingsSection icon={Palette} title="Appearance" defaultOpen>
+        <SettingsSection icon={Palette} title="Appearance" defaultOpen isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "appearance"}>
           <SettingsSubLabel>Theme</SettingsSubLabel>
           <div className="flex gap-2 mb-1 flex-wrap">
             {[
@@ -20919,7 +20998,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* NAVIGATION */}
-        <SettingsSection icon={LayoutGrid} title="Navigation">
+        <SettingsSection icon={LayoutGrid} title="Navigation" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "navigation"}>
           <SettingsSubLabel>Default Landing Tab</SettingsSubLabel>
           <div className="flex gap-2 flex-wrap mb-1">
             {navTabs.map((t) => {
@@ -21056,7 +21135,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* TRADING DEFAULTS */}
-        <SettingsSection icon={Scale} title="Trading Defaults">
+        <SettingsSection icon={Scale} title="Trading Defaults" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "trading-defaults"}>
           <SettingsSubLabel>Default Account Balance</SettingsSubLabel>
           <div
             className="flex items-center rounded-lg px-3 mb-1"
@@ -21149,7 +21228,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* RISK & DISCIPLINE */}
-        <SettingsSection icon={ShieldAlert} title="Risk & Discipline">
+        <SettingsSection icon={ShieldAlert} title="Risk & Discipline" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "risk-discipline"}>
           <SettingsSubLabel>Revenge Trade Cooldown</SettingsSubLabel>
           <button
             type="button"
@@ -21233,7 +21312,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* TAGS */}
-        <SettingsSection icon={Tags} title="Custom Tags">
+        <SettingsSection icon={Tags} title="Custom Tags" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "custom-tags"}>
           <SettingsSubLabel>Setup Tags</SettingsSubLabel>
           <div className="flex gap-2 flex-wrap mb-1 items-center">
             {SETUPS.filter((s) => !hiddenDefaultSetupIds.includes(s.id)).map((s) => (
@@ -21441,7 +21520,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* NOTIFICATIONS */}
-        <SettingsSection icon={Bell} title="Notifications">
+        <SettingsSection icon={Bell} title="Notifications" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "notifications"}>
           <SettingsSubLabel>News Alarm Lead Time</SettingsSubLabel>
           <PillGroup
             options={[5, 10, 15, 20, 30]}
@@ -21455,7 +21534,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* SHARING & REPORTS */}
-        <SettingsSection icon={Share2} title="Sharing & Reports">
+        <SettingsSection icon={Share2} title="Sharing & Reports" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "sharing-reports"}>
           <SettingsSubLabel>Weekly Share Card</SettingsSubLabel>
           <button
             type="button"
@@ -21492,7 +21571,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* JOURNAL & DATA */}
-        <SettingsSection icon={Table2} title="Journal & Data">
+        <SettingsSection icon={Table2} title="Journal & Data" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "journal-data"}>
           <SettingsSubLabel>Insights Heatmap Range</SettingsSubLabel>
           <PillGroup
             options={[13, 26, 52]}
@@ -21558,7 +21637,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
         {/* HELP */}
-        <SettingsSection icon={Lightbulb} title="Help & Tips">
+        <SettingsSection icon={Lightbulb} title="Help & Tips" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "help-tips"}>
           <button
             type="button"
             onClick={() => persistSettings({ ...settings, showOnboardingTips: !settings.showOnboardingTips })}
@@ -21600,7 +21679,7 @@ if (activeTab === "community") {
         </SettingsSection>
 
                 {/* FULL BACKUP */}
-        <SettingsSection icon={Download} title="Full Backup (Everything)">
+        <SettingsSection icon={Download} title="Full Backup (Everything)" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "backup"}>
           <p className="text-xs mb-3" style={{ color: palette.textFaint }}>
             Exports absolutely everything — trades, journal, playbook, notes, settings, goals, and calculator
             inputs — in one file. This is separate from the Curve tab's "Backup &amp; Restore," which only
@@ -21692,7 +21771,7 @@ if (activeTab === "community") {
 
         {/* If signed in but no community username set yet, still offer sign-out here */}
         {session && !communityUsername && (
-          <SettingsSection icon={Users} title="Community">
+          <SettingsSection icon={Users} title="Community" isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "community"}>
             <SettingsSubLabel>Signed In As</SettingsSubLabel>
             <div
               className="rounded-lg px-3 py-2.5 mb-3"
@@ -21713,7 +21792,7 @@ if (activeTab === "community") {
         )}
 
         {/* DANGER ZONE */}
-        <SettingsSection icon={AlertTriangle} title="Danger Zone" danger>
+        <SettingsSection icon={AlertTriangle} title="Danger Zone" danger isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "danger-zone"}>
           {!pendingSettingsReset ? (
             <button
               type="button"
@@ -21758,7 +21837,8 @@ if (activeTab === "community") {
       </div>
     </div>
   </div>
-)}
+  );
+})()}
 
 {pendingAccountDelete && (
   <div

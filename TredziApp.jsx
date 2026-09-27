@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -5878,6 +5878,26 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
   }, []);
 
 
+  // Fetch today's remaining AI Coach messages as soon as we know who's signed
+  // in, so the count is right the first time the Coach tab is opened rather
+  // than only appearing after the first message is sent.
+  useEffect(() => {
+    if (!session?.token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await communityApi("/ai/coach/usage", {
+          headers: { Authorization: `Bearer ${session.token}` },
+        });
+        if (!cancelled && typeof data.remaining === "number") setCoachRemaining(data.remaining);
+      } catch (err) {
+        // non-critical, fail silently \u2014 remaining will still update after the first send
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.token]);
+
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -6730,6 +6750,78 @@ useEffect(() => {
       setChangePasswordError(err.message || "Couldn't update your password.");
     } finally {
       setChangePasswordBusy(false);
+    }
+  };
+
+  // Build a compact, plain-text summary of the user's own trade stats to send
+  // alongside each Coach message, so the model answers from real numbers
+  // instead of guessing. Kept short on purpose — every line here is tokens
+  // the Worker pays for on each request.
+  const buildCoachContext = () => {
+    if (!trades.length) return "The user hasn't logged any trades yet.";
+    const insights = computeInsights(trades, customSetups, customMoods);
+    const perf = computePerformanceMetrics(trades);
+    const headline = computeHeadlineInsight(trades, customSetups, customMoods);
+    const lines = [];
+    lines.push(`Total trades: ${trades.length}`);
+    lines.push(`Win rate: ${(perf.winRate * 100).toFixed(0)}%`);
+    lines.push(`Net P&L: $${fmtMoney(perf.netProfit)}`);
+    lines.push(`Profit factor: ${Number.isFinite(perf.profitFactor) ? perf.profitFactor.toFixed(2) : "\u221e"}`);
+    if (insights.setupRows.length) {
+      lines.push(
+        "By setup: " +
+          insights.setupRows
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
+            .join("; ")
+      );
+    }
+    if (insights.moodRows.length) {
+      lines.push(
+        "By mood: " +
+          insights.moodRows
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
+            .join("; ")
+      );
+    }
+    if (insights.revengeCount > 0) {
+      lines.push(`Revenge trades: ${insights.revengeCount}, cost $${fmtMoney(insights.revengePnl)}`);
+    }
+    if (headline) lines.push(`Headline insight: ${headline}`);
+    return lines.join("\n");
+  };
+
+  // Send one message to the AI Coach (POST /ai/coach on the same Worker used
+  // for Community). Rate-limited per account by the backend; coachRemaining
+  // tracks how many messages are left today so the UI can show/disable state.
+  const sendCoachMessage = async () => {
+    const text = coachInput.trim();
+    if (!text || coachLoading) return;
+    if (!session?.token) {
+      setCoachError("Sign in to your account (Community tab) to use the AI Coach.");
+      return;
+    }
+    setCoachError("");
+    setCoachInput("");
+    const userMsg = { role: "user", text, id: `cm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` };
+    setCoachMessages((prev) => [...prev, userMsg]);
+    setCoachLoading(true);
+    try {
+      const data = await communityApi("/ai/coach", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ message: text, context: buildCoachContext() }),
+      });
+      setCoachMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: data.reply, id: `cm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
+      ]);
+      if (typeof data.remaining === "number") setCoachRemaining(data.remaining);
+    } catch (err) {
+      setCoachError(err.message || "Couldn't reach the AI Coach \u2014 try again in a moment.");
+      setCoachMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+      setCoachInput(text);
+    } finally {
+      setCoachLoading(false);
     }
   };
 
@@ -14301,6 +14393,124 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       </>
     );
 
+    const coachSection = !session?.token ? (
+      <div
+        className="rounded-2xl p-6 text-center"
+        style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+      >
+        <Sparkles size={28} style={{ color: palette.gold, margin: "0 auto 10px" }} />
+        <p className="text-sm mb-1" style={{ color: palette.text, fontWeight: 600 }}>
+          Sign in to use the AI Coach
+        </p>
+        <p className="text-xs" style={{ color: palette.textFaint }}>
+          The Coach reads your own trade stats and answers questions about them \u2014 sign in from the Community tab
+          first.
+        </p>
+      </div>
+    ) : (
+      <div className="flex flex-col" style={{ minHeight: "420px" }}>
+        <div
+          className="rounded-2xl p-4 mb-3 flex-1 flex flex-col gap-3"
+          style={{
+            background: palette.surface,
+            border: `1px solid ${palette.border}`,
+            minHeight: "320px",
+            maxHeight: "520px",
+            overflowY: "auto",
+          }}
+        >
+          {coachMessages.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+              <Sparkles size={24} style={{ color: palette.textFaint, marginBottom: "8px" }} />
+              <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px" }}>
+                Ask about your setups, moods, or patterns \u2014 e.g. "What's my best setup?" or "Why do my Tuesday
+                trades underperform?"
+              </p>
+            </div>
+          ) : (
+            coachMessages.map((m) => (
+              <div
+                key={m.id}
+                className="rounded-xl px-3 py-2"
+                style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  background: m.role === "user" ? palette.gold : palette.field,
+                  color: m.role === "user" ? palette.letterbox : palette.text,
+                  fontSize: "13.5px",
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {m.text}
+              </div>
+            ))
+          )}
+          {coachLoading && (
+            <div
+              className="rounded-xl px-3 py-2"
+              style={{ alignSelf: "flex-start", background: palette.field, color: palette.textFaint, fontSize: "13px" }}
+            >
+              Thinking\u2026
+            </div>
+          )}
+        </div>
+
+        {coachError && (
+          <p className="text-xs mb-2" style={{ color: palette.red }}>
+            {coachError}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={coachInput}
+            onChange={(e) => setCoachInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendCoachMessage();
+              }
+            }}
+            placeholder="Ask the Coach about your trades\u2026"
+            disabled={coachLoading}
+            className="flex-1 rounded-lg px-3 py-2.5"
+            style={{
+              background: palette.field,
+              border: `1px solid ${palette.border}`,
+              color: palette.text,
+              fontFamily: mono,
+              fontSize: "13.5px",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={sendCoachMessage}
+            disabled={coachLoading || !coachInput.trim()}
+            className={`rounded-lg px-4 py-2.5 flex items-center justify-center ${TAP}`}
+            style={{
+              background: palette.gold,
+              color: palette.letterbox,
+              opacity: coachLoading || !coachInput.trim() ? 0.6 : 1,
+            }}
+            aria-label="Send"
+          >
+            <Send size={16} />
+          </button>
+        </div>
+
+        {coachRemaining !== null && (
+          <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
+            {coachRemaining > 0
+              ? `${coachRemaining} message${coachRemaining === 1 ? "" : "s"} left today.`
+              : "Daily limit reached \u2014 resets at midnight UTC."}
+          </p>
+        )}
+      </div>
+    );
+
     body = (
       <div className={isDesktop ? "insights-desktop-redesign" : ""}>
         {isDesktop && (
@@ -14339,8 +14549,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         {insightsSubTab === "overview" && overviewSection}
         {insightsSubTab === "behavior" && behaviorSection}
         {insightsSubTab === "journal" && journalSection}
+        {insightsSubTab === "coach" && coachSection}
 
-        {insightsSubTab !== "journal" && hasData && (
+        {insightsSubTab !== "journal" && insightsSubTab !== "coach" && hasData && (
           <>
             <button
               type="button"

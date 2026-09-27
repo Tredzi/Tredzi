@@ -14544,7 +14544,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
               <Sparkles size={24} style={{ color: palette.textFaint, marginBottom: "8px" }} />
               <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px" }}>
-                Ask about your setups, moods, or patterns \u2014 e.g. "What's my best setup?" or "Why do my Tuesday
+                Ask about your setups, moods, or patterns - e.g. "What's my best setup?" or "Why do my Tuesday
                 trades underperform?"
               </p>
             </div>
@@ -14572,7 +14572,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
               className="rounded-xl px-3 py-2"
               style={{ alignSelf: "flex-start", background: palette.field, color: palette.textFaint, fontSize: "13px" }}
             >
-              Thinking\u2026
+              Thinking...
             </div>
           )}
         </div>
@@ -14594,7 +14594,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 sendCoachMessage();
               }
             }}
-            placeholder="Ask the Coach about your trades\u2026"
+            placeholder="Ask the Coach about your trades..."
             disabled={coachLoading}
             className="flex-1 rounded-lg px-3 py-2.5"
             style={{

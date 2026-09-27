@@ -84,12 +84,12 @@ const DARK_PALETTE = {
   text: "#F5F6F9",
   textMuted: "#A3AEC4",
   textFaint: "#68738F",
-  gold: "#2E5C9A",
-  goldBright: "#5B8AC4",
+  gold: "#3B9EFF",
+  goldBright: "#8CC7FF",
   green: "#63D4A4",
   red: "#F0897E",
   shadow: "0 4px 10px rgba(0,0,0,0.4), 0 16px 36px rgba(0,0,0,0.45)",
-  glow: "rgba(91,138,196,0.4)",
+  glow: "rgba(140,199,255,0.4)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.4)",
 };
 
@@ -102,12 +102,12 @@ const LIGHT_PALETTE = {
   text: "#19170F",
   textMuted: "#68624F",
   textFaint: "#9D9782",
-  gold: "#2E5C9A",
-  goldBright: "#1E4A7A",
+  gold: "#2563EB",
+  goldBright: "#1E40AF",
   green: "#0D9463",
   red: "#C43B2E",
   shadow: "0 1px 2px rgba(25,23,15,0.04), 0 10px 24px rgba(25,23,15,0.06)",
-  glow: "rgba(46,92,154,0.16)",
+  glow: "rgba(37,99,235,0.16)",
   navShadow: "0 -6px 18px rgba(25,23,15,0.045)",
 };
 
@@ -120,12 +120,12 @@ const AMBER_PALETTE = {
   text: "#F3EFE8",
   textMuted: "#ADA598",
   textFaint: "#726A5C",
-  gold: "#2E5C9A",
-  goldBright: "#5B8AC4",
+  gold: "#3B9EFF",
+  goldBright: "#8CC7FF",
   green: "#6FC492",
   red: "#E27860",
   shadow: "0 4px 10px rgba(0,0,0,0.5), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(91,138,196,0.3)",
+  glow: "rgba(140,199,255,0.3)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.5)",
 };
 
@@ -138,12 +138,12 @@ const FOREST_PALETTE = {
   text: "#EAF2EC",
   textMuted: "#9FB3A4",
   textFaint: "#6B7D70",
-  gold: "#2E5C9A",
-  goldBright: "#5B8AC4",
+  gold: "#3B9EFF",
+  goldBright: "#8CC7FF",
   green: "#4FC98A",
   red: "#E2735C",
   shadow: "0 4px 10px rgba(0,0,0,0.45), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(46,92,154,0.35)",
+  glow: "rgba(59,158,255,0.35)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.45)",
 };
 
@@ -3233,8 +3233,8 @@ const SHARE_COLORS = {
   dark: {
     green: "#4FB286",
     red: "#DB6B63",
-    gold: "#2E5C9A",
-    goldBright: "#5B8AC4",
+    gold: "#3B9EFF",
+    goldBright: "#8CC7FF",
     text: "#F3F5F9",
     textMuted: "#A8B4CC",
     textFaint: "#7C89A6",
@@ -3248,8 +3248,8 @@ const SHARE_COLORS = {
   light: {
     green: "#0D9463",
     red: "#C43B2E",
-    gold: "#2E5C9A",
-    goldBright: "#1E4A7A",
+    gold: "#2563EB",
+    goldBright: "#1E40AF",
     text: "#19170F",
     textMuted: "#68624F",
     textFaint: "#9D9782",
@@ -10862,7 +10862,7 @@ rightContent={
                   </div>
                   <div className="text-right">
                     <div style={{ color: palette.textFaint, fontSize: "10px" }}>Risking</div>
-                    <div style={{ color: palette.green, fontFamily: mono, fontSize: "16px", fontWeight: 700, marginTop: "3px" }}>
+                    <div style={{ color: palette.gold, fontFamily: mono, fontSize: "16px", fontWeight: 700, marginTop: "3px" }}>
                       ${fmt(riskAmt)}
                     </div>
                   </div>
@@ -11935,7 +11935,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                       fontSize: "12px",
                     }}
                     labelStyle={{ color: palette.textMuted }}
-                    itemStyle={{ color: netPnl >= 0 ? palette.green : palette.red }}
+                    itemStyle={{ color: palette.goldBright }}
                     formatter={(v) => [`$${fmt(v)}`, "Equity"]}
                     labelFormatter={(l) => `Trade ${l}`}
                   />
@@ -22775,7 +22775,7 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
       )}
 
       {statementPeriod && (() => {
-        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#2E5C9A", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
+        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#2563EB", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
         const data = computeStatementData(trades, journalEntries, customSetups, playbookCheckins, startingBalance, statementPeriod, customMoods);
         const fmtSigned = (n) => `${n >= 0 ? "+" : "-"}$${fmtMoney(n)}`;
         const fmtRatio = (n) => (Number.isFinite(n) ? n.toFixed(2) : "\u221e");

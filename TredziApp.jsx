@@ -316,8 +316,11 @@ function resizeImageFile(file, maxDim = SCREENSHOT_MAX_DIM) {
 }
 
 const STICKER_MAX_DIM = 320;
-const STICKER_MAX_BYTES = 140_000; // headroom under the worker's 200,000-char stored limit
+const STICKER_MAX_BYTES = 140_000; // headroom under the worker's stored limit, for canvas-resized static stickers
+const STICKER_RAW_MAX_BYTES = 2_000_000; // animated GIF/WebP go through untouched (canvas would flatten the animation), so just cap the raw file size
 
+// Static images only — draws to canvas to resize/compress, which flattens any animation
+// to a single frame. GIF/WebP go through readStickerFileRaw instead so animation survives.
 function resizeStickerFile(file, maxDim = STICKER_MAX_DIM) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -335,6 +338,21 @@ function resizeStickerFile(file, maxDim = STICKER_MAX_DIM) {
       img.onerror = () => reject(new Error("Couldn't read that image"));
       img.src = reader.result;
     };
+    reader.onerror = () => reject(new Error("Couldn't read that file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// GIF/WebP pass through unmodified so their animation is preserved — no canvas step,
+// just a straight base64 read, gated by a raw file-size cap instead of a re-encoded one.
+function readStickerFileRaw(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > STICKER_RAW_MAX_BYTES) {
+      reject(new Error("That file's too large — try a GIF/WebP under 2MB (trim it or shrink the resolution)."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error("Couldn't read that file"));
     reader.readAsDataURL(file);
   });
@@ -7356,7 +7374,8 @@ if (!isSignal && !communityMsgText.trim()) return;
     setStickerUploading(true);
     setStickerError("");
     try {
-      const image = await resizeStickerFile(file);
+      const isAnimatable = file.type === "image/gif" || file.type === "image/webp";
+      const image = isAnimatable ? await readStickerFileRaw(file) : await resizeStickerFile(file);
       const data = await communityApi(`/stickers/packs/${stickerActivePackId}/stickers`, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },

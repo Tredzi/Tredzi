@@ -84,12 +84,12 @@ const DARK_PALETTE = {
   text: "#F5F6F9",
   textMuted: "#A3AEC4",
   textFaint: "#68738F",
-  gold: "#E0AC5F",
-  goldBright: "#FFD695",
+  gold: "#8C7AE6",
+  goldBright: "#B8ACFF",
   green: "#63D4A4",
   red: "#F0897E",
   shadow: "0 4px 10px rgba(0,0,0,0.4), 0 16px 36px rgba(0,0,0,0.45)",
-  glow: "rgba(255,214,149,0.4)",
+  glow: "rgba(184,172,255,0.4)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.4)",
 };
 
@@ -102,12 +102,12 @@ const LIGHT_PALETTE = {
   text: "#19170F",
   textMuted: "#68624F",
   textFaint: "#9D9782",
-  gold: "#B08A3E",
-  goldBright: "#8C6A26",
+  gold: "#8C7AE6",
+  goldBright: "#B8ACFF",
   green: "#0D9463",
   red: "#C43B2E",
   shadow: "0 1px 2px rgba(25,23,15,0.04), 0 10px 24px rgba(25,23,15,0.06)",
-  glow: "rgba(176,138,62,0.16)",
+  glow: "rgba(140,122,230,0.16)",
   navShadow: "0 -6px 18px rgba(25,23,15,0.045)",
 };
 
@@ -120,12 +120,12 @@ const AMBER_PALETTE = {
   text: "#F3EFE8",
   textMuted: "#ADA598",
   textFaint: "#726A5C",
-  gold: "#D99A44",
-  goldBright: "#EFC06B",
+  gold: "#8C7AE6",
+  goldBright: "#B8ACFF",
   green: "#6FC492",
   red: "#E27860",
   shadow: "0 4px 10px rgba(0,0,0,0.5), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(239,192,107,0.3)",
+  glow: "rgba(184,172,255,0.3)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.5)",
 };
 
@@ -138,12 +138,12 @@ const FOREST_PALETTE = {
   text: "#EAF2EC",
   textMuted: "#9FB3A4",
   textFaint: "#6B7D70",
-  gold: "#D9A441",
-  goldBright: "#F0C36B",
+  gold: "#8C7AE6",
+  goldBright: "#B8ACFF",
   green: "#4FC98A",
   red: "#E2735C",
   shadow: "0 4px 10px rgba(0,0,0,0.45), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(217,164,65,0.35)",
+  glow: "rgba(140,122,230,0.35)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.45)",
 };
 
@@ -3233,8 +3233,8 @@ const SHARE_COLORS = {
   dark: {
     green: "#4FB286",
     red: "#DB6B63",
-    gold: "#C7A25C",
-    goldBright: "#E7C687",
+    gold: "#8C7AE6",
+    goldBright: "#B8ACFF",
     text: "#F3F5F9",
     textMuted: "#A8B4CC",
     textFaint: "#7C89A6",
@@ -3248,8 +3248,8 @@ const SHARE_COLORS = {
   light: {
     green: "#0D9463",
     red: "#C43B2E",
-    gold: "#B08A3E",
-    goldBright: "#8C6A26",
+    gold: "#8C7AE6",
+    goldBright: "#B8ACFF",
     text: "#19170F",
     textMuted: "#68624F",
     textFaint: "#9D9782",
@@ -22775,7 +22775,7 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
       )}
 
       {statementPeriod && (() => {
-        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#B08A3E", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
+        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#8C7AE6", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
         const data = computeStatementData(trades, journalEntries, customSetups, playbookCheckins, startingBalance, statementPeriod, customMoods);
         const fmtSigned = (n) => `${n >= 0 ? "+" : "-"}$${fmtMoney(n)}`;
         const fmtRatio = (n) => (Number.isFinite(n) ? n.toFixed(2) : "\u221e");

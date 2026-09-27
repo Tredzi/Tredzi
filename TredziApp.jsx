@@ -84,12 +84,12 @@ const DARK_PALETTE = {
   text: "#F5F6F9",
   textMuted: "#A3AEC4",
   textFaint: "#68738F",
-  gold: "#3B9EFF",
-  goldBright: "#8CC7FF",
+  gold: "#2E5C9A",
+  goldBright: "#5B8AC4",
   green: "#63D4A4",
   red: "#F0897E",
   shadow: "0 4px 10px rgba(0,0,0,0.4), 0 16px 36px rgba(0,0,0,0.45)",
-  glow: "rgba(140,199,255,0.4)",
+  glow: "rgba(91,138,196,0.4)",
   navShadow: "0 -6px 20px rgba(0,0,0,0.4)",
 };
 
@@ -102,49 +102,31 @@ const LIGHT_PALETTE = {
   text: "#19170F",
   textMuted: "#68624F",
   textFaint: "#9D9782",
-  gold: "#2563EB",
-  goldBright: "#1E40AF",
+  gold: "#2E5C9A",
+  goldBright: "#1E4A7A",
   green: "#0D9463",
   red: "#C43B2E",
   shadow: "0 1px 2px rgba(25,23,15,0.04), 0 10px 24px rgba(25,23,15,0.06)",
-  glow: "rgba(37,99,235,0.16)",
+  glow: "rgba(46,92,154,0.16)",
   navShadow: "0 -6px 18px rgba(25,23,15,0.045)",
 };
 
-const AMBER_PALETTE = {
-  bg: "#0B0A09",
-  letterbox: "#060505",
-  surface: "#181614",
-  field: "#211E1A",
-  border: "#3D372F",
-  text: "#F3EFE8",
-  textMuted: "#ADA598",
-  textFaint: "#726A5C",
-  gold: "#3B9EFF",
-  goldBright: "#8CC7FF",
-  green: "#6FC492",
-  red: "#E27860",
-  shadow: "0 4px 10px rgba(0,0,0,0.5), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(140,199,255,0.3)",
-  navShadow: "0 -6px 20px rgba(0,0,0,0.5)",
-};
-
-const FOREST_PALETTE = {
-  bg: "#0D140F",
-  letterbox: "#070B08",
-  surface: "#16211A",
-  field: "#1E2B22",
-  border: "#35473C",
-  text: "#EAF2EC",
-  textMuted: "#9FB3A4",
-  textFaint: "#6B7D70",
-  gold: "#3B9EFF",
-  goldBright: "#8CC7FF",
-  green: "#4FC98A",
-  red: "#E2735C",
-  shadow: "0 4px 10px rgba(0,0,0,0.45), 0 16px 36px rgba(0,0,0,0.5)",
-  glow: "rgba(59,158,255,0.35)",
-  navShadow: "0 -6px 20px rgba(0,0,0,0.45)",
+const VOID_PALETTE = {
+  bg: "#000000",
+  letterbox: "#000000",
+  surface: "#0A0A0C",
+  field: "#131316",
+  border: "#232328",
+  text: "#F2F3F6",
+  textMuted: "#8E93A0",
+  textFaint: "#54585F",
+  gold: "#2E5C9A",
+  goldBright: "#5B8AC4",
+  green: "#63D4A4",
+  red: "#F0897E",
+  shadow: "0 4px 10px rgba(0,0,0,0.6), 0 16px 36px rgba(0,0,0,0.65)",
+  glow: "rgba(91,138,196,0.4)",
+  navShadow: "0 -6px 20px rgba(0,0,0,0.6)",
 };
 
 const palette = { ...DARK_PALETTE };
@@ -634,11 +616,11 @@ function StatChip({ label, value, onClick, isDesktop }) {
 
 
 const AVATAR_HUES = [
-  { bg: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`, fg: palette.letterbox },
-  { bg: `linear-gradient(135deg, ${palette.green}, #3FA97C)`, fg: "#08150F" },
-  { bg: `linear-gradient(135deg, ${palette.red}, #C85A50)`, fg: "#1A0806" },
-  { bg: `linear-gradient(135deg, #7EA6E0, #4E7BC4)`, fg: "#08131F" },
-  { bg: `linear-gradient(135deg, #C792E4, #9A5DC2)`, fg: "#170A1F" },
+  { bg: palette.gold, fg: palette.letterbox },
+  { bg: palette.green, fg: "#08150F" },
+  { bg: palette.red, fg: "#1A0806" },
+  { bg: "#5B8AC4", fg: "#08131F" },
+  { bg: "#C792E4", fg: "#170A1F" },
 ];
 
 const getInitials = (name) =>
@@ -792,7 +774,7 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent }) {
     <div
       className="relative overflow-hidden rounded-2xl p-5 mb-6"
       style={{
-        background: `linear-gradient(135deg, ${palette.surface} 0%, ${palette.field}CC 100%)`,
+        background: palette.surface,
         border: `1px solid ${palette.gold}22`,
         borderRadius: "18px",
         boxShadow: `${palette.shadow}, 0 0 0 1px ${palette.gold}0A inset`,
@@ -800,14 +782,6 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent }) {
         transition: THEME_TRANSITION,
       }}
     >
-      <div
-        className="absolute inset-0 pointer-events-none"
-        aria-hidden="true"
-        style={{
-          background: `repeating-linear-gradient(to bottom, ${palette.gold}14 0px, ${palette.gold}14 1px, transparent 1px, transparent 10px)`,
-          opacity: 0.6,
-        }}
-      />
       <div
         className="absolute left-0 top-0 bottom-0 flex flex-col justify-around pointer-events-none"
         aria-hidden="true"
@@ -926,10 +900,6 @@ function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFi
         preserveAspectRatio="none"
       >
         <defs>
-          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={palette.gold} stopOpacity={opacityFill} />
-            <stop offset="100%" stopColor={palette.gold} stopOpacity="0" />
-          </linearGradient>
           <filter id={glowId} x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="4" result="blur" />
             <feMerge>
@@ -938,7 +908,7 @@ function OnboardingCurveLayer({ d, top, height, viewBoxH, opacityLine, opacityFi
             </feMerge>
           </filter>
         </defs>
-        <path d={`${d} L1280,${viewBoxH} L0,${viewBoxH} Z`} fill={`url(#${fillId})`} />
+        <path d={`${d} L1280,${viewBoxH} L0,${viewBoxH} Z`} fill={palette.gold} fillOpacity={opacityFill} />
         <path d={d} fill="none" stroke={palette.gold} strokeWidth="1.25" opacity={opacityLine} />
         <path
           className="onboard-curve-travel"
@@ -3245,8 +3215,8 @@ const SHARE_COLORS = {
   dark: {
     green: "#4FB286",
     red: "#DB6B63",
-    gold: "#3B9EFF",
-    goldBright: "#8CC7FF",
+    gold: "#2E5C9A",
+    goldBright: "#5B8AC4",
     text: "#F3F5F9",
     textMuted: "#A8B4CC",
     textFaint: "#7C89A6",
@@ -3260,8 +3230,8 @@ const SHARE_COLORS = {
   light: {
     green: "#0D9463",
     red: "#C43B2E",
-    gold: "#2563EB",
-    goldBright: "#1E40AF",
+    gold: "#2E5C9A",
+    goldBright: "#1E4A7A",
     text: "#19170F",
     textMuted: "#68624F",
     textFaint: "#9D9782",
@@ -3346,10 +3316,7 @@ function drawShareCard(canvas, {
   roundRect(36, 36, W - 72, H - 72, 28);
   ctx.clip();
 
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, c.bgFrom);
-  bgGrad.addColorStop(1, c.bgTo);
-  ctx.fillStyle = bgGrad;
+  ctx.fillStyle = c.bgFrom;
   ctx.fillRect(0, 0, W, H);
 
   ctx.save();
@@ -3363,26 +3330,6 @@ function drawShareCard(canvas, {
     }
   }
   ctx.restore();
-
-  const glowA = isDark ? "2E" : "16";
-  const glowB = isDark ? "26" : "12";
-  const g1 = ctx.createRadialGradient(W * 0.12, 100, 0, W * 0.12, 100, 560);
-  g1.addColorStop(0, `${lineColor}${glowA}`);
-  g1.addColorStop(1, `${lineColor}00`);
-  ctx.fillStyle = g1;
-  ctx.fillRect(0, 0, W, H * 0.5);
-
-  const g2 = ctx.createRadialGradient(W * 0.92, 60, 0, W * 0.92, 60, 480);
-  g2.addColorStop(0, `${c.gold}${glowB}`);
-  g2.addColorStop(1, `${c.gold}00`);
-  ctx.fillStyle = g2;
-  ctx.fillRect(0, 0, W, H * 0.45);
-
-  const g3 = ctx.createRadialGradient(W * 0.5, H * 0.86, 0, W * 0.5, H * 0.86, 520);
-  g3.addColorStop(0, `${lineColor}${glowB}`);
-  g3.addColorStop(1, `${lineColor}00`);
-  ctx.fillStyle = g3;
-  ctx.fillRect(0, H * 0.55, W, H * 0.45);
 
   ctx.restore(); // end clip
 
@@ -3474,13 +3421,10 @@ function drawShareCard(canvas, {
   const numText = fmtPct(netPct);
   ctx.font = "700 96px -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   const numWidth = ctx.measureText(numText).width;
-  const numGrad = ctx.createLinearGradient(80, 0, 80 + numWidth, 0);
-  numGrad.addColorStop(0, lineColor);
-  numGrad.addColorStop(1, tint);
   ctx.save();
   ctx.shadowColor = `${lineColor}AA`;
   ctx.shadowBlur = 32;
-  ctx.fillStyle = numGrad;
+  ctx.fillStyle = lineColor;
   ctx.fillText(numText, 80, traderAlias ? 410 : 390);
   ctx.restore();
 
@@ -3528,10 +3472,7 @@ function drawShareCard(canvas, {
   const chartH = 320;
 
   roundRect(chartX, chartY, chartW, chartH, 20);
-  const chartBg = ctx.createLinearGradient(chartX, chartY, chartX, chartY + chartH);
-  chartBg.addColorStop(0, c.surface);
-  chartBg.addColorStop(1, `${c.surface}CC`);
-  ctx.fillStyle = chartBg;
+  ctx.fillStyle = c.surface;
   ctx.fill();
   ctx.save();
   ctx.shadowColor = `${lineColor}33`;
@@ -3576,10 +3517,7 @@ function drawShareCard(canvas, {
   curve.forEach((p, i) => ctx.lineTo(xFor(i), yFor(p.pct)));
   ctx.lineTo(xFor(curve.length - 1), yFor(0));
   ctx.closePath();
-  const areaGrad = ctx.createLinearGradient(0, plotY, 0, plotY + plotH);
-  areaGrad.addColorStop(0, `${lineColor}70`);
-  areaGrad.addColorStop(1, `${lineColor}00`);
-  ctx.fillStyle = areaGrad;
+  ctx.fillStyle = `${lineColor}40`;
   ctx.fill();
 
   ctx.beginPath();
@@ -3644,10 +3582,7 @@ function drawShareCard(canvas, {
     stats.forEach((s, i) => {
       const x = chartX + i * (chipW + gap);
       roundRect(x, y, chipW, chipH, 20);
-      const cardGrad = ctx.createLinearGradient(x, y, x, y + chipH);
-      cardGrad.addColorStop(0, c.surface);
-      cardGrad.addColorStop(1, `${c.surface}CC`);
-      ctx.fillStyle = cardGrad;
+      ctx.fillStyle = c.surface;
       ctx.fill();
       ctx.strokeStyle = s.accent ? `${s.color}66` : c.border;
       ctx.lineWidth = s.accent ? 2 : 1;
@@ -3889,8 +3824,7 @@ export default function TredziApp() {
 Object.assign(
   palette,
   theme === "light" ? LIGHT_PALETTE
-    : theme === "amber" ? AMBER_PALETTE
-    : theme === "forest" ? FOREST_PALETTE
+    : theme === "void" ? VOID_PALETTE
     : DARK_PALETTE
 );
 
@@ -4039,6 +3973,11 @@ const resetPropFirmWizard = () => {
   const [expandedHeatmapDay, setExpandedHeatmapDay] = useState(null);
   const [insightReportMsg, setInsightReportMsg] = useState("");
   const [insightsSubTab, setInsightsSubTab] = useState("overview");
+  const [coachMessages, setCoachMessages] = useState([]);
+  const [coachInput, setCoachInput] = useState("");
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachError, setCoachError] = useState("");
+  const [coachRemaining, setCoachRemaining] = useState(null);
 
   const [journalSubTab, setJournalSubTab] = useState("log");
   const [journalEntries, setJournalEntries] = useState([]);
@@ -5884,7 +5823,7 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
         if (cancelled) return;
         if (themeRes && themeRes.value) {
           const t = themeRes.value;
-          if (t === "light" || t === "dark") setTheme(t);
+          if (t === "light" || t === "dark" || t === "void") setTheme(t);
         }
       } catch (err) {
         // non-critical, fail silently
@@ -6417,7 +6356,7 @@ const [balRes, csRes, tradesRes, journalRes, playbookRulesRes, playbookCheckinsR
 
 const setThemeMode = (mode) => {
   persistSettings({ ...settings, themeMode: mode });
-  if (mode === "dark" || mode === "light" || mode === "amber" || mode === "forest") {
+  if (mode === "dark" || mode === "light" || mode === "void") {
     setTheme(mode);
     window.storage.set(THEME_STORAGE_KEY, mode, false).catch(() => {});
   }
@@ -8197,7 +8136,7 @@ const updateSyncedJournalRow = (trade) => {
                         width: "88px",
                         height: "88px",
                         borderRadius: "24px",
-                        background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                        background: palette.gold,
                         boxShadow: `0 10px 28px ${palette.gold}44`,
                       }}
                     >
@@ -8433,7 +8372,7 @@ const updateSyncedJournalRow = (trade) => {
                 disabled={authBusy || !authEmail.trim() || !authPassword}
                 className={`w-full rounded-2xl py-3.5 ${TAP}`}
                 style={{
-                  background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                  background: palette.gold,
                   color: palette.letterbox,
                   fontFamily: mono,
                   fontSize: "14px",
@@ -9370,7 +9309,7 @@ const dataUrl = drawShareCard(shareCanvasRef.current, {
     if (Array.isArray(data.notepadNotes)) {
       persistNotepadNotes(data.notepadNotes.map(migrateNoteShape));
     }
-if (data.theme === "light" || data.theme === "dark" || data.theme === "amber" || data.theme === "forest") {
+if (data.theme === "light" || data.theme === "dark" || data.theme === "void") {
   setTheme(data.theme);
   window.storage.set(THEME_STORAGE_KEY, data.theme, false).catch(() => {});
 }
@@ -9483,7 +9422,7 @@ if (data.theme === "light" || data.theme === "dark" || data.theme === "amber" ||
     if (Array.isArray(data.playbookRules)) persistPlaybookRules(data.playbookRules.slice(0, MAX_PLAYBOOK_RULES));
     if (Array.isArray(data.playbookCheckins)) persistPlaybookCheckins(data.playbookCheckins);
     if (Array.isArray(data.notepadNotes)) persistNotepadNotes(data.notepadNotes.map(migrateNoteShape));
-    if (data.theme === "light" || data.theme === "dark" || data.theme === "amber" || data.theme === "forest") {
+    if (data.theme === "light" || data.theme === "dark" || data.theme === "void") {
       setTheme(data.theme);
       window.storage.set(THEME_STORAGE_KEY, data.theme, false).catch(() => {});
     }
@@ -12995,6 +12934,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "overview", label: "Overview" },
       { id: "behavior", label: "Behavior" },
       { id: "journal", label: "Journal" },
+      { id: "coach", label: "Coach" },
     ];
 
     const insightsSubNav = isDesktop ? (
@@ -17164,7 +17104,7 @@ if (activeTab === "community") {
           className={isDesktop ? "flex items-center gap-3 px-5 py-3.5 flex-shrink-0" : "flex items-center gap-2.5 px-3.5 py-2.5 flex-shrink-0"}
           style={{
             borderBottom: `1px solid ${palette.border}`,
-            background: `linear-gradient(180deg, ${palette.surface}, ${palette.surface}CC)`,
+            background: palette.surface,
             borderTopLeftRadius: isDesktop ? "16px" : 0,
             borderTopRightRadius: isDesktop ? "16px" : 0,
           }}
@@ -17477,7 +17417,7 @@ if (activeTab === "community") {
 
          ) : communityPanelTab === "signal" ? (
   <>
-    <div className="flex-1 px-4 py-4" style={{ background: `radial-gradient(ellipse 800px 400px at 50% 0%, ${palette.gold}08, transparent), ${palette.bg}`, overflowY: "auto", minHeight: 0 }}>
+    <div className="flex-1 px-4 py-4" style={{ background: palette.bg, overflowY: "auto", minHeight: 0 }}>
       {signalMessages.length > 0 && (
         <div
           className="rounded-2xl mb-4 overflow-hidden"
@@ -17819,7 +17759,7 @@ if (activeTab === "community") {
         <button type="button" onClick={() => setSignalComposerOpen(true)}
           className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 ${TAP}`}
           style={{
-            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+            background: palette.gold,
             color: palette.letterbox, boxShadow: `0 3px 10px ${palette.gold}44`,
             fontFamily: sans, fontSize: "13.5px", fontWeight: 700,
           }} aria-label="Post a new signal">
@@ -17916,7 +17856,7 @@ if (activeTab === "community") {
           <button type="button" onClick={() => { sendCommunityMessage(); setSignalComposerOpen(false); }} disabled={!signalPair.trim()}
             className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 ${TAP}`}
             style={{
-              background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+              background: palette.gold,
               color: palette.letterbox, boxShadow: `0 3px 10px ${palette.gold}44`,
               opacity: !signalPair.trim() ? 0.5 : 1,
               fontFamily: sans, fontSize: "13.5px", fontWeight: 700,
@@ -18501,7 +18441,7 @@ if (activeTab === "community") {
         <div
           className="flex-1 px-4 py-4"
           style={{
-            background: `radial-gradient(ellipse 800px 400px at 50% 0%, ${palette.gold}08, transparent), ${palette.bg}`,
+            background: palette.bg,
             overflowY: "auto",
             minHeight: 0,
           }}
@@ -18780,7 +18720,7 @@ if (activeTab === "community") {
               style={{
                 width: isDesktop ? "40px" : "42px",
                 height: isDesktop ? "40px" : "42px",
-                background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                background: palette.gold,
                 color: palette.letterbox,
                 boxShadow: `0 3px 10px ${palette.gold}44`,
                 opacity: !communityMsgText.trim() ? 0.5 : 1,
@@ -18937,7 +18877,7 @@ if (activeTab === "community") {
         <div
           className="rounded-3xl p-6 mb-5 text-center relative overflow-hidden"
           style={{
-            background: `linear-gradient(160deg, ${palette.gold}22, ${palette.surface} 60%)`,
+            background: palette.surface,
             border: `1px solid ${palette.gold}44`,
             boxShadow: palette.shadow,
           }}
@@ -18983,7 +18923,7 @@ if (activeTab === "community") {
           onClick={() => communityUsernameDraft.trim() && claimCommunityUsername(communityUsernameDraft.trim())}
           className={`w-full rounded-2xl py-3.5 ${TAP}`}
           style={{
-            background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+            background: palette.gold,
             color: palette.letterbox,
             fontFamily: mono, fontSize: "14px", fontWeight: 700,
             boxShadow: `0 6px 18px ${palette.gold}44`,
@@ -19061,7 +19001,7 @@ if (activeTab === "community") {
           const pill = (primary, busy) => ({
             height: isDesktop ? "32px" : "34px", padding: "0 18px", borderRadius: "8px", whiteSpace: "nowrap",
             fontSize: "12.5px", fontWeight: 700, fontFamily: sans,
-            background: primary ? `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})` : palette.field,
+            background: primary ? palette.gold : palette.field,
             border: `1px solid ${primary ? "transparent" : palette.border}`,
             color: primary ? palette.letterbox : palette.text,
             opacity: busy ? 0.6 : 1,
@@ -19137,8 +19077,8 @@ if (activeTab === "community") {
           const profileStoryUnseen = authorHasUnseen(p.username);
           const profileStoryAction = profileHasStory ? () => openStoryViewerFor(p.username) : (isMe ? openStoryComposer : null);
           const profileRingGradient = profileHasStory
-            ? `linear-gradient(135deg, ${profileStoryUnseen ? palette.gold : palette.border}, ${profileStoryUnseen ? palette.goldBright : palette.border})`
-            : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`;
+            ? (profileStoryUnseen ? palette.gold : palette.border)
+            : palette.gold;
           const avatarRingHandlers = profileStoryAction
             ? {
                 role: "button",
@@ -19277,7 +19217,7 @@ if (activeTab === "community") {
                       {post.image ? (
                         <img src={post.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
-                        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: isDesktop ? "18px" : "10px", background: `linear-gradient(rgba(5,7,12,0.45), rgba(5,7,12,0.45)), ${avatarStyleFor(post.author).bg}`, color: "#FFFFFF", fontSize: isDesktop ? "14px" : "11.5px", fontWeight: 600, lineHeight: 1.4 }}>
+                        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: isDesktop ? "18px" : "10px", background: avatarStyleFor(post.author).bg, boxShadow: "inset 0 0 0 999px rgba(5,7,12,0.45)", color: "#FFFFFF", fontSize: isDesktop ? "14px" : "11.5px", fontWeight: 600, lineHeight: 1.4 }}>
                           <span style={{ display: "-webkit-box", WebkitLineClamp: isDesktop ? 6 : 5, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{post.text}</span>
                         </span>
                       )}
@@ -19356,7 +19296,7 @@ if (activeTab === "community") {
                     width: isDesktop ? "88px" : "66px",
                     height: isDesktop ? "88px" : "66px",
                     padding: "3px",
-                    background: hasOwnStory ? `linear-gradient(135deg, ${ownStoryUnseen ? palette.gold : palette.border}, ${ownStoryUnseen ? palette.goldBright : palette.border})` : palette.border,
+                    background: hasOwnStory ? (ownStoryUnseen ? palette.gold : palette.border) : palette.border,
                   }}
                 >
                   <span className="flex items-center justify-center rounded-full w-full h-full overflow-hidden" style={{ background: palette.surface }}>
@@ -19546,7 +19486,7 @@ if (activeTab === "community") {
                               className={`flex-shrink-0 ${TAP}`}
                               style={{
                                 height: "32px", minWidth: "92px", padding: "0 16px", borderRadius: "8px",
-                                background: row.isFollowedByMe ? palette.field : `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                                background: row.isFollowedByMe ? palette.field : palette.gold,
                                 border: `1px solid ${row.isFollowedByMe ? palette.border : "transparent"}`,
                                 color: row.isFollowedByMe ? palette.text : palette.letterbox,
                                 fontSize: "12.5px", fontWeight: 700, fontFamily: sans, opacity: followBusy ? 0.6 : 1,
@@ -19813,7 +19753,7 @@ if (activeTab === "community") {
                     onClick={() => profilePostImageInputRef.current && profilePostImageInputRef.current.click()}
                     disabled={profilePostImageUploading}
                     className={TAP}
-                    style={{ marginTop: "16px", height: "34px", padding: "0 18px", borderRadius: "8px", background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`, color: palette.letterbox, border: "none", fontSize: "13px", fontWeight: 700, fontFamily: sans, opacity: profilePostImageUploading ? 0.6 : 1 }}
+                    style={{ marginTop: "16px", height: "34px", padding: "0 18px", borderRadius: "8px", background: palette.gold, color: palette.letterbox, border: "none", fontSize: "13px", fontWeight: 700, fontFamily: sans, opacity: profilePostImageUploading ? 0.6 : 1 }}
                   >
                     {profilePostImageUploading ? "Uploading…" : "Select from device"}
                   </button>
@@ -19974,7 +19914,7 @@ if (activeTab === "community") {
                   {slide.image ? (
                     <img src={slide.image} alt="Story" className="rounded-xl" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                   ) : (
-                    <div className="w-full rounded-2xl p-6 text-center" style={{ background: "linear-gradient(160deg, #23283A, #12151C)", border: `1px solid rgba(255,255,255,0.1)` }}>
+                    <div className="w-full rounded-2xl p-6 text-center" style={{ background: "#171B24", border: `1px solid rgba(255,255,255,0.1)` }}>
                       {slide.text && <p style={{ color: "#F5F6F9", fontSize: "16px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{slide.text}</p>}
                     </div>
                   )}
@@ -20230,7 +20170,7 @@ if (activeTab === "community") {
                    style={{
                    width: "36px",
                    height: "36px",
-                   background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                   background: palette.gold,
                    boxShadow: `0 3px 10px ${palette.gold}44`,
                     }}
                    >
@@ -20261,7 +20201,7 @@ if (activeTab === "community") {
                   style={{
                     width: "34px",
                     height: "34px",
-                    background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+                    background: palette.gold,
                     boxShadow: `0 3px 10px ${palette.gold}44`,
                   }}
                 >
@@ -20373,7 +20313,7 @@ if (activeTab === "community") {
             flexShrink: 0,
             border: "none",
             background: isDesktop
-              ? `linear-gradient(180deg, ${palette.surface} 0%, ${palette.bg} 100%)`
+              ? palette.surface
               : `${palette.surface}F2`,
             backdropFilter: isDesktop ? undefined : "blur(10px)",
             WebkitBackdropFilter: isDesktop ? undefined : "blur(10px)",
@@ -20423,7 +20363,7 @@ if (activeTab === "community") {
             bottom: "8px",
             width: "3px",
             borderRadius: "0 3px 3px 0",
-            background: `linear-gradient(180deg, ${palette.gold}, ${palette.goldBright})`,
+            background: palette.gold,
             boxShadow: `0 0 12px ${palette.gold}55`,
           }}
         />
@@ -20443,11 +20383,7 @@ if (activeTab === "community") {
         }
         style={{
           color: active ? palette.goldBright : palette.textMuted,
-          background: active
-            ? isDesktop
-              ? `linear-gradient(135deg, ${palette.gold}22, ${palette.gold}0A)`
-              : `${palette.gold}16`
-            : "transparent",
+          background: active ? `${palette.gold}16` : "transparent",
           borderRadius: isDesktop ? "10px" : "12px",
           border: isDesktop
             ? `1px solid ${active ? `${palette.gold}3A` : "transparent"}`
@@ -20570,7 +20506,7 @@ if (activeTab === "community") {
                 onClick={() => setPulseOpen(true)}
                 className={`mx-4 mb-1 rounded-xl px-3.5 py-3 text-left ${TAP}`}
                 style={{
-                  background: `linear-gradient(135deg, ${palette.gold}16, ${palette.gold}05)`,
+                  background: `${palette.gold}12`,
                   border: `1px solid ${palette.gold}2A`,
                   boxShadow: palette.shadow,
                   cursor: "pointer",
@@ -20758,7 +20694,7 @@ if (activeTab === "community") {
             style={{
               width: isDesktop ? "38px" : "34px",
               height: isDesktop ? "38px" : "34px",
-              background: `linear-gradient(135deg, ${palette.gold}, ${palette.goldBright})`,
+              background: palette.gold,
               boxShadow: `0 3px 10px ${palette.gold}44`,
             }}
           >
@@ -21221,10 +21157,9 @@ if (activeTab === "community") {
           <SettingsSubLabel>Theme</SettingsSubLabel>
           <div className="flex gap-2 mb-1 flex-wrap">
             {[
-              { id: "dark", label: "Dark" },
+              { id: "dark", label: "Night" },
               { id: "light", label: "Light" },
-              { id: "amber", label: "Amber" },
-              { id: "forest", label: "Forest" },
+              { id: "void", label: "Void" },
               { id: "auto", label: "Auto" },
             ].map((opt) => {
               const active = settings.themeMode === opt.id;
@@ -23115,7 +23050,7 @@ const isOwner = membership?.role === "owner" || !!myMember?.isOwner;
       )}
 
       {statementPeriod && (() => {
-        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#2563EB", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
+        const S = { text: "#19170F", muted: "#68624F", faint: "#9D9782", border: "#E6E1D4", green: "#0D9463", red: "#C43B2E", gold: "#2E5C9A", bg: "#FFFFFF", bgAlt: "#F4F2EB" };
         const data = computeStatementData(trades, journalEntries, customSetups, playbookCheckins, startingBalance, statementPeriod, customMoods);
         const fmtSigned = (n) => `${n >= 0 ? "+" : "-"}$${fmtMoney(n)}`;
         const fmtRatio = (n) => (Number.isFinite(n) ? n.toFixed(2) : "\u221e");

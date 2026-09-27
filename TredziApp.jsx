@@ -6762,16 +6762,97 @@ useEffect(() => {
     const insights = computeInsights(trades, customSetups, customMoods);
     const perf = computePerformanceMetrics(trades);
     const headline = computeHeadlineInsight(trades, customSetups, customMoods);
+    const monthCmp = computeMonthComparison(trades);
+    const disciplineStreak = computeDisciplineStreak(trades);
+    const consistency = computeConsistencyScore(trades);
+    const overconfidence = computeOverconfidenceCheck(trades);
+    // fmtMoney() always returns an unsigned amount, so wrap it ourselves \u2014 otherwise a
+    // negative net P&L (or loss) gets sent to the model as a positive number.
+    const money = (n) => (Number.isFinite(n) ? `${n < 0 ? "-" : ""}$${fmtMoney(n)}` : "$0");
     const lines = [];
+
+    // --- Overall performance ---
     lines.push(`Total trades: ${trades.length}`);
     lines.push(`Win rate: ${(perf.winRate * 100).toFixed(0)}%`);
-    lines.push(`Net P&L: $${fmtMoney(perf.netProfit)}`);
+    lines.push(`Net P&L: ${money(perf.netProfit)}`);
     lines.push(`Profit factor: ${Number.isFinite(perf.profitFactor) ? perf.profitFactor.toFixed(2) : "\u221e"}`);
+    lines.push(`Avg win: ${money(perf.avgWin)}, avg loss: ${money(-perf.avgLoss)}`);
+    lines.push(`Largest win: ${money(perf.largestWin)}, largest loss: ${money(perf.largestLoss)}`);
+    lines.push(`Max drawdown: ${money(perf.maxDD)}`);
+
+    // --- Current win/loss streak, most recent trade first ---
+    const byTime = [...trades].sort((a, b) => a.ts - b.ts);
+    let streakLen = 0;
+    let streakType = null;
+    for (let i = byTime.length - 1; i >= 0; i--) {
+      const isWin = byTime[i].pnl > 0;
+      if (streakType === null) {
+        streakType = isWin ? "win" : "loss";
+        streakLen = 1;
+      } else if ((isWin && streakType === "win") || (!isWin && streakType === "loss")) {
+        streakLen += 1;
+      } else break;
+    }
+    if (streakType) {
+      lines.push(`Current streak: ${streakLen} ${streakType}${streakLen === 1 ? "" : "s"} in a row`);
+    }
+    if (disciplineStreak.hasData) {
+      lines.push(
+        `Discipline streak (consecutive days with no revenge trade): ${disciplineStreak.current} current, ${disciplineStreak.best} best ever`
+      );
+    }
+
+    // --- Day-of-week breakdown \u2014 which day they trade most/least, best/worst day ---
+    if (insights.weekdayRows.length) {
+      const mostTraded = [...insights.weekdayRows].sort((a, b) => b.count - a.count)[0];
+      const leastTraded = [...insights.weekdayRows].sort((a, b) => a.count - b.count)[0];
+      const bestPnlDay = [...insights.weekdayRows].sort((a, b) => b.pnl - a.pnl)[0];
+      const worstPnlDay = [...insights.weekdayRows].sort((a, b) => a.pnl - b.pnl)[0];
+      lines.push(
+        "By weekday: " +
+          insights.weekdayRows
+            .map((r) => `${r.label} \u2014 ${r.count} trades, ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L`)
+            .join("; ")
+      );
+      lines.push(
+        `Trades most often on ${mostTraded.label} (${mostTraded.count} trades), least often on ${leastTraded.label} (${leastTraded.count} trades)`
+      );
+      lines.push(
+        `Most profitable weekday: ${bestPnlDay.label} (${money(bestPnlDay.pnl)}). Least profitable weekday: ${worstPnlDay.label} (${money(worstPnlDay.pnl)})`
+      );
+    }
+
+    // --- Best/worst single calendar day ---
+    const pnlByDay = {};
+    trades.forEach((t) => {
+      const k = dayKeyFromTs(t.ts);
+      pnlByDay[k] = (pnlByDay[k] || 0) + t.pnl;
+    });
+    const dayEntries = Object.entries(pnlByDay);
+    if (dayEntries.length) {
+      const best = dayEntries.reduce((a, b) => (b[1] > a[1] ? b : a));
+      const worst = dayEntries.reduce((a, b) => (b[1] < a[1] ? b : a));
+      lines.push(`Best single day: ${best[0]} (${money(best[1])}). Worst single day: ${worst[0]} (${money(worst[1])})`);
+    }
+
+    // --- This month vs last month ---
+    const now = new Date();
+    const thisMonthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthName = lastMonthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+    lines.push(
+      `This month (${thisMonthName}): ${monthCmp.thisMonth.count} trades, ${monthCmp.thisMonth.winRate.toFixed(0)}% win rate, ${money(monthCmp.thisMonth.net)} net`
+    );
+    lines.push(
+      `Last month (${lastMonthName}): ${monthCmp.lastMonth.count} trades, ${monthCmp.lastMonth.winRate.toFixed(0)}% win rate, ${money(monthCmp.lastMonth.net)} net`
+    );
+
+    // --- By setup / mood ---
     if (insights.setupRows.length) {
       lines.push(
         "By setup: " +
           insights.setupRows
-            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L, ${r.count} trades`)
             .join("; ")
       );
     }
@@ -6779,14 +6860,54 @@ useEffect(() => {
       lines.push(
         "By mood: " +
           insights.moodRows
-            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L, ${r.count} trades`)
             .join("; ")
       );
     }
     if (insights.revengeCount > 0) {
-      lines.push(`Revenge trades: ${insights.revengeCount}, cost $${fmtMoney(insights.revengePnl)}`);
+      lines.push(`Revenge trades: ${insights.revengeCount}, cost ${money(insights.revengePnl)}`);
+    }
+    if (consistency) {
+      lines.push(`Day-to-day consistency: ${consistency.label}`);
+    }
+    if (overconfidence && overconfidence.detected) {
+      lines.push(
+        `After 3+ wins in a row, average trade size increases ${overconfidence.pctChange.toFixed(0)}% \u2014 possible overconfidence sizing up.`
+      );
     }
     if (headline) lines.push(`Headline insight: ${headline}`);
+
+    // --- Journal tab \u2014 separate structured entries (session, R:R, mistakes) ---
+    const filledRows = filledJournalRows(journalEntries);
+    if (filledRows.length) {
+      lines.push(`Journal entries logged: ${filledRows.length}`);
+      const mistakes = journalMistakeFrequency(filledRows, 3);
+      if (mistakes.length) {
+        lines.push("Most frequent mistakes: " + mistakes.map((m) => `${m.label} (${m.count}x)`).join(", "));
+      }
+      const rrValues = filledRows.map((r) => parseFloat(r.rr)).filter((v) => Number.isFinite(v));
+      if (rrValues.length) {
+        const avgRR = rrValues.reduce((s, v) => s + v, 0) / rrValues.length;
+        lines.push(`Average R:R across journal entries: ${avgRR.toFixed(2)}`);
+      }
+      const sessionRows = computeSessionWinRates(filledRows).filter((s) => s.total > 0);
+      if (sessionRows.length) {
+        lines.push(
+          "By session: " +
+            sessionRows
+              .map((s) => `${s.label} \u2014 ${s.total} trades, ${s.winRate !== null ? s.winRate.toFixed(0) + "% win rate" : "no outcome logged"}`)
+              .join("; ")
+        );
+      }
+    }
+
+    // --- App guide, so the coach can also answer "what does X tab do" questions ---
+    const tabGuide = TOUR_STEPS.filter((s) => s.tabId).map((s) => `${s.title}: ${s.text}`);
+    tabGuide.push(
+      "Community: join or create trading groups for chat, trade signals, and Q&A, or browse the account-wide Global Feed of everyone's posted trades."
+    );
+    lines.push("App guide \u2014 " + tabGuide.join(" | "));
+
     return lines.join("\n");
   };
 

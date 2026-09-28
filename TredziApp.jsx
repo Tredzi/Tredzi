@@ -1326,10 +1326,60 @@ function computePlaybookStats(rules, checkins) {
   return { ruleStats, current, best, hasData: sorted.length > 0, overallPct, totalCheckins: sorted.length };
 }
 
+// Session hours are defined in each market's own local time and converted to UTC using the
+// market's *current* daylight-saving offset, so they stay correct across DST changes.
+//   London   08:00-17:00 London time   (UTC 8-17 in winter, 7-16 in summer)
+//   New York 08:00-17:00 New York time (UTC 13-22 in winter, 12-21 in summer)
+//   Asia     Sydney 08:00 -> Tokyo 18:00 (UTC 22-9 in Australian winter, 21-9 in Australian summer)
+const _tzFmtCache = {};
+const _tzShiftCache = {};
+function tzDstShiftHours(timeZone, standardOffsetHours) {
+  // How many hours the zone is currently ahead of its standard (non-DST) offset: 0 or 1.
+  const nowMs = Date.now();
+  const hit = _tzShiftCache[timeZone];
+  if (hit && nowMs - hit.ts < 60000) return hit.value;
+  let value = 0;
+  try {
+    if (!_tzFmtCache[timeZone]) {
+      _tzFmtCache[timeZone] = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
+    const parts = _tzFmtCache[timeZone].formatToParts(new Date(nowMs));
+    const g = (t) => Number(parts.find((x) => x.type === t).value);
+    const asUTC = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second"));
+    const offsetHours = Math.round((asUTC - Math.floor(nowMs / 1000) * 1000) / 1800000) / 2;
+    value = offsetHours - standardOffsetHours;
+  } catch (err) {
+    value = 0; // fall back to winter hours if Intl time zones are unavailable
+  }
+  _tzShiftCache[timeZone] = { ts: nowMs, value };
+  return value;
+}
+
 const MARKET_SESSIONS = [
-  { id: "asia", label: "Asia", startUTC: 22, endUTC: 9, color: "#6C8EBF" },
-  { id: "london", label: "London", startUTC: 8, endUTC: 17, color: "#6CBF8E" },
-  { id: "newyork", label: "New York", startUTC: 13, endUTC: 22, color: "#BFA26C" },
+  {
+    id: "asia", label: "Asia", color: "#6C8EBF",
+    get startUTC() { return mod24(22 - tzDstShiftHours("Australia/Sydney", 10)); },
+    get endUTC() { return 9; },
+  },
+  {
+    id: "london", label: "London", color: "#6CBF8E",
+    get startUTC() { return 8 - tzDstShiftHours("Europe/London", 0); },
+    get endUTC() { return 17 - tzDstShiftHours("Europe/London", 0); },
+  },
+  {
+    id: "newyork", label: "New York", color: "#BFA26C",
+    get startUTC() { return 13 - tzDstShiftHours("America/New_York", -5); },
+    get endUTC() { return mod24(22 - tzDstShiftHours("America/New_York", -5)); },
+  },
 ];
 
 function mod24(h) {
@@ -1382,9 +1432,11 @@ function sessionCountdown(session, nowUTCHour) {
 }
 
 function highLiquidityWindowLocal(tzOffsetMinutes) {
+  const london = MARKET_SESSIONS.find((s) => s.id === "london");
+  const newyork = MARKET_SESSIONS.find((s) => s.id === "newyork");
   return {
-    startLocal: mod24(13 - tzOffsetMinutes / 60),
-    endLocal: mod24(17 - tzOffsetMinutes / 60),
+    startLocal: mod24(newyork.startUTC - tzOffsetMinutes / 60),
+    endLocal: mod24(london.endUTC - tzOffsetMinutes / 60),
   };
 }
 
@@ -1446,7 +1498,10 @@ const DEFAULT_CS_INPUTS = {
 
 const PROFIT_TARGET_OPTIONS = [5, 6, 8, 10, 12];
 
-const EDGE_CURVE_MAX_TRADES = 200; // cap for chart performance/readability
+// The projection is computed over ALL projected trades (so final R / $ figures are correct),
+// and only the chart is thinned to ~EDGE_CHART_MAX_POINTS points for readability/performance.
+const EDGE_CURVE_MAX_TRADES = 250000; // safety ceiling only (10 years at ~68 trades/day)
+const EDGE_CHART_MAX_POINTS = 400;
 
 const EDGE_PROJECTION_PERIODS = [
   { label: "1 Week", days: 7 },
@@ -2593,7 +2648,10 @@ function tierFor(value, thresholds) {
   return "Excellent";
 }
 
+const MIN_TRADES_FOR_TIERS = 20;
+
 function tierColor(tier) {
+  if (tier === "Early") return palette.textFaint;
   if (tier === "Poor") return palette.red;
   if (tier === "Average") return palette.gold;
   return palette.green;
@@ -2632,14 +2690,18 @@ function computePerformanceMetrics(trades) {
     avgLoss,
   };
 
-  const tiers = {
-    profitFactor: tierFor(metrics.profitFactor, [1, 1.5, 2.5]),
-    recoveryFactor: tierFor(metrics.recoveryFactor, [1, 2, 4]),
-    winLossRatio: tierFor(metrics.winLossRatio, [0.8, 1.2, 2]),
-    expectancy: tierFor(metrics.expectancy, [0, 5, 20]),
-  };
+  // Below this many trades, ratings like "Excellent" aren't statistically meaningful.
+  const smallSample = trades.length < MIN_TRADES_FOR_TIERS;
+  const tiers = smallSample
+    ? { profitFactor: "Early", recoveryFactor: "Early", winLossRatio: "Early", expectancy: "Early" }
+    : {
+        profitFactor: tierFor(metrics.profitFactor, [1, 1.5, 2.5]),
+        recoveryFactor: tierFor(metrics.recoveryFactor, [1, 2, 4]),
+        winLossRatio: tierFor(metrics.winLossRatio, [0.8, 1.2, 2]),
+        expectancy: tierFor(metrics.expectancy, [0, 5, 20]),
+      };
 
-  return { ...metrics, tiers, netProfit, maxDD };
+  return { ...metrics, tiers, netProfit, maxDD, smallSample };
 }
 
 const METRIC_INFO = {
@@ -2789,15 +2851,31 @@ function generateThreeCurveProjection({ winRatePct, rr, spreadPct, numTrades, ri
   if (!normal || !best || !worst) return null;
 
   const trades = normal.trades;
-  const chartData = Array.from({ length: trades + 1 }, (_, i) => ({
-    trade: i,
-    normal: normal.points[i] ? normal.points[i].r : null,
-    best: best.points[i] ? best.points[i].r : null,
-    worst: worst.points[i] ? worst.points[i].r : null,
-    normalPnl: normal.points[i] ? normal.points[i].pnl : null,
-    bestPnl: best.points[i] ? best.points[i].pnl : null,
-    worstPnl: worst.points[i] ? worst.points[i].pnl : null,
-  }));
+  // Thin the chart to ~EDGE_CHART_MAX_POINTS points (always keeping the first and last trade).
+  const step = Math.max(1, Math.ceil(trades / EDGE_CHART_MAX_POINTS));
+  const chartData = [];
+  for (let i = 0; i <= trades; i += step) {
+    chartData.push({
+      trade: i,
+      normal: normal.points[i] ? normal.points[i].r : null,
+      best: best.points[i] ? best.points[i].r : null,
+      worst: worst.points[i] ? worst.points[i].r : null,
+      normalPnl: normal.points[i] ? normal.points[i].pnl : null,
+      bestPnl: best.points[i] ? best.points[i].pnl : null,
+      worstPnl: worst.points[i] ? worst.points[i].pnl : null,
+    });
+  }
+  if (chartData[chartData.length - 1].trade !== trades) {
+    chartData.push({
+      trade: trades,
+      normal: normal.points[trades].r,
+      best: best.points[trades].r,
+      worst: worst.points[trades].r,
+      normalPnl: normal.points[trades].pnl,
+      bestPnl: best.points[trades].pnl,
+      worstPnl: worst.points[trades].pnl,
+    });
+  }
 
   return {
     chartData,
@@ -11439,6 +11517,8 @@ rightContent={
             <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="trade"
+              type="number"
+              domain={[0, "dataMax"]}
               stroke={palette.textFaint}
               tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
               tickLine={false}
@@ -13763,6 +13843,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         {expandedMetric === key && METRIC_INFO[label] && (
           <div className="text-xs mt-2" style={{ color: palette.textFaint }}>
             {METRIC_INFO[label]}
+            {tier === "Early" && ` Based on fewer than ${MIN_TRADES_FOR_TIERS} trades, so treat this as a first look, not a verdict.`}
           </div>
         )}
       </div>
@@ -13922,8 +14003,10 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 <span style={{ color: palette.textMuted, fontSize: "12px" }}>{row.label}</span>
                 <div className="flex items-center gap-2">
                   <span style={{ fontFamily: mono, fontSize: "13px", color: palette.text }}>{row.fmt(row.thisV)}</span>
-                  <span style={{ fontSize: "11px", color: flat ? palette.textFaint : up ? palette.green : palette.red }}>
-                    {flat ? "\u2014" : up ? "\u2191" : "\u2193"} vs {row.fmt(row.lastV)}
+                  <span style={{ fontSize: "11px", color: flat || monthCmp.lastMonth.count === 0 ? palette.textFaint : up ? palette.green : palette.red }}>
+                    {monthCmp.lastMonth.count === 0
+                      ? "no trades last month"
+                      : `${flat ? "\u2014" : up ? "\u2191" : "\u2193"} vs ${row.fmt(row.lastV)}`}
                   </span>
                 </div>
               </div>

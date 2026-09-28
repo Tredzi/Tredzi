@@ -4421,6 +4421,8 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [myGroupsLoaded, setMyGroupsLoaded] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [groupMessages, setGroupMessages] = useState([]);
+  const groupMessagesRef = useRef([]);
+  groupMessagesRef.current = groupMessages;
   const [groupMessagesLoaded, setGroupMessagesLoaded] = useState(false);
   const [communityApiError, setCommunityApiError] = useState("");
   const [addingGroup, setAddingGroup] = useState(false);
@@ -5979,22 +5981,122 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
     const membership = myGroups.find((g) => g.id === activeGroupId);
     if (!membership) return;
     let cancelled = false;
+    let haveFull = false; // first load per group is a full fetch; after that we only ask for what's new
+    let lastLoad = 0;
+    let ws = null;
+    let wsOpen = false;
+    let retryTimer = null;
+    let pingTimer = null;
+    let fails = 0;
     const loadMessages = async () => {
+      lastLoad = Date.now();
       try {
-        const data = await communityApi(`/groups/${activeGroupId}/messages`, {
-          headers: { Authorization: `Bearer ${membership.token}` },
-        });
-        if (!cancelled) { setGroupMessages(data.messages || []); setCommunityApiError(""); }
+        const real = groupMessagesRef.current.filter((m) => !String(m.id).startsWith("tmp_"));
+        const since = haveFull && real.length ? Math.max(...real.map((m) => m.ts || 0)) : 0;
+        const data = await communityApi(
+          since > 0 ? `/groups/${activeGroupId}/messages?since=${since}` : `/groups/${activeGroupId}/messages`,
+          { headers: { Authorization: `Bearer ${membership.token}` } }
+        );
+        if (cancelled) return;
+        if (data.resync) { haveFull = false; return loadMessages(); }
+        if (data.delta) {
+          setGroupMessages((prev) => {
+            const idSet = new Set(data.ids || []);
+            const known = new Set(prev.map((m) => m.id));
+            const kept = prev
+              .filter((m) => String(m.id).startsWith("tmp_") || idSet.has(m.id))
+              .map((m) => {
+                if (String(m.id).startsWith("tmp_")) return m;
+                const mm = data.meta?.[m.id];
+                return { ...m, reactions: mm?.reactions || {}, myReactions: mm?.myReactions || [], replyCount: mm?.replyCount || 0 };
+              });
+            const added = (data.messages || []).filter((m) => !known.has(m.id));
+            return added.length ? [...kept, ...added].sort((a, b) => (a.ts || 0) - (b.ts || 0)) : kept;
+          });
+        } else {
+          setGroupMessages(data.messages || []);
+          haveFull = true;
+        }
+        setCommunityApiError("");
       } catch (err) {
         if (!cancelled) setCommunityApiError(err.message);
       } finally {
         if (!cancelled) setGroupMessagesLoaded(true);
       }
     };
+
+    // --- Live socket: the worker pushes new messages / deletes the moment they happen. ---
+    const connect = () => {
+      if (cancelled || fails > 6) return;
+      if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+      try {
+        ws = new WebSocket(
+          COMMUNITY_API_BASE.replace(/^http/, "ws") + `/groups/${activeGroupId}/ws?token=${encodeURIComponent(membership.token)}`
+        );
+      } catch (e) { return; }
+      ws.onopen = () => {
+        wsOpen = true;
+        fails = 0;
+        if (haveFull) loadMessages(); // catch anything missed while the socket was down
+        clearInterval(pingTimer);
+        pingTimer = setInterval(() => { try { ws.send("ping"); } catch (e) {} }, 25000);
+      };
+      ws.onmessage = (ev) => {
+        if (typeof ev.data !== "string" || ev.data === "pong") return;
+        let evt;
+        try { evt = JSON.parse(ev.data); } catch (e) { return; }
+        if (evt.t === "msg" && evt.message) {
+          const m = evt.message;
+          // Only auto-scroll if the reader is already at (or near) the bottom.
+          const endEl = communityMessagesEndRef.current;
+          const nearBottom = !endEl || endEl.getBoundingClientRect().top < window.innerHeight + 200;
+          setGroupMessages((prev) => {
+            if (prev.some((x) => x.id === m.id)) return prev;
+            // Our own message echoing back: swap the "sending" bubble for the real one.
+            const ti = prev.findIndex((x) => String(x.id).startsWith("tmp_") && x.author === m.author && x.type === m.type && x.text === m.text);
+            if (ti >= 0) { const next = prev.slice(); next[ti] = m; return next; }
+            return [...prev, m].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+          });
+          if (nearBottom) setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
+        } else if (evt.t === "del") {
+          setGroupMessages((prev) => prev.filter((x) => x.id !== evt.id));
+        } else if (evt.t === "sync") {
+          loadMessages();
+        }
+      };
+      ws.onclose = () => {
+        wsOpen = false;
+        clearInterval(pingTimer);
+        if (cancelled) return;
+        fails += 1;
+        retryTimer = setTimeout(connect, Math.min(1000 * 2 ** Math.min(fails, 4), 15000));
+      };
+      ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    };
+    // Phones drop sockets when the tab sleeps — reconnect and re-sync when it wakes.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!wsOpen) { fails = 0; clearTimeout(retryTimer); connect(); }
+      if (haveFull) loadMessages();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     setGroupMessagesLoaded(false);
     loadMessages();
-    const id = setInterval(loadMessages, COMMUNITY_MESSAGE_POLL_MS);
-    return () => { cancelled = true; clearInterval(id); };
+    connect();
+    // Polling stays as a safety net; with a live socket it backs off to every 30s.
+    const id = setInterval(() => {
+      if (wsOpen && Date.now() - lastLoad < 30000) return;
+      loadMessages();
+    }, COMMUNITY_MESSAGE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      clearInterval(pingTimer);
+      clearTimeout(retryTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} }
+    };
   }, [activeGroupId, myGroups]);
 
   // Land on the newest message whenever the chat opens — on first load, on
@@ -7271,33 +7373,86 @@ if (isSignal) {
 if (isSignal && !signalPair.trim()) return;
 if (!isSignal && !communityMsgText.trim()) return;
 
+    // Optimistic send: show the message instantly, POST in the background, and
+    // skip the old full re-download of the whole chat (up to 300 rows, stickers
+    // included as base64) that used to run after every send. Polling keeps
+    // everyone else's view in sync.
+    const draft = {
+      text: communityMsgText.trim(),
+      pair: signalPair.trim().toUpperCase(),
+      direction: signalDirection,
+      entry: signalEntry.trim(),
+      sl: signalSL.trim(),
+      tp: signalTP.trim(),
+    };
+    const replyTarget = replyingTo;
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    // Replies to a signal become thread replies on the server and never show in the main list.
+    const replyParent = replyTarget ? groupMessages.find((m) => m.id === replyTarget.id) : null;
+    const goesToThread = !isSignal && !!replyParent && (replyParent.type === "signal" || replyParent.type === "thread_reply");
+    if (!goesToThread) {
+      setGroupMessages((cur) => [
+        ...cur,
+        {
+          id: tempId,
+          group_id: activeGroupId,
+          author: communityUsername || "Anonymous",
+          type: isSignal ? "signal" : "chat",
+          text: draft.text,
+          reply_to_id: !isSignal ? replyTarget?.id || null : null,
+          pair: isSignal ? draft.pair : null,
+          direction: isSignal ? draft.direction : null,
+          entry: isSignal ? draft.entry : null,
+          sl: isSignal ? draft.sl : null,
+          tp: isSignal ? draft.tp : null,
+          ts: Date.now(),
+          reactions: {},
+          myReactions: [],
+          replyCount: 0,
+          replyToAuthor: !isSignal && replyTarget ? replyTarget.author : undefined,
+          replyToText: !isSignal && replyTarget ? String(replyTarget.preview || "") : undefined,
+        },
+      ]);
+      setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
+    }
+    setCommunityMsgText("");
+    setSignalPair("");
+    setSignalEntry("");
+    setSignalSL("");
+    setSignalTP("");
+    setReplyingTo(null);
+
     try {
-      await communityApi(`/groups/${activeGroupId}/messages`, {
+      const res = await communityApi(`/groups/${activeGroupId}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${membership.token}` },
         body: JSON.stringify({
           author: communityUsername || "Anonymous",
           type: isSignal ? "signal" : "chat",
-          text: communityMsgText.trim(),
-          replyTo: !isSignal ? replyingTo?.id || undefined : undefined,
-          pair: isSignal ? signalPair.trim().toUpperCase() : undefined,
-          direction: isSignal ? signalDirection : undefined,
-          entry: isSignal ? signalEntry.trim() : undefined,
-          sl: isSignal ? signalSL.trim() : undefined,
-          tp: isSignal ? signalTP.trim() : undefined,
+          text: draft.text,
+          replyTo: !isSignal ? replyTarget?.id || undefined : undefined,
+          pair: isSignal ? draft.pair : undefined,
+          direction: isSignal ? draft.direction : undefined,
+          entry: isSignal ? draft.entry : undefined,
+          sl: isSignal ? draft.sl : undefined,
+          tp: isSignal ? draft.tp : undefined,
         }),
       });
-      setCommunityMsgText("");
-      setSignalPair("");
-      setSignalEntry("");
-      setSignalSL("");
-      setSignalTP("");
-      setReplyingTo(null);
-      const data = await communityApi(`/groups/${activeGroupId}/messages`, {
-        headers: { Authorization: `Bearer ${membership.token}` },
+      setGroupMessages((cur) => {
+        if (res?.id && cur.some((m) => m.id === res.id)) return cur.filter((m) => m.id !== tempId);
+        return cur.map((m) => (m.id === tempId ? { ...m, id: res?.id || m.id, ts: res?.ts || m.ts } : m));
       });
-      setGroupMessages(data.messages || []);
     } catch (err) {
+      // Roll back the optimistic bubble and give the text back so nothing is lost.
+      setGroupMessages((cur) => cur.filter((m) => m.id !== tempId));
+      setCommunityMsgText(draft.text);
+      if (isSignal) {
+        setSignalPair(draft.pair);
+        setSignalEntry(draft.entry);
+        setSignalSL(draft.sl);
+        setSignalTP(draft.tp);
+      }
+      if (replyTarget) setReplyingTo(replyTarget);
       setCommunityApiError(err.message);
     }
   };
@@ -7398,23 +7553,50 @@ if (!isSignal && !communityMsgText.trim()) return;
     const membership = myGroups.find((g) => g.id === activeGroupId);
     if (!membership) return;
     setStickerPickerOpen(false);
+    // Optimistic: the sticker appears immediately; no full chat re-download afterwards.
+    const replyTarget = replyingTo;
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const replyParent = replyTarget ? groupMessages.find((m) => m.id === replyTarget.id) : null;
+    const goesToThread = !!replyParent && (replyParent.type === "signal" || replyParent.type === "thread_reply");
+    if (!goesToThread) {
+      setGroupMessages((cur) => [
+        ...cur,
+        {
+          id: tempId,
+          group_id: activeGroupId,
+          author: communityUsername || "Anonymous",
+          type: "sticker",
+          text: image,
+          reply_to_id: replyTarget?.id || null,
+          ts: Date.now(),
+          reactions: {},
+          myReactions: [],
+          replyCount: 0,
+          replyToAuthor: replyTarget ? replyTarget.author : undefined,
+          replyToText: replyTarget ? String(replyTarget.preview || "") : undefined,
+        },
+      ]);
+      setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
+    }
+    setReplyingTo(null);
     try {
-      await communityApi(`/groups/${activeGroupId}/messages`, {
+      const res = await communityApi(`/groups/${activeGroupId}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${membership.token}` },
         body: JSON.stringify({
           author: communityUsername || "Anonymous",
           type: "sticker",
           stickerImage: image,
-          replyTo: replyingTo?.id || undefined,
+          replyTo: replyTarget?.id || undefined,
         }),
       });
-      setReplyingTo(null);
-      const data = await communityApi(`/groups/${activeGroupId}/messages`, {
-        headers: { Authorization: `Bearer ${membership.token}` },
+      setGroupMessages((cur) => {
+        if (res?.id && cur.some((m) => m.id === res.id)) return cur.filter((m) => m.id !== tempId);
+        return cur.map((m) => (m.id === tempId ? { ...m, id: res?.id || m.id, ts: res?.ts || m.ts } : m));
       });
-      setGroupMessages(data.messages || []);
     } catch (err) {
+      setGroupMessages((cur) => cur.filter((m) => m.id !== tempId));
+      if (replyTarget) setReplyingTo(replyTarget);
       setCommunityApiError(err.message);
     }
   };
@@ -10007,6 +10189,76 @@ const hiddenTabIds = settings.hiddenTabs || [];
   );
   const activeInMobileOverflow = mobileNavOverflowTabs.some((t) => t.id === activeTab);
 
+  // Shared sub-tab bar for Challenge / Journal / Sessions. Desktop uses the same underline
+  // style as the Insights tabs; mobile keeps the original pill buttons.
+  const renderSubNav = (tabs, activeId, onSelect) =>
+    isDesktop ? (
+      <div
+        className="flex items-center gap-7 mb-8"
+        style={{
+          borderBottom: `1px solid ${palette.border}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: `${palette.bg}F2`,
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          paddingTop: "6px",
+        }}
+      >
+        {tabs.map((t) => {
+          const active = activeId === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              className={TAP}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: `2.5px solid ${active ? palette.gold : "transparent"}`,
+                color: active ? palette.text : palette.textFaint,
+                fontFamily: display,
+                fontSize: "14.5px",
+                fontWeight: active ? 700 : 500,
+                padding: "0 2px 14px 2px",
+                marginBottom: "-1px",
+                cursor: "pointer",
+                transition: "color 0.15s ease, border-color 0.15s ease",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    ) : (
+      <div className="flex gap-2 mb-6">
+        {tabs.map((t) => {
+          const active = activeId === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
+              style={{
+                background: active ? palette.gold : palette.field,
+                color: active ? palette.letterbox : palette.textMuted,
+                border: `1px solid ${active ? palette.gold : palette.border}`,
+                fontFamily: mono,
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+
   let body = null;
 
   if (activeTab === "risk") {
@@ -10186,29 +10438,7 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
 
     body = (
       <>
-        <div className="flex gap-2 mb-6">
-          {RISK_SUB_TABS.map((s) => {
-            const active = riskSubTab === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setRiskSubTab(s.id)}
-                className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
-                style={{
-                  background: active ? palette.gold : palette.field,
-                  color: active ? palette.letterbox : palette.textMuted,
-                  border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontFamily: mono,
-                  fontSize: "13px",
-                  fontWeight: 600,
-                }}
-              >
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
+        {renderSubNav(RISK_SUB_TABS, riskSubTab, setRiskSubTab)}
 
         {riskSubTab === "challenge" ? (
           <>
@@ -14904,31 +15134,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "playbook", label: "Playbook" },
     ];
 
-    const journalSubNav = (
-      <div className="flex gap-2 mb-6">
-        {JOURNAL_SUB_TABS.map((s) => {
-          const active = journalSubTab === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setJournalSubTab(s.id)}
-              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
-              style={{
-                background: active ? palette.gold : palette.field,
-                color: active ? palette.letterbox : palette.textMuted,
-                border: `1px solid ${active ? palette.gold : palette.border}`,
-                fontFamily: mono,
-                fontSize: "13px",
-                fontWeight: 600,
-              }}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-    );
+    const journalSubNav = renderSubNav(JOURNAL_SUB_TABS, journalSubTab, setJournalSubTab);
 
     if (journalSubTab === "playbook") {
       const stats = computePlaybookStats(playbookRules, playbookCheckins);
@@ -15402,7 +15608,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         JOURNAL_TOGGLE_COL_WIDTH + JOURNAL_COLUMNS.reduce((s, c) => s + journalColWidths[c.id], 0) + 36;
 
       const cellInputStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "14px" : "12px", border: "none" };
-      const detailFieldStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "15px" : "13px", border: "none" };
+      const detailFieldStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "14px" : "13px", border: "none" }; // desktop matches cellInputStyle (14px) so expanding a row doesn't change text size
 
       const autoResizeTextarea = (el) => {
         if (!el) return;
@@ -15550,12 +15756,13 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           ...detailFieldStyle,
           border: `1px solid ${palette.border}`,
           borderRadius: "6px",
-          padding: "4px 8px",
+          padding: isDesktop ? "6px 10px" : "4px 8px",
           width: "100%",
           display: "block",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          ...(isDesktop ? { lineHeight: "1.5", minHeight: "34px", boxSizing: "border-box" } : {}),
         };
 
         if (field.id === "session") {
@@ -16936,31 +17143,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "news", label: "News" },
     ];
 
-    const sessionsSubNav = (
-      <div className="flex gap-2 mb-6">
-        {SESSIONS_SUB_TABS.map((s) => {
-          const active = sessionsSubTab === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSessionsSubTab(s.id)}
-              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
-              style={{
-                background: active ? palette.gold : palette.field,
-                color: active ? palette.letterbox : palette.textMuted,
-                border: `1px solid ${active ? palette.gold : palette.border}`,
-                fontFamily: mono,
-                fontSize: "13px",
-                fontWeight: 600,
-              }}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-    );
+    const sessionsSubNav = renderSubNav(SESSIONS_SUB_TABS, sessionsSubTab, setSessionsSubTab);
 
     let newsBody = null;
     {

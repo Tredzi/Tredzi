@@ -10302,9 +10302,7 @@ const hiddenTabIds = settings.hiddenTabs || [];
           position: "sticky",
           top: 0,
           zIndex: 5,
-          background: `${palette.bg}F2`,
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          background: palette.bg,
           paddingTop: "6px",
         }}
       >
@@ -13659,9 +13657,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           position: "sticky",
           top: 0,
           zIndex: 5,
-          background: `${palette.bg}F2`,
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          background: palette.bg,
           paddingTop: "6px",
         }}
       >
@@ -13701,9 +13697,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           position: "sticky",
           top: 0,
           zIndex: 5,
-          background: `${palette.bg}F2`,
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          background: palette.bg,
           paddingTop: "8px",
           paddingBottom: "8px",
         }}
@@ -21337,7 +21331,7 @@ if (activeTab === "community") {
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "" : "px-0")
-      : (isDesktop ? "px-8 py-6" : "px-5 py-5")
+      : (isDesktop ? "px-8 pt-0 pb-6" : "px-5 pt-0 pb-5")
   }`}
               style={{
                 flex: "1 1 auto",
@@ -21353,10 +21347,12 @@ if (activeTab === "community") {
                 paddingBottom: communityFullBleed ? (isDesktop ? "6px" : MOBILE_NAV_SPACE) : (!isDesktop ? MOBILE_NAV_SPACE : undefined),
               }}
             >
-              {communityFullBleed || !isDesktop ? (
+              {communityFullBleed ? (
                 body
+              ) : !isDesktop ? (
+                <div style={{ paddingTop: "20px" }}>{body}</div>
               ) : (
-                <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+                <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingTop: "24px" }}>
                   {body}
                 </div>
               )}

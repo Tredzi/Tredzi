@@ -4021,6 +4021,12 @@ const resetPropFirmWizard = () => {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState("");
   const [coachRemaining, setCoachRemaining] = useState(null);
+  const [coachChats, setCoachChats] = useState([]); // saved chats: [{ id, title, updatedAt }]
+  const [coachChatId, setCoachChatId] = useState(null); // null = a fresh, unsaved chat
+  const [coachChatsMax, setCoachChatsMax] = useState(5);
+  const [coachHistoryOpen, setCoachHistoryOpen] = useState(false);
+  const [coachDeleteConfirmId, setCoachDeleteConfirmId] = useState(null);
+  const coachScrollRef = useRef(null);
 
   const [journalSubTab, setJournalSubTab] = useState("log");
   const [journalEntries, setJournalEntries] = useState([]);
@@ -5935,6 +5941,44 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
   // Fetch today's remaining AI Coach messages as soon as we know who's signed
   // in, so the count is right the first time the Coach tab is opened rather
   // than only appearing after the first message is sent.
+  // Load the saved Coach chats and reopen the most recent one, so history survives
+  // switching tabs or coming back later (and follows the account across devices).
+  useEffect(() => {
+    if (!session?.token) {
+      setCoachChats([]);
+      setCoachChatId(null);
+      setCoachMessages([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await communityApi("/ai/coach/chats", { headers: { Authorization: `Bearer ${session.token}` } });
+        if (cancelled) return;
+        const chats = list.chats || [];
+        setCoachChats(chats);
+        if (typeof list.max === "number") setCoachChatsMax(list.max);
+        if (chats.length > 0) {
+          const first = await communityApi(`/ai/coach/chats/${chats[0].id}`, {
+            headers: { Authorization: `Bearer ${session.token}` },
+          });
+          if (cancelled) return;
+          setCoachChatId(first.id);
+          setCoachMessages((first.messages || []).map((m, i) => ({ role: m.role, text: m.text, id: `cm-${first.id}-${i}` })));
+        }
+      } catch (err) {
+        // non-critical — the Coach still works, just without saved history
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.token]);
+
+  // Keep the newest Coach message in view (replies can now be long when explaining).
+  useEffect(() => {
+    const el = coachScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [coachMessages, coachLoading]);
+
   useEffect(() => {
     if (!session?.token) return;
     let cancelled = false;
@@ -7068,6 +7112,52 @@ useEffect(() => {
   // Send one message to the AI Coach (POST /ai/coach on the same Worker used
   // for Community). Rate-limited per account by the backend; coachRemaining
   // tracks how many messages are left today so the UI can show/disable state.
+  const openCoachChat = async (id) => {
+    if (!session?.token || coachLoading) return;
+    setCoachError("");
+    setCoachHistoryOpen(false);
+    setCoachDeleteConfirmId(null);
+    if (id === coachChatId) return;
+    try {
+      const data = await communityApi(`/ai/coach/chats/${id}`, { headers: { Authorization: `Bearer ${session.token}` } });
+      setCoachChatId(data.id);
+      setCoachMessages((data.messages || []).map((m, i) => ({ role: m.role, text: m.text, id: `cm-${data.id}-${i}` })));
+    } catch (err) {
+      setCoachError(err.message || "Couldn't open that chat.");
+    }
+  };
+
+  const newCoachChat = () => {
+    if (coachLoading) return;
+    if (coachChats.length >= coachChatsMax) {
+      setCoachError(`You have ${coachChatsMax} saved chats \u2014 delete one to start a new one.`);
+      setCoachHistoryOpen(true);
+      return;
+    }
+    setCoachError("");
+    setCoachChatId(null);
+    setCoachMessages([]);
+    setCoachHistoryOpen(false);
+    setCoachDeleteConfirmId(null);
+  };
+
+  const deleteCoachChat = async (id) => {
+    if (!session?.token) return;
+    try {
+      await communityApi(`/ai/coach/chats/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${session.token}` } });
+      setCoachChats((cur) => cur.filter((c) => c.id !== id));
+      if (id === coachChatId) {
+        setCoachChatId(null);
+        setCoachMessages([]);
+      }
+      setCoachError("");
+    } catch (err) {
+      setCoachError(err.message || "Couldn't delete that chat.");
+    } finally {
+      setCoachDeleteConfirmId(null);
+    }
+  };
+
   const sendCoachMessage = async () => {
     const text = coachInput.trim();
     if (!text || coachLoading) return;
@@ -7084,14 +7174,26 @@ useEffect(() => {
       const data = await communityApi("/ai/coach", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ message: text, context: buildCoachContext() }),
+        body: JSON.stringify({ message: text, context: buildCoachContext(), chatId: coachChatId || undefined }),
       });
       setCoachMessages((prev) => [
         ...prev,
         { role: "assistant", text: data.reply, id: `cm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
       ]);
       if (typeof data.remaining === "number") setCoachRemaining(data.remaining);
+      if (data.chatId) {
+        setCoachChatId(data.chatId);
+        setCoachChats((cur) => [
+          { id: data.chatId, title: data.title || "Chat", updatedAt: data.updatedAt || Date.now() },
+          ...cur.filter((c) => c.id !== data.chatId),
+        ]);
+      }
     } catch (err) {
+      if (/no longer exists/i.test(err.message || "")) {
+        // chat was deleted elsewhere — drop it locally and start fresh next time
+        setCoachChats((cur) => cur.filter((c) => c.id !== coachChatId));
+        setCoachChatId(null);
+      }
       setCoachError(err.message || "Couldn't reach the AI Coach \u2014 try again in a moment.");
       setCoachMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
       setCoachInput(text);
@@ -14956,7 +15058,105 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       </div>
     ) : (
       <div className="flex flex-col" style={{ minHeight: "420px" }}>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setCoachHistoryOpen((o) => !o)}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 min-w-0 ${TAP}`}
+            style={{
+              background: palette.field,
+              border: `1px solid ${palette.border}`,
+              color: palette.text,
+              fontFamily: mono,
+              fontSize: "12.5px",
+              maxWidth: "70%",
+            }}
+            aria-label="Saved chats"
+          >
+            <Clock size={14} style={{ flexShrink: 0, color: palette.textMuted }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {coachChats.find((c) => c.id === coachChatId)?.title || "New chat"}
+            </span>
+            <ChevronDown size={14} style={{ flexShrink: 0, color: palette.textMuted }} />
+          </button>
+          <button
+            type="button"
+            onClick={newCoachChat}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${TAP}`}
+            style={{
+              background: palette.gold,
+              color: palette.letterbox,
+              fontFamily: mono,
+              fontSize: "12.5px",
+              fontWeight: 600,
+              opacity: coachChats.length >= coachChatsMax ? 0.6 : 1,
+            }}
+          >
+            <Plus size={14} />
+            New chat
+          </button>
+        </div>
+
+        {coachHistoryOpen && (
+          <div
+            className="rounded-2xl p-2 mb-3"
+            style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
+          >
+            {coachChats.length === 0 ? (
+              <p className="text-xs px-2 py-3" style={{ color: palette.textFaint }}>
+                No saved chats yet — your conversations are saved automatically.
+              </p>
+            ) : (
+              coachChats.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2"
+                  style={{ background: c.id === coachChatId ? palette.field : "transparent" }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => openCoachChat(c.id)}
+                    className={`flex-1 min-w-0 text-left ${TAP}`}
+                    style={{ color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
+                  >
+                    <span className="block" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.title}
+                    </span>
+                    <span className="block" style={{ color: palette.textFaint, fontSize: "10.5px" }}>
+                      {new Date(c.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </button>
+                  {coachDeleteConfirmId === c.id ? (
+                    <button
+                      type="button"
+                      onClick={() => deleteCoachChat(c.id)}
+                      className={`rounded-md px-2 py-1 ${TAP}`}
+                      style={{ background: palette.red, color: "#FFFFFF", fontFamily: mono, fontSize: "11px", fontWeight: 600 }}
+                    >
+                      Delete?
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCoachDeleteConfirmId(c.id)}
+                      className={TAP}
+                      style={{ color: palette.textFaint, padding: "4px" }}
+                      aria-label="Delete chat"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+            <p className="text-xs px-2 pt-2" style={{ color: palette.textFaint }}>
+              {coachChats.length}/{coachChatsMax} saved chats
+            </p>
+          </div>
+        )}
+
         <div
+          ref={coachScrollRef}
           className="rounded-2xl p-4 mb-3 flex-1 flex flex-col gap-3"
           style={{
             background: palette.surface,
@@ -14970,8 +15170,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
               <Sparkles size={24} style={{ color: palette.textFaint, marginBottom: "8px" }} />
               <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px" }}>
-                Ask about your setups, moods, or patterns - e.g. "What's my best setup?" or "Why do my Tuesday
-                trades underperform?"
+                Chat about anything, or ask about your setups, moods, and patterns - e.g. "What's my best setup?"
+                or "Explain risk of ruin".
               </p>
             </div>
           ) : (
@@ -15020,7 +15220,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 sendCoachMessage();
               }
             }}
-            placeholder="Ask the Coach about your trades..."
+            placeholder="Message the Coach..."
             disabled={coachLoading}
             className="flex-1 rounded-lg px-3 py-2.5"
             style={{

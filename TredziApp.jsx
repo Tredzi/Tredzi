@@ -810,7 +810,7 @@ function RuleRow({ label, detail, pass }) {
   );
 }
 
-function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel }) {
+function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel, statLeft, statRight }) {
   const toneColor =
     tone === "good" ? palette.green : tone === "bad" ? palette.red : palette.goldBright;
   const hasProgress = typeof progress === "number" && !Number.isNaN(progress);
@@ -830,11 +830,7 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, ico
       <div
         className="absolute left-0 top-0 bottom-0"
         aria-hidden="true"
-        style={{
-          width: "3px",
-          background: `linear-gradient(${toneColor}, ${toneColor}00)`,
-          opacity: 0.85,
-        }}
+        style={{ width: "3px", background: toneColor }}
       />
       <div className="relative flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -858,7 +854,7 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, ico
           >
             {eyebrow}
           </div>
-          {statusLabel && (
+          {statusLabel && isDesktop && (
             <span
               className="flex-shrink-0"
               style={{ fontFamily: mono, fontSize: "10px", letterSpacing: "0.05em", color: toneColor, transition: THEME_TRANSITION }}
@@ -908,6 +904,39 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, ico
               transition: "width 0.4s ease",
             }}
           />
+        </div>
+      )}
+      {(statLeft || statRight) && (
+        <div className="relative flex items-center mt-3.5">
+          {statLeft && (
+            <div style={{ flex: 1, fontFamily: mono, fontSize: "15px", fontWeight: 600, color: toneColor, fontVariantNumeric: "tabular-nums" }}>
+              {statLeft.value}
+              {statLeft.unit && (
+                <span style={{ fontSize: "11px", color: palette.textFaint, fontWeight: 400 }}> {statLeft.unit}</span>
+              )}
+            </div>
+          )}
+          {statLeft && statRight && (
+            <div style={{ width: "1px", alignSelf: "stretch", background: palette.border, margin: "0 14px" }} />
+          )}
+          {statRight && (
+            <div
+              style={{
+                flex: 1,
+                textAlign: statLeft ? "right" : "left",
+                fontFamily: mono,
+                fontSize: "15px",
+                fontWeight: 600,
+                color: palette.green,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {statRight.value}
+              {statRight.unit && (
+                <span style={{ fontSize: "11px", color: palette.textFaint, fontWeight: 400 }}> {statRight.unit}</span>
+              )}
+            </div>
+          )}
         </div>
       )}
       {sub && (
@@ -10682,6 +10711,16 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
                   : hasBoth
                   ? undefined
                   : "Enter starting & current balance below"
+              }
+              statLeft={
+                hasTarget && hasBoth && progressPct < 100
+                  ? { value: `$${fmt(remainingToTarget)}`, unit: "to go" }
+                  : undefined
+              }
+              statRight={
+                hasTarget && hasBoth && bestDay > 0
+                  ? { value: `$${fmt(bestDay)}`, unit: "best day" }
+                  : undefined
               }
               tone={
                 !hasTarget

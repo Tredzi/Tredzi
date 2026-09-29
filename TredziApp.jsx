@@ -810,89 +810,111 @@ function RuleRow({ label, detail, pass }) {
   );
 }
 
-function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent }) {
+function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress }) {
   const toneColor =
     tone === "good" ? palette.green : tone === "bad" ? palette.red : palette.goldBright;
+  const hasProgress = typeof progress === "number" && !Number.isNaN(progress);
+  const progressPct = hasProgress ? Math.max(0, Math.min(100, progress)) : 0;
   return (
     <div
       className="relative overflow-hidden rounded-2xl p-5 mb-6"
       style={{
-        background: palette.surface,
-        border: `1px solid ${palette.gold}22`,
+        background: `linear-gradient(165deg, ${palette.surface} 0%, ${palette.field} 130%)`,
+        border: `1px solid ${palette.border}`,
         borderRadius: "18px",
-        boxShadow: `${palette.shadow}, 0 0 0 1px ${palette.gold}0A inset`,
+        boxShadow: `${palette.shadow}, inset 0 1px 0 ${palette.text}08`,
         "--glow": palette.glow,
         transition: THEME_TRANSITION,
       }}
     >
       <div
-        className="absolute left-0 top-0 bottom-0 flex flex-col justify-around pointer-events-none"
+        className="absolute left-0 top-0 bottom-0"
         aria-hidden="true"
-        style={{ width: "34px", padding: "10px 0" }}
-      >
-        {LADDER.map((w, i) => (
-          <div
-            key={i}
-            style={{
-              height: "3px",
-              width: `${w}%`,
-              background: i % 2 === 0 ? palette.green : palette.red,
-              opacity: 0.4,
-              marginBottom: "2px",
-              borderRadius: "1px",
-            }}
-          />
-        ))}
-      </div>
-      <div className="relative" style={{ paddingLeft: "38px" }}>
-        <div className="flex items-start justify-between gap-2">
-          <div
-            className="uppercase mb-2 flex items-center gap-2"
-            style={{ color: palette.textMuted, letterSpacing: "0.12em", fontSize: "11px", transition: THEME_TRANSITION }}
-          >
-            <span style={{ width: "4px", height: "4px", borderRadius: "999px", background: palette.gold, display: "inline-block" }} />
-            {eyebrow}
-          </div>
-          {rightContent && isDesktop && (
-            <div className="text-right flex-shrink-0" style={{ marginLeft: "8px" }}>
-              {rightContent}
+        style={{
+          width: "3px",
+          background: `linear-gradient(${toneColor}, ${toneColor}00)`,
+          opacity: 0.85,
+        }}
+      />
+      <div className="relative flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {Icon && (
+            <div
+              className="flex items-center justify-center flex-shrink-0"
+              style={{
+                width: "30px",
+                height: "30px",
+                borderRadius: "9px",
+                background: `${toneColor}1F`,
+                border: `1px solid ${toneColor}33`,
+              }}
+            >
+              <Icon size={15} style={{ color: toneColor }} strokeWidth={2.25} />
             </div>
           )}
-        </div>
-        <div className="flex items-baseline gap-2 ticker-glow">
-          <span
-            style={{
-              fontFamily: mono,
-              fontSize: isDesktop ? "3.2rem" : "2.15rem",
-              fontWeight: 600,
-              color: toneColor,
-              fontVariantNumeric: "tabular-nums",
-              lineHeight: 1,
-              transition: THEME_TRANSITION,
-            }}
-          >
-            {value}
-          </span>
-          {unit && (
-            <span style={{ fontFamily: mono, fontSize: "1rem", color: palette.textMuted, transition: THEME_TRANSITION }}>
-              {unit}
-            </span>
-          )}
-        </div>
-        {sub && (
-          <div className="mt-2 text-sm" style={{ color: palette.textMuted, transition: THEME_TRANSITION }}>
-            {sub}
-          </div>
-        )}
-        {rightContent && !isDesktop && (
           <div
-            className="mt-3 pt-3"
-            style={{ borderTop: `1px dashed ${palette.border}` }}
+            className="uppercase truncate"
+            style={{ color: palette.textMuted, letterSpacing: "0.12em", fontSize: "11px", fontWeight: 600, transition: THEME_TRANSITION }}
           >
+            {eyebrow}
+          </div>
+        </div>
+        {rightContent && isDesktop && (
+          <div className="text-right flex-shrink-0" style={{ marginLeft: "8px" }}>
             {rightContent}
           </div>
         )}
       </div>
+      <div className="relative flex items-baseline gap-2 ticker-glow">
+        <span
+          style={{
+            fontFamily: mono,
+            fontSize: isDesktop ? "3.2rem" : "2.15rem",
+            fontWeight: 600,
+            color: toneColor,
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+            transition: THEME_TRANSITION,
+          }}
+        >
+          {value}
+        </span>
+        {unit && (
+          <span style={{ fontFamily: mono, fontSize: "1rem", color: palette.textMuted, transition: THEME_TRANSITION }}>
+            {unit}
+          </span>
+        )}
+      </div>
+      {hasProgress && (
+        <div
+          className="relative mt-3"
+          style={{ height: "6px", borderRadius: "999px", background: palette.field, border: `1px solid ${palette.border}`, overflow: "hidden" }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${progressPct}%`,
+              borderRadius: "999px",
+              background: `linear-gradient(90deg, ${toneColor}99, ${toneColor})`,
+              boxShadow: `0 0 8px ${toneColor}77`,
+              transition: "width 0.4s ease",
+            }}
+          />
+        </div>
+      )}
+      {sub && (
+        <div className="relative mt-2 text-sm" style={{ color: palette.textMuted, transition: THEME_TRANSITION }}>
+          {sub}
+        </div>
+      )}
+      {rightContent && !isDesktop && (
+        <div
+          className="relative mt-3 pt-3"
+          style={{ borderTop: `1px dashed ${palette.border}` }}
+        >
+          {rightContent}
+        </div>
+      )}
     </div>
   );
 }
@@ -12351,6 +12373,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
           )}
 
           <Readout
+            icon={Building2}
             eyebrow={`${firm.name} · ${plan.label} · $${(pfSizeAmount / 1000).toFixed(0)}K`}
             value={phase.targetPct === "instant" ? "Instant" : `${phase.targetPct}%`}
             unit={phase.targetPct === "instant" ? undefined : "target"}

@@ -810,7 +810,7 @@ function RuleRow({ label, detail, pass }) {
   );
 }
 
-function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress }) {
+function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel }) {
   const toneColor =
     tone === "good" ? palette.green : tone === "bad" ? palette.red : palette.goldBright;
   const hasProgress = typeof progress === "number" && !Number.isNaN(progress);
@@ -858,6 +858,14 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, ico
           >
             {eyebrow}
           </div>
+          {statusLabel && (
+            <span
+              className="flex-shrink-0"
+              style={{ fontFamily: mono, fontSize: "10px", letterSpacing: "0.05em", color: toneColor, transition: THEME_TRANSITION }}
+            >
+              &#9679; {statusLabel}
+            </span>
+          )}
         </div>
         {rightContent && isDesktop && (
           <div className="text-right flex-shrink-0" style={{ marginLeft: "8px" }}>
@@ -10643,6 +10651,17 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
         {riskSubTab === "challenge" ? (
           <>
             <Readout isDesktop={isDesktop}
+              icon={Target}
+              progress={hasTarget && hasBoth ? progressPct : undefined}
+              statusLabel={
+                hasTarget && hasBoth
+                  ? progressPct >= 100
+                    ? "TARGET HIT"
+                    : totalProfit < 0
+                    ? "BELOW START"
+                    : "IN PROGRESS"
+                  : undefined
+              }
               eyebrow={!hasTarget ? (hasBoth && totalProfit < 0 ? "You Need More for Payout" : "Your Profit Amount") : "Profit Target Progress"}
               value={
                 !hasTarget
@@ -10650,10 +10669,9 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
                     ? `${totalProfit < 0 ? "-" : ""}$${fmt(Math.abs(totalProfit))}`
                     : "Instant"
                   : hasBoth
-                  ? progressPct.toFixed(1)
-                  : "0.0"
+                  ? `${totalProfit < 0 ? "-" : ""}$${fmt(Math.abs(totalProfit))}`
+                  : "$0"
               }
-              unit={!hasTarget ? undefined : "%"}
               sub={
                 !hasTarget
                   ? hasBoth
@@ -10662,7 +10680,7 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
                       : "No profit target required for this challenge type"
                     : "Enter starting & current balance below"
                   : hasBoth
-                  ? `$${fmt(totalProfit)} of $${fmt(targetAmount)} target ($${fmt(remainingToTarget)} to go)`
+                  ? undefined
                   : "Enter starting & current balance below"
               }
               tone={
@@ -11785,6 +11803,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
       body = (
         <>
           <Readout
+            icon={Building2}
             eyebrow="Prop Firm"
             value={String(PROP_FIRMS.length)}
             unit={PROP_FIRMS.length === 1 ? "firm mapped" : "firms mapped"}
@@ -12463,6 +12482,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
           persistSettings={persistSettings}
         />
         <Readout isDesktop={isDesktop}
+          icon={ArrowLeftRight}
           eyebrow={`${fx.from} \u2192 ${fx.to}`}
           value={sameCurrency ? fmtThousands(amount) : fmtThousands(converted)}
           unit={fx.to}
@@ -12656,6 +12676,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
        />
 
         <Readout
+          icon={TrendingUp}
           eyebrow="Equity"
           value={`${netPnl >= 0 ? "+" : "-"}$${fmtMoney(netPnl)}`}
           sub={
@@ -14077,6 +14098,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ) : (
       <>
         <Readout
+          icon={ShieldAlert}
           eyebrow="Discipline Grade"
           value={grade.grade}
           unit={grade.grade !== "N/A" ? `${grade.score}/100` : undefined}
@@ -14382,6 +14404,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ) : (
       <>
         <Readout
+          icon={ClipboardCheck}
           eyebrow="Journal Entries"
           value={String(journalRows.length)}
           unit={journalRows.length === 1 ? "row" : "rows"}
@@ -17051,6 +17074,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             persistSettings={persistSettings}
           />
           <Readout
+            icon={FileText}
             eyebrow="Notepad"
             value={String(notepadNotes.length)}
             unit={notepadNotes.length === 1 ? "note" : "notes"}
@@ -17470,6 +17494,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       newsBody = (
         <>
           <Readout
+            icon={Newspaper}
             eyebrow="Next USD Event"
             value={next ? formatCountdown(nextMs) : "N/A"}
             sub={next ? `${next.ev.name}  ${nextLabel}` : "No upcoming events, add one below"}
@@ -17853,6 +17878,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             persistSettings={persistSettings}
           />
           <Readout
+            icon={Clock}
             eyebrow="Your Local Time"
             value={localTimeLabel}
             sub={

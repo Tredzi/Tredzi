@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createRoot } from "react-dom/client";
-import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile, Sparkles, Sticker } from "lucide-react";
+import { Scale, LineChart as CurveIcon, ArrowLeftRight, Trash2, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Newspaper, Share2, X, Download, Upload, Copy, Sun, Moon, Bell, Info, Camera, Pencil, Check, Clock, Lightbulb, BookOpen, ClipboardCheck, TrendingUp, Flame, Target, FileText, Search, Minus, WrapText, CalendarClock, Settings, Palette, LayoutGrid, ShieldAlert, Tags, Table2, AlertTriangle, Building2, Filter, Users, Send, LogOut, Menu, HelpCircle, Heart, MessageCircle, Smile, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -310,49 +310,6 @@ function resizeImageFile(file, maxDim = SCREENSHOT_MAX_DIM) {
       img.onerror = () => reject(new Error("Couldn't read that image"));
       img.src = reader.result;
     };
-    reader.onerror = () => reject(new Error("Couldn't read that file"));
-    reader.readAsDataURL(file);
-  });
-}
-
-const STICKER_MAX_DIM = 320;
-const STICKER_MAX_BYTES = 140_000; // headroom under the worker's stored limit, for canvas-resized static stickers
-const STICKER_RAW_MAX_BYTES = 2_000_000; // animated GIF/WebP go through untouched (canvas would flatten the animation), so just cap the raw file size
-
-// Static images only — draws to canvas to resize/compress, which flattens any animation
-// to a single frame. GIF/WebP go through readStickerFileRaw instead so animation survives.
-function resizeStickerFile(file, maxDim = STICKER_MAX_DIM) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let dim = maxDim;
-        let dataUrl = drawScaled(img, dim).toDataURL("image/png");
-        while (dataUrlBytes(dataUrl) > STICKER_MAX_BYTES && dim > 96) {
-          dim = Math.round(dim * 0.8);
-          dataUrl = drawScaled(img, dim).toDataURL("image/png");
-        }
-        resolve(dataUrl);
-      };
-      img.onerror = () => reject(new Error("Couldn't read that image"));
-      img.src = reader.result;
-    };
-    reader.onerror = () => reject(new Error("Couldn't read that file"));
-    reader.readAsDataURL(file);
-  });
-}
-
-// GIF/WebP pass through unmodified so their animation is preserved — no canvas step,
-// just a straight base64 read, gated by a raw file-size cap instead of a re-encoded one.
-function readStickerFileRaw(file) {
-  return new Promise((resolve, reject) => {
-    if (file.size > STICKER_RAW_MAX_BYTES) {
-      reject(new Error("That file's too large — try a GIF/WebP under 2MB (trim it or shrink the resolution)."));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error("Couldn't read that file"));
     reader.readAsDataURL(file);
   });
@@ -810,148 +767,89 @@ function RuleRow({ label, detail, pass }) {
   );
 }
 
-function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel, statLeft, statRight }) {
+function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent }) {
   const toneColor =
     tone === "good" ? palette.green : tone === "bad" ? palette.red : palette.goldBright;
-  const hasProgress = typeof progress === "number" && !Number.isNaN(progress);
-  const progressPct = hasProgress ? Math.max(0, Math.min(100, progress)) : 0;
   return (
     <div
       className="relative overflow-hidden rounded-2xl p-5 mb-6"
       style={{
-        background: `linear-gradient(165deg, ${palette.surface} 0%, ${palette.field} 130%)`,
-        border: `1px solid ${palette.border}`,
+        background: palette.surface,
+        border: `1px solid ${palette.gold}22`,
         borderRadius: "18px",
-        boxShadow: `${palette.shadow}, inset 0 1px 0 ${palette.text}08`,
+        boxShadow: `${palette.shadow}, 0 0 0 1px ${palette.gold}0A inset`,
         "--glow": palette.glow,
         transition: THEME_TRANSITION,
       }}
     >
       <div
-        className="absolute left-0 top-0 bottom-0"
+        className="absolute left-0 top-0 bottom-0 flex flex-col justify-around pointer-events-none"
         aria-hidden="true"
-        style={{ width: "3px", background: toneColor }}
-      />
-      <div className="relative flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {Icon && (
-            <div
-              className="flex items-center justify-center flex-shrink-0"
-              style={{
-                width: "30px",
-                height: "30px",
-                borderRadius: "9px",
-                background: `${toneColor}1F`,
-                border: `1px solid ${toneColor}33`,
-              }}
-            >
-              <Icon size={15} style={{ color: toneColor }} strokeWidth={2.25} />
-            </div>
-          )}
+        style={{ width: "34px", padding: "10px 0" }}
+      >
+        {LADDER.map((w, i) => (
           <div
-            className="uppercase truncate"
-            style={{ color: palette.textMuted, letterSpacing: "0.12em", fontSize: "11px", fontWeight: 600, transition: THEME_TRANSITION }}
+            key={i}
+            style={{
+              height: "3px",
+              width: `${w}%`,
+              background: i % 2 === 0 ? palette.green : palette.red,
+              opacity: 0.4,
+              marginBottom: "2px",
+              borderRadius: "1px",
+            }}
+          />
+        ))}
+      </div>
+      <div className="relative" style={{ paddingLeft: "38px" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div
+            className="uppercase mb-2 flex items-center gap-2"
+            style={{ color: palette.textMuted, letterSpacing: "0.12em", fontSize: "11px", transition: THEME_TRANSITION }}
           >
+            <span style={{ width: "4px", height: "4px", borderRadius: "999px", background: palette.gold, display: "inline-block" }} />
             {eyebrow}
           </div>
-          {statusLabel && isDesktop && (
-            <span
-              className="flex-shrink-0"
-              style={{ fontFamily: mono, fontSize: "10px", letterSpacing: "0.05em", color: toneColor, transition: THEME_TRANSITION }}
-            >
-              &#9679; {statusLabel}
+          {rightContent && isDesktop && (
+            <div className="text-right flex-shrink-0" style={{ marginLeft: "8px" }}>
+              {rightContent}
+            </div>
+          )}
+        </div>
+        <div className="flex items-baseline gap-2 ticker-glow">
+          <span
+            style={{
+              fontFamily: mono,
+              fontSize: isDesktop ? "3.2rem" : "2.15rem",
+              fontWeight: 600,
+              color: toneColor,
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1,
+              transition: THEME_TRANSITION,
+            }}
+          >
+            {value}
+          </span>
+          {unit && (
+            <span style={{ fontFamily: mono, fontSize: "1rem", color: palette.textMuted, transition: THEME_TRANSITION }}>
+              {unit}
             </span>
           )}
         </div>
-        {rightContent && isDesktop && (
-          <div className="text-right flex-shrink-0" style={{ marginLeft: "8px" }}>
+        {sub && (
+          <div className="mt-2 text-sm" style={{ color: palette.textMuted, transition: THEME_TRANSITION }}>
+            {sub}
+          </div>
+        )}
+        {rightContent && !isDesktop && (
+          <div
+            className="mt-3 pt-3"
+            style={{ borderTop: `1px dashed ${palette.border}` }}
+          >
             {rightContent}
           </div>
         )}
       </div>
-      <div className="relative flex items-baseline gap-2 ticker-glow">
-        <span
-          style={{
-            fontFamily: mono,
-            fontSize: isDesktop ? "3.2rem" : "2.15rem",
-            fontWeight: 600,
-            color: toneColor,
-            fontVariantNumeric: "tabular-nums",
-            lineHeight: 1,
-            transition: THEME_TRANSITION,
-          }}
-        >
-          {value}
-        </span>
-        {unit && (
-          <span style={{ fontFamily: mono, fontSize: "1rem", color: palette.textMuted, transition: THEME_TRANSITION }}>
-            {unit}
-          </span>
-        )}
-      </div>
-      {hasProgress && (
-        <div
-          className="relative mt-3"
-          style={{ height: "6px", borderRadius: "999px", background: palette.field, border: `1px solid ${palette.border}`, overflow: "hidden" }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${progressPct}%`,
-              borderRadius: "999px",
-              background: `linear-gradient(90deg, ${toneColor}99, ${toneColor})`,
-              boxShadow: `0 0 8px ${toneColor}77`,
-              transition: "width 0.4s ease",
-            }}
-          />
-        </div>
-      )}
-      {(statLeft || statRight) && (
-        <div className="relative flex items-center mt-3.5">
-          {statLeft && (
-            <div style={{ flex: 1, fontFamily: mono, fontSize: "15px", fontWeight: 600, color: toneColor, fontVariantNumeric: "tabular-nums" }}>
-              {statLeft.value}
-              {statLeft.unit && (
-                <span style={{ fontSize: "11px", color: palette.textFaint, fontWeight: 400 }}> {statLeft.unit}</span>
-              )}
-            </div>
-          )}
-          {statLeft && statRight && (
-            <div style={{ width: "1px", alignSelf: "stretch", background: palette.border, margin: "0 14px" }} />
-          )}
-          {statRight && (
-            <div
-              style={{
-                flex: 1,
-                textAlign: statLeft ? "right" : "left",
-                fontFamily: mono,
-                fontSize: "15px",
-                fontWeight: 600,
-                color: palette.green,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {statRight.value}
-              {statRight.unit && (
-                <span style={{ fontSize: "11px", color: palette.textFaint, fontWeight: 400 }}> {statRight.unit}</span>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      {sub && (
-        <div className="relative mt-2 text-sm" style={{ color: palette.textMuted, transition: THEME_TRANSITION }}>
-          {sub}
-        </div>
-      )}
-      {rightContent && !isDesktop && (
-        <div
-          className="relative mt-3 pt-3"
-          style={{ borderTop: `1px dashed ${palette.border}` }}
-        >
-          {rightContent}
-        </div>
-      )}
     </div>
   );
 }
@@ -1385,60 +1283,10 @@ function computePlaybookStats(rules, checkins) {
   return { ruleStats, current, best, hasData: sorted.length > 0, overallPct, totalCheckins: sorted.length };
 }
 
-// Session hours are defined in each market's own local time and converted to UTC using the
-// market's *current* daylight-saving offset, so they stay correct across DST changes.
-//   London   08:00-17:00 London time   (UTC 8-17 in winter, 7-16 in summer)
-//   New York 08:00-17:00 New York time (UTC 13-22 in winter, 12-21 in summer)
-//   Asia     Sydney 08:00 -> Tokyo 18:00 (UTC 22-9 in Australian winter, 21-9 in Australian summer)
-const _tzFmtCache = {};
-const _tzShiftCache = {};
-function tzDstShiftHours(timeZone, standardOffsetHours) {
-  // How many hours the zone is currently ahead of its standard (non-DST) offset: 0 or 1.
-  const nowMs = Date.now();
-  const hit = _tzShiftCache[timeZone];
-  if (hit && nowMs - hit.ts < 60000) return hit.value;
-  let value = 0;
-  try {
-    if (!_tzFmtCache[timeZone]) {
-      _tzFmtCache[timeZone] = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        hourCycle: "h23",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    }
-    const parts = _tzFmtCache[timeZone].formatToParts(new Date(nowMs));
-    const g = (t) => Number(parts.find((x) => x.type === t).value);
-    const asUTC = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second"));
-    const offsetHours = Math.round((asUTC - Math.floor(nowMs / 1000) * 1000) / 1800000) / 2;
-    value = offsetHours - standardOffsetHours;
-  } catch (err) {
-    value = 0; // fall back to winter hours if Intl time zones are unavailable
-  }
-  _tzShiftCache[timeZone] = { ts: nowMs, value };
-  return value;
-}
-
 const MARKET_SESSIONS = [
-  {
-    id: "asia", label: "Asia", color: "#6C8EBF",
-    get startUTC() { return mod24(22 - tzDstShiftHours("Australia/Sydney", 10)); },
-    get endUTC() { return 9; },
-  },
-  {
-    id: "london", label: "London", color: "#6CBF8E",
-    get startUTC() { return 8 - tzDstShiftHours("Europe/London", 0); },
-    get endUTC() { return 17 - tzDstShiftHours("Europe/London", 0); },
-  },
-  {
-    id: "newyork", label: "New York", color: "#BFA26C",
-    get startUTC() { return 13 - tzDstShiftHours("America/New_York", -5); },
-    get endUTC() { return mod24(22 - tzDstShiftHours("America/New_York", -5)); },
-  },
+  { id: "asia", label: "Asia", startUTC: 22, endUTC: 9, color: "#6C8EBF" },
+  { id: "london", label: "London", startUTC: 8, endUTC: 17, color: "#6CBF8E" },
+  { id: "newyork", label: "New York", startUTC: 13, endUTC: 22, color: "#BFA26C" },
 ];
 
 function mod24(h) {
@@ -1491,11 +1339,9 @@ function sessionCountdown(session, nowUTCHour) {
 }
 
 function highLiquidityWindowLocal(tzOffsetMinutes) {
-  const london = MARKET_SESSIONS.find((s) => s.id === "london");
-  const newyork = MARKET_SESSIONS.find((s) => s.id === "newyork");
   return {
-    startLocal: mod24(newyork.startUTC - tzOffsetMinutes / 60),
-    endLocal: mod24(london.endUTC - tzOffsetMinutes / 60),
+    startLocal: mod24(13 - tzOffsetMinutes / 60),
+    endLocal: mod24(17 - tzOffsetMinutes / 60),
   };
 }
 
@@ -1557,10 +1403,7 @@ const DEFAULT_CS_INPUTS = {
 
 const PROFIT_TARGET_OPTIONS = [5, 6, 8, 10, 12];
 
-// The projection is computed over ALL projected trades (so final R / $ figures are correct),
-// and only the chart is thinned to ~EDGE_CHART_MAX_POINTS points for readability/performance.
-const EDGE_CURVE_MAX_TRADES = 250000; // safety ceiling only (10 years at ~68 trades/day)
-const EDGE_CHART_MAX_POINTS = 400;
+const EDGE_CURVE_MAX_TRADES = 200; // cap for chart performance/readability
 
 const EDGE_PROJECTION_PERIODS = [
   { label: "1 Week", days: 7 },
@@ -2707,10 +2550,7 @@ function tierFor(value, thresholds) {
   return "Excellent";
 }
 
-const MIN_TRADES_FOR_TIERS = 20;
-
 function tierColor(tier) {
-  if (tier === "Early") return palette.textFaint;
   if (tier === "Poor") return palette.red;
   if (tier === "Average") return palette.gold;
   return palette.green;
@@ -2749,18 +2589,14 @@ function computePerformanceMetrics(trades) {
     avgLoss,
   };
 
-  // Below this many trades, ratings like "Excellent" aren't statistically meaningful.
-  const smallSample = trades.length < MIN_TRADES_FOR_TIERS;
-  const tiers = smallSample
-    ? { profitFactor: "Early", recoveryFactor: "Early", winLossRatio: "Early", expectancy: "Early" }
-    : {
-        profitFactor: tierFor(metrics.profitFactor, [1, 1.5, 2.5]),
-        recoveryFactor: tierFor(metrics.recoveryFactor, [1, 2, 4]),
-        winLossRatio: tierFor(metrics.winLossRatio, [0.8, 1.2, 2]),
-        expectancy: tierFor(metrics.expectancy, [0, 5, 20]),
-      };
+  const tiers = {
+    profitFactor: tierFor(metrics.profitFactor, [1, 1.5, 2.5]),
+    recoveryFactor: tierFor(metrics.recoveryFactor, [1, 2, 4]),
+    winLossRatio: tierFor(metrics.winLossRatio, [0.8, 1.2, 2]),
+    expectancy: tierFor(metrics.expectancy, [0, 5, 20]),
+  };
 
-  return { ...metrics, tiers, netProfit, maxDD, smallSample };
+  return { ...metrics, tiers, netProfit, maxDD };
 }
 
 const METRIC_INFO = {
@@ -2910,31 +2746,15 @@ function generateThreeCurveProjection({ winRatePct, rr, spreadPct, numTrades, ri
   if (!normal || !best || !worst) return null;
 
   const trades = normal.trades;
-  // Thin the chart to ~EDGE_CHART_MAX_POINTS points (always keeping the first and last trade).
-  const step = Math.max(1, Math.ceil(trades / EDGE_CHART_MAX_POINTS));
-  const chartData = [];
-  for (let i = 0; i <= trades; i += step) {
-    chartData.push({
-      trade: i,
-      normal: normal.points[i] ? normal.points[i].r : null,
-      best: best.points[i] ? best.points[i].r : null,
-      worst: worst.points[i] ? worst.points[i].r : null,
-      normalPnl: normal.points[i] ? normal.points[i].pnl : null,
-      bestPnl: best.points[i] ? best.points[i].pnl : null,
-      worstPnl: worst.points[i] ? worst.points[i].pnl : null,
-    });
-  }
-  if (chartData[chartData.length - 1].trade !== trades) {
-    chartData.push({
-      trade: trades,
-      normal: normal.points[trades].r,
-      best: best.points[trades].r,
-      worst: worst.points[trades].r,
-      normalPnl: normal.points[trades].pnl,
-      bestPnl: best.points[trades].pnl,
-      worstPnl: worst.points[trades].pnl,
-    });
-  }
+  const chartData = Array.from({ length: trades + 1 }, (_, i) => ({
+    trade: i,
+    normal: normal.points[i] ? normal.points[i].r : null,
+    best: best.points[i] ? best.points[i].r : null,
+    worst: worst.points[i] ? worst.points[i].r : null,
+    normalPnl: normal.points[i] ? normal.points[i].pnl : null,
+    bestPnl: best.points[i] ? best.points[i].pnl : null,
+    worstPnl: worst.points[i] ? worst.points[i].pnl : null,
+  }));
 
   return {
     chartData,
@@ -3967,6 +3787,12 @@ export default function TredziApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMobileSection, setSettingsMobileSection] = useState(null);
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
+  const [brokerLogin, setBrokerLogin] = useState("");
+  const [brokerPassword, setBrokerPassword] = useState("");
+  const [brokerServer, setBrokerServer] = useState("");
+  const [brokerBusy, setBrokerBusy] = useState(false);
+  const [brokerError, setBrokerError] = useState("");
+  const [brokerStatus, setBrokerStatus] = useState(null); // null = not checked yet; { status: "none"|"connecting"|"connected"|"failed", ... }
   const [pulseOpen, setPulseOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
@@ -4158,12 +3984,6 @@ const resetPropFirmWizard = () => {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState("");
   const [coachRemaining, setCoachRemaining] = useState(null);
-  const [coachChats, setCoachChats] = useState([]); // saved chats: [{ id, title, updatedAt }]
-  const [coachChatId, setCoachChatId] = useState(null); // null = a fresh, unsaved chat
-  const [coachChatsMax, setCoachChatsMax] = useState(5);
-  const [coachHistoryOpen, setCoachHistoryOpen] = useState(false);
-  const [coachDeleteConfirmId, setCoachDeleteConfirmId] = useState(null);
-  const coachScrollRef = useRef(null);
 
   const [journalSubTab, setJournalSubTab] = useState("log");
   const [journalEntries, setJournalEntries] = useState([]);
@@ -4564,8 +4384,6 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [myGroupsLoaded, setMyGroupsLoaded] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [groupMessages, setGroupMessages] = useState([]);
-  const groupMessagesRef = useRef([]);
-  groupMessagesRef.current = groupMessages;
   const [groupMessagesLoaded, setGroupMessagesLoaded] = useState(false);
   const [communityApiError, setCommunityApiError] = useState("");
   const [addingGroup, setAddingGroup] = useState(false);
@@ -4579,15 +4397,6 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [communityMsgText, setCommunityMsgText] = useState("");
   const [communityMsgMode, setCommunityMsgMode] = useState("chat");
-  const [stickerPacks, setStickerPacks] = useState([]);
-  const [stickerPacksLoaded, setStickerPacksLoaded] = useState(false);
-  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
-  const [stickerManageMode, setStickerManageMode] = useState(false);
-  const [stickerActivePackId, setStickerActivePackId] = useState(null);
-  const [stickerNewPackName, setStickerNewPackName] = useState("");
-  const [stickerUploading, setStickerUploading] = useState(false);
-  const [stickerError, setStickerError] = useState("");
-  const stickerFileInputRef = useRef(null);
   const [signalPair, setSignalPair] = useState("");
   const [signalDirection, setSignalDirection] = useState("buy");
   const [signalEntry, setSignalEntry] = useState("");
@@ -6078,44 +5887,6 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
   // Fetch today's remaining AI Coach messages as soon as we know who's signed
   // in, so the count is right the first time the Coach tab is opened rather
   // than only appearing after the first message is sent.
-  // Load the saved Coach chats and reopen the most recent one, so history survives
-  // switching tabs or coming back later (and follows the account across devices).
-  useEffect(() => {
-    if (!session?.token) {
-      setCoachChats([]);
-      setCoachChatId(null);
-      setCoachMessages([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await communityApi("/ai/coach/chats", { headers: { Authorization: `Bearer ${session.token}` } });
-        if (cancelled) return;
-        const chats = list.chats || [];
-        setCoachChats(chats);
-        if (typeof list.max === "number") setCoachChatsMax(list.max);
-        if (chats.length > 0) {
-          const first = await communityApi(`/ai/coach/chats/${chats[0].id}`, {
-            headers: { Authorization: `Bearer ${session.token}` },
-          });
-          if (cancelled) return;
-          setCoachChatId(first.id);
-          setCoachMessages((first.messages || []).map((m, i) => ({ role: m.role, text: m.text, id: `cm-${first.id}-${i}` })));
-        }
-      } catch (err) {
-        // non-critical — the Coach still works, just without saved history
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [session?.token]);
-
-  // Keep the newest Coach message in view (replies can now be long when explaining).
-  useEffect(() => {
-    const el = coachScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [coachMessages, coachLoading]);
-
   useEffect(() => {
     if (!session?.token) return;
     let cancelled = false;
@@ -6162,122 +5933,22 @@ const toggleStoryReaction = async (storyId, emojiKey) => {
     const membership = myGroups.find((g) => g.id === activeGroupId);
     if (!membership) return;
     let cancelled = false;
-    let haveFull = false; // first load per group is a full fetch; after that we only ask for what's new
-    let lastLoad = 0;
-    let ws = null;
-    let wsOpen = false;
-    let retryTimer = null;
-    let pingTimer = null;
-    let fails = 0;
     const loadMessages = async () => {
-      lastLoad = Date.now();
       try {
-        const real = groupMessagesRef.current.filter((m) => !String(m.id).startsWith("tmp_"));
-        const since = haveFull && real.length ? Math.max(...real.map((m) => m.ts || 0)) : 0;
-        const data = await communityApi(
-          since > 0 ? `/groups/${activeGroupId}/messages?since=${since}` : `/groups/${activeGroupId}/messages`,
-          { headers: { Authorization: `Bearer ${membership.token}` } }
-        );
-        if (cancelled) return;
-        if (data.resync) { haveFull = false; return loadMessages(); }
-        if (data.delta) {
-          setGroupMessages((prev) => {
-            const idSet = new Set(data.ids || []);
-            const known = new Set(prev.map((m) => m.id));
-            const kept = prev
-              .filter((m) => String(m.id).startsWith("tmp_") || idSet.has(m.id))
-              .map((m) => {
-                if (String(m.id).startsWith("tmp_")) return m;
-                const mm = data.meta?.[m.id];
-                return { ...m, reactions: mm?.reactions || {}, myReactions: mm?.myReactions || [], replyCount: mm?.replyCount || 0 };
-              });
-            const added = (data.messages || []).filter((m) => !known.has(m.id));
-            return added.length ? [...kept, ...added].sort((a, b) => (a.ts || 0) - (b.ts || 0)) : kept;
-          });
-        } else {
-          setGroupMessages(data.messages || []);
-          haveFull = true;
-        }
-        setCommunityApiError("");
+        const data = await communityApi(`/groups/${activeGroupId}/messages`, {
+          headers: { Authorization: `Bearer ${membership.token}` },
+        });
+        if (!cancelled) { setGroupMessages(data.messages || []); setCommunityApiError(""); }
       } catch (err) {
         if (!cancelled) setCommunityApiError(err.message);
       } finally {
         if (!cancelled) setGroupMessagesLoaded(true);
       }
     };
-
-    // --- Live socket: the worker pushes new messages / deletes the moment they happen. ---
-    const connect = () => {
-      if (cancelled || fails > 6) return;
-      if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
-      try {
-        ws = new WebSocket(
-          COMMUNITY_API_BASE.replace(/^http/, "ws") + `/groups/${activeGroupId}/ws?token=${encodeURIComponent(membership.token)}`
-        );
-      } catch (e) { return; }
-      ws.onopen = () => {
-        wsOpen = true;
-        fails = 0;
-        if (haveFull) loadMessages(); // catch anything missed while the socket was down
-        clearInterval(pingTimer);
-        pingTimer = setInterval(() => { try { ws.send("ping"); } catch (e) {} }, 25000);
-      };
-      ws.onmessage = (ev) => {
-        if (typeof ev.data !== "string" || ev.data === "pong") return;
-        let evt;
-        try { evt = JSON.parse(ev.data); } catch (e) { return; }
-        if (evt.t === "msg" && evt.message) {
-          const m = evt.message;
-          // Only auto-scroll if the reader is already at (or near) the bottom.
-          const endEl = communityMessagesEndRef.current;
-          const nearBottom = !endEl || endEl.getBoundingClientRect().top < window.innerHeight + 200;
-          setGroupMessages((prev) => {
-            if (prev.some((x) => x.id === m.id)) return prev;
-            // Our own message echoing back: swap the "sending" bubble for the real one.
-            const ti = prev.findIndex((x) => String(x.id).startsWith("tmp_") && x.author === m.author && x.type === m.type && x.text === m.text);
-            if (ti >= 0) { const next = prev.slice(); next[ti] = m; return next; }
-            return [...prev, m].sort((a, b) => (a.ts || 0) - (b.ts || 0));
-          });
-          if (nearBottom) setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
-        } else if (evt.t === "del") {
-          setGroupMessages((prev) => prev.filter((x) => x.id !== evt.id));
-        } else if (evt.t === "sync") {
-          loadMessages();
-        }
-      };
-      ws.onclose = () => {
-        wsOpen = false;
-        clearInterval(pingTimer);
-        if (cancelled) return;
-        fails += 1;
-        retryTimer = setTimeout(connect, Math.min(1000 * 2 ** Math.min(fails, 4), 15000));
-      };
-      ws.onerror = () => { try { ws.close(); } catch (e) {} };
-    };
-    // Phones drop sockets when the tab sleeps — reconnect and re-sync when it wakes.
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!wsOpen) { fails = 0; clearTimeout(retryTimer); connect(); }
-      if (haveFull) loadMessages();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
     setGroupMessagesLoaded(false);
     loadMessages();
-    connect();
-    // Polling stays as a safety net; with a live socket it backs off to every 30s.
-    const id = setInterval(() => {
-      if (wsOpen && Date.now() - lastLoad < 30000) return;
-      loadMessages();
-    }, COMMUNITY_MESSAGE_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-      clearInterval(pingTimer);
-      clearTimeout(retryTimer);
-      document.removeEventListener("visibilitychange", onVisible);
-      if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} }
-    };
+    const id = setInterval(loadMessages, COMMUNITY_MESSAGE_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
   }, [activeGroupId, myGroups]);
 
   // Land on the newest message whenever the chat opens — on first load, on
@@ -7097,97 +6768,16 @@ useEffect(() => {
     const insights = computeInsights(trades, customSetups, customMoods);
     const perf = computePerformanceMetrics(trades);
     const headline = computeHeadlineInsight(trades, customSetups, customMoods);
-    const monthCmp = computeMonthComparison(trades);
-    const disciplineStreak = computeDisciplineStreak(trades);
-    const consistency = computeConsistencyScore(trades);
-    const overconfidence = computeOverconfidenceCheck(trades);
-    // fmtMoney() always returns an unsigned amount, so wrap it ourselves \u2014 otherwise a
-    // negative net P&L (or loss) gets sent to the model as a positive number.
-    const money = (n) => (Number.isFinite(n) ? `${n < 0 ? "-" : ""}$${fmtMoney(n)}` : "$0");
     const lines = [];
-
-    // --- Overall performance ---
     lines.push(`Total trades: ${trades.length}`);
     lines.push(`Win rate: ${(perf.winRate * 100).toFixed(0)}%`);
-    lines.push(`Net P&L: ${money(perf.netProfit)}`);
+    lines.push(`Net P&L: $${fmtMoney(perf.netProfit)}`);
     lines.push(`Profit factor: ${Number.isFinite(perf.profitFactor) ? perf.profitFactor.toFixed(2) : "\u221e"}`);
-    lines.push(`Avg win: ${money(perf.avgWin)}, avg loss: ${money(-perf.avgLoss)}`);
-    lines.push(`Largest win: ${money(perf.largestWin)}, largest loss: ${money(perf.largestLoss)}`);
-    lines.push(`Max drawdown: ${money(perf.maxDD)}`);
-
-    // --- Current win/loss streak, most recent trade first ---
-    const byTime = [...trades].sort((a, b) => a.ts - b.ts);
-    let streakLen = 0;
-    let streakType = null;
-    for (let i = byTime.length - 1; i >= 0; i--) {
-      const isWin = byTime[i].pnl > 0;
-      if (streakType === null) {
-        streakType = isWin ? "win" : "loss";
-        streakLen = 1;
-      } else if ((isWin && streakType === "win") || (!isWin && streakType === "loss")) {
-        streakLen += 1;
-      } else break;
-    }
-    if (streakType) {
-      lines.push(`Current streak: ${streakLen} ${streakType}${streakLen === 1 ? "" : "s"} in a row`);
-    }
-    if (disciplineStreak.hasData) {
-      lines.push(
-        `Discipline streak (consecutive days with no revenge trade): ${disciplineStreak.current} current, ${disciplineStreak.best} best ever`
-      );
-    }
-
-    // --- Day-of-week breakdown \u2014 which day they trade most/least, best/worst day ---
-    if (insights.weekdayRows.length) {
-      const mostTraded = [...insights.weekdayRows].sort((a, b) => b.count - a.count)[0];
-      const leastTraded = [...insights.weekdayRows].sort((a, b) => a.count - b.count)[0];
-      const bestPnlDay = [...insights.weekdayRows].sort((a, b) => b.pnl - a.pnl)[0];
-      const worstPnlDay = [...insights.weekdayRows].sort((a, b) => a.pnl - b.pnl)[0];
-      lines.push(
-        "By weekday: " +
-          insights.weekdayRows
-            .map((r) => `${r.label} \u2014 ${r.count} trades, ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L`)
-            .join("; ")
-      );
-      lines.push(
-        `Trades most often on ${mostTraded.label} (${mostTraded.count} trades), least often on ${leastTraded.label} (${leastTraded.count} trades)`
-      );
-      lines.push(
-        `Most profitable weekday: ${bestPnlDay.label} (${money(bestPnlDay.pnl)}). Least profitable weekday: ${worstPnlDay.label} (${money(worstPnlDay.pnl)})`
-      );
-    }
-
-    // --- Best/worst single calendar day ---
-    const pnlByDay = {};
-    trades.forEach((t) => {
-      const k = dayKeyFromTs(t.ts);
-      pnlByDay[k] = (pnlByDay[k] || 0) + t.pnl;
-    });
-    const dayEntries = Object.entries(pnlByDay);
-    if (dayEntries.length) {
-      const best = dayEntries.reduce((a, b) => (b[1] > a[1] ? b : a));
-      const worst = dayEntries.reduce((a, b) => (b[1] < a[1] ? b : a));
-      lines.push(`Best single day: ${best[0]} (${money(best[1])}). Worst single day: ${worst[0]} (${money(worst[1])})`);
-    }
-
-    // --- This month vs last month ---
-    const now = new Date();
-    const thisMonthName = now.toLocaleString("en-US", { month: "long", year: "numeric" });
-    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthName = lastMonthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
-    lines.push(
-      `This month (${thisMonthName}): ${monthCmp.thisMonth.count} trades, ${monthCmp.thisMonth.winRate.toFixed(0)}% win rate, ${money(monthCmp.thisMonth.net)} net`
-    );
-    lines.push(
-      `Last month (${lastMonthName}): ${monthCmp.lastMonth.count} trades, ${monthCmp.lastMonth.winRate.toFixed(0)}% win rate, ${money(monthCmp.lastMonth.net)} net`
-    );
-
-    // --- By setup / mood ---
     if (insights.setupRows.length) {
       lines.push(
         "By setup: " +
           insights.setupRows
-            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L, ${r.count} trades`)
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
             .join("; ")
       );
     }
@@ -7195,106 +6785,20 @@ useEffect(() => {
       lines.push(
         "By mood: " +
           insights.moodRows
-            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, ${money(r.pnl)} P&L, ${r.count} trades`)
+            .map((r) => `${r.label} \u2014 ${r.winRate.toFixed(0)}% win rate, $${fmtMoney(r.pnl)} P&L, ${r.count} trades`)
             .join("; ")
       );
     }
     if (insights.revengeCount > 0) {
-      lines.push(`Revenge trades: ${insights.revengeCount}, cost ${money(insights.revengePnl)}`);
-    }
-    if (consistency) {
-      lines.push(`Day-to-day consistency: ${consistency.label}`);
-    }
-    if (overconfidence && overconfidence.detected) {
-      lines.push(
-        `After 3+ wins in a row, average trade size increases ${overconfidence.pctChange.toFixed(0)}% \u2014 possible overconfidence sizing up.`
-      );
+      lines.push(`Revenge trades: ${insights.revengeCount}, cost $${fmtMoney(insights.revengePnl)}`);
     }
     if (headline) lines.push(`Headline insight: ${headline}`);
-
-    // --- Journal tab \u2014 separate structured entries (session, R:R, mistakes) ---
-    const filledRows = filledJournalRows(journalEntries);
-    if (filledRows.length) {
-      lines.push(`Journal entries logged: ${filledRows.length}`);
-      const mistakes = journalMistakeFrequency(filledRows, 3);
-      if (mistakes.length) {
-        lines.push("Most frequent mistakes: " + mistakes.map((m) => `${m.label} (${m.count}x)`).join(", "));
-      }
-      const rrValues = filledRows.map((r) => parseFloat(r.rr)).filter((v) => Number.isFinite(v));
-      if (rrValues.length) {
-        const avgRR = rrValues.reduce((s, v) => s + v, 0) / rrValues.length;
-        lines.push(`Average R:R across journal entries: ${avgRR.toFixed(2)}`);
-      }
-      const sessionRows = computeSessionWinRates(filledRows).filter((s) => s.total > 0);
-      if (sessionRows.length) {
-        lines.push(
-          "By session: " +
-            sessionRows
-              .map((s) => `${s.label} \u2014 ${s.total} trades, ${s.winRate !== null ? s.winRate.toFixed(0) + "% win rate" : "no outcome logged"}`)
-              .join("; ")
-        );
-      }
-    }
-
-    // --- App guide, so the coach can also answer "what does X tab do" questions ---
-    const tabGuide = TOUR_STEPS.filter((s) => s.tabId).map((s) => `${s.title}: ${s.text}`);
-    tabGuide.push(
-      "Community: join or create trading groups for chat, trade signals, and Q&A, or browse the account-wide Global Feed of everyone's posted trades."
-    );
-    lines.push("App guide \u2014 " + tabGuide.join(" | "));
-
     return lines.join("\n");
   };
 
   // Send one message to the AI Coach (POST /ai/coach on the same Worker used
   // for Community). Rate-limited per account by the backend; coachRemaining
   // tracks how many messages are left today so the UI can show/disable state.
-  const openCoachChat = async (id) => {
-    if (!session?.token || coachLoading) return;
-    setCoachError("");
-    setCoachHistoryOpen(false);
-    setCoachDeleteConfirmId(null);
-    if (id === coachChatId) return;
-    try {
-      const data = await communityApi(`/ai/coach/chats/${id}`, { headers: { Authorization: `Bearer ${session.token}` } });
-      setCoachChatId(data.id);
-      setCoachMessages((data.messages || []).map((m, i) => ({ role: m.role, text: m.text, id: `cm-${data.id}-${i}` })));
-    } catch (err) {
-      setCoachError(err.message || "Couldn't open that chat.");
-    }
-  };
-
-  const newCoachChat = () => {
-    if (coachLoading) return;
-    if (coachChats.length >= coachChatsMax) {
-      setCoachError(`You have ${coachChatsMax} saved chats \u2014 delete one to start a new one.`);
-      setCoachHistoryOpen(true);
-      return;
-    }
-    setCoachError("");
-    setCoachChatId(null);
-    setCoachMessages([]);
-    setCoachHistoryOpen(false);
-    setCoachDeleteConfirmId(null);
-  };
-
-  const deleteCoachChat = async (id) => {
-    if (!session?.token) return;
-    try {
-      await communityApi(`/ai/coach/chats/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${session.token}` } });
-      setCoachChats((cur) => cur.filter((c) => c.id !== id));
-      if (id === coachChatId) {
-        setCoachChatId(null);
-        setCoachMessages([]);
-      }
-      setCoachError("");
-    } catch (err) {
-      setCoachError(err.message || "Couldn't delete that chat.");
-    } finally {
-      setCoachDeleteConfirmId(null);
-    }
-  };
-
   const sendCoachMessage = async () => {
     const text = coachInput.trim();
     if (!text || coachLoading) return;
@@ -7311,26 +6815,14 @@ useEffect(() => {
       const data = await communityApi("/ai/coach", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ message: text, context: buildCoachContext(), chatId: coachChatId || undefined }),
+        body: JSON.stringify({ message: text, context: buildCoachContext() }),
       });
       setCoachMessages((prev) => [
         ...prev,
         { role: "assistant", text: data.reply, id: `cm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
       ]);
       if (typeof data.remaining === "number") setCoachRemaining(data.remaining);
-      if (data.chatId) {
-        setCoachChatId(data.chatId);
-        setCoachChats((cur) => [
-          { id: data.chatId, title: data.title || "Chat", updatedAt: data.updatedAt || Date.now() },
-          ...cur.filter((c) => c.id !== data.chatId),
-        ]);
-      }
     } catch (err) {
-      if (/no longer exists/i.test(err.message || "")) {
-        // chat was deleted elsewhere — drop it locally and start fresh next time
-        setCoachChats((cur) => cur.filter((c) => c.id !== coachChatId));
-        setCoachChatId(null);
-      }
       setCoachError(err.message || "Couldn't reach the AI Coach \u2014 try again in a moment.");
       setCoachMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
       setCoachInput(text);
@@ -7612,230 +7104,33 @@ if (isSignal) {
 if (isSignal && !signalPair.trim()) return;
 if (!isSignal && !communityMsgText.trim()) return;
 
-    // Optimistic send: show the message instantly, POST in the background, and
-    // skip the old full re-download of the whole chat (up to 300 rows, stickers
-    // included as base64) that used to run after every send. Polling keeps
-    // everyone else's view in sync.
-    const draft = {
-      text: communityMsgText.trim(),
-      pair: signalPair.trim().toUpperCase(),
-      direction: signalDirection,
-      entry: signalEntry.trim(),
-      sl: signalSL.trim(),
-      tp: signalTP.trim(),
-    };
-    const replyTarget = replyingTo;
-    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    // Replies to a signal become thread replies on the server and never show in the main list.
-    const replyParent = replyTarget ? groupMessages.find((m) => m.id === replyTarget.id) : null;
-    const goesToThread = !isSignal && !!replyParent && (replyParent.type === "signal" || replyParent.type === "thread_reply");
-    if (!goesToThread) {
-      setGroupMessages((cur) => [
-        ...cur,
-        {
-          id: tempId,
-          group_id: activeGroupId,
-          author: communityUsername || "Anonymous",
-          type: isSignal ? "signal" : "chat",
-          text: draft.text,
-          reply_to_id: !isSignal ? replyTarget?.id || null : null,
-          pair: isSignal ? draft.pair : null,
-          direction: isSignal ? draft.direction : null,
-          entry: isSignal ? draft.entry : null,
-          sl: isSignal ? draft.sl : null,
-          tp: isSignal ? draft.tp : null,
-          ts: Date.now(),
-          reactions: {},
-          myReactions: [],
-          replyCount: 0,
-          replyToAuthor: !isSignal && replyTarget ? replyTarget.author : undefined,
-          replyToText: !isSignal && replyTarget ? String(replyTarget.preview || "") : undefined,
-        },
-      ]);
-      setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
-    }
-    setCommunityMsgText("");
-    setSignalPair("");
-    setSignalEntry("");
-    setSignalSL("");
-    setSignalTP("");
-    setReplyingTo(null);
-
     try {
-      const res = await communityApi(`/groups/${activeGroupId}/messages`, {
+      await communityApi(`/groups/${activeGroupId}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${membership.token}` },
         body: JSON.stringify({
           author: communityUsername || "Anonymous",
           type: isSignal ? "signal" : "chat",
-          text: draft.text,
-          replyTo: !isSignal ? replyTarget?.id || undefined : undefined,
-          pair: isSignal ? draft.pair : undefined,
-          direction: isSignal ? draft.direction : undefined,
-          entry: isSignal ? draft.entry : undefined,
-          sl: isSignal ? draft.sl : undefined,
-          tp: isSignal ? draft.tp : undefined,
+          text: communityMsgText.trim(),
+          replyTo: !isSignal ? replyingTo?.id || undefined : undefined,
+          pair: isSignal ? signalPair.trim().toUpperCase() : undefined,
+          direction: isSignal ? signalDirection : undefined,
+          entry: isSignal ? signalEntry.trim() : undefined,
+          sl: isSignal ? signalSL.trim() : undefined,
+          tp: isSignal ? signalTP.trim() : undefined,
         }),
       });
-      setGroupMessages((cur) => {
-        if (res?.id && cur.some((m) => m.id === res.id)) return cur.filter((m) => m.id !== tempId);
-        return cur.map((m) => (m.id === tempId ? { ...m, id: res?.id || m.id, ts: res?.ts || m.ts } : m));
-      });
-    } catch (err) {
-      // Roll back the optimistic bubble and give the text back so nothing is lost.
-      setGroupMessages((cur) => cur.filter((m) => m.id !== tempId));
-      setCommunityMsgText(draft.text);
-      if (isSignal) {
-        setSignalPair(draft.pair);
-        setSignalEntry(draft.entry);
-        setSignalSL(draft.sl);
-        setSignalTP(draft.tp);
-      }
-      if (replyTarget) setReplyingTo(replyTarget);
-      setCommunityApiError(err.message);
-    }
-  };
-
-  // --- Sticker packs: personal, account-scoped (session token, not a group
-  // membership token) so the same stickers follow the user into any group. ---
-  const fetchStickerPacks = async () => {
-    if (!session?.token) return;
-    try {
-      const data = await communityApi("/stickers", {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      setStickerPacks(data.packs || []);
-    } catch (err) {
-      // silent — sticker picker just shows empty, not worth a banner
-    } finally {
-      setStickerPacksLoaded(true);
-    }
-  };
-
-  const createStickerPack = async () => {
-    const name = stickerNewPackName.trim();
-    if (!name || !session?.token) return;
-    setStickerError("");
-    try {
-      const data = await communityApi("/stickers/packs", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ name }),
-      });
-      setStickerPacks((cur) => [...cur, { id: data.id, name: data.name, stickers: [] }]);
-      setStickerActivePackId(data.id);
-      setStickerNewPackName("");
-    } catch (err) {
-      setStickerError(err.message);
-    }
-  };
-
-  const deleteStickerPack = async (packId) => {
-    if (!session?.token) return;
-    setStickerPacks((cur) => cur.filter((p) => p.id !== packId));
-    if (stickerActivePackId === packId) setStickerActivePackId(null);
-    try {
-      await communityApi(`/stickers/packs/${packId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-    } catch (err) {
-      setStickerError(err.message);
-      fetchStickerPacks(); // resync on failure
-    }
-  };
-
-  const deleteSticker = async (stickerId, packId) => {
-    if (!session?.token) return;
-    setStickerPacks((cur) =>
-      cur.map((p) => (p.id === packId ? { ...p, stickers: p.stickers.filter((s) => s.id !== stickerId) } : p))
-    );
-    try {
-      await communityApi(`/stickers/${stickerId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-    } catch (err) {
-      setStickerError(err.message);
-      fetchStickerPacks();
-    }
-  };
-
-  const handleStickerFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !stickerActivePackId || !session?.token) return;
-    setStickerUploading(true);
-    setStickerError("");
-    try {
-      const isAnimatable = file.type === "image/gif" || file.type === "image/webp";
-      const image = isAnimatable ? await readStickerFileRaw(file) : await resizeStickerFile(file);
-      const data = await communityApi(`/stickers/packs/${stickerActivePackId}/stickers`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ image }),
-      });
-      setStickerPacks((cur) =>
-        cur.map((p) =>
-          p.id === stickerActivePackId ? { ...p, stickers: [...p.stickers, { id: data.id, image: data.image }] } : p
-        )
-      );
-    } catch (err) {
-      setStickerError(err.message);
-    } finally {
-      setStickerUploading(false);
-    }
-  };
-
-  const sendSticker = async (image) => {
-    if (!activeGroupId) return;
-    const membership = myGroups.find((g) => g.id === activeGroupId);
-    if (!membership) return;
-    setStickerPickerOpen(false);
-    // Optimistic: the sticker appears immediately; no full chat re-download afterwards.
-    const replyTarget = replyingTo;
-    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const replyParent = replyTarget ? groupMessages.find((m) => m.id === replyTarget.id) : null;
-    const goesToThread = !!replyParent && (replyParent.type === "signal" || replyParent.type === "thread_reply");
-    if (!goesToThread) {
-      setGroupMessages((cur) => [
-        ...cur,
-        {
-          id: tempId,
-          group_id: activeGroupId,
-          author: communityUsername || "Anonymous",
-          type: "sticker",
-          text: image,
-          reply_to_id: replyTarget?.id || null,
-          ts: Date.now(),
-          reactions: {},
-          myReactions: [],
-          replyCount: 0,
-          replyToAuthor: replyTarget ? replyTarget.author : undefined,
-          replyToText: replyTarget ? String(replyTarget.preview || "") : undefined,
-        },
-      ]);
-      setTimeout(() => communityMessagesEndRef.current?.scrollIntoView({ block: "end" }), 30);
-    }
-    setReplyingTo(null);
-    try {
-      const res = await communityApi(`/groups/${activeGroupId}/messages`, {
-        method: "POST",
+      setCommunityMsgText("");
+      setSignalPair("");
+      setSignalEntry("");
+      setSignalSL("");
+      setSignalTP("");
+      setReplyingTo(null);
+      const data = await communityApi(`/groups/${activeGroupId}/messages`, {
         headers: { Authorization: `Bearer ${membership.token}` },
-        body: JSON.stringify({
-          author: communityUsername || "Anonymous",
-          type: "sticker",
-          stickerImage: image,
-          replyTo: replyTarget?.id || undefined,
-        }),
       });
-      setGroupMessages((cur) => {
-        if (res?.id && cur.some((m) => m.id === res.id)) return cur.filter((m) => m.id !== tempId);
-        return cur.map((m) => (m.id === tempId ? { ...m, id: res?.id || m.id, ts: res?.ts || m.ts } : m));
-      });
+      setGroupMessages(data.messages || []);
     } catch (err) {
-      setGroupMessages((cur) => cur.filter((m) => m.id !== tempId));
-      if (replyTarget) setReplyingTo(replyTarget);
       setCommunityApiError(err.message);
     }
   };
@@ -10428,74 +9723,6 @@ const hiddenTabIds = settings.hiddenTabs || [];
   );
   const activeInMobileOverflow = mobileNavOverflowTabs.some((t) => t.id === activeTab);
 
-  // Shared sub-tab bar for Challenge / Journal / Sessions. Desktop uses the same underline
-  // style as the Insights tabs; mobile keeps the original pill buttons.
-  const renderSubNav = (tabs, activeId, onSelect) =>
-    isDesktop ? (
-      <div
-        className="flex items-center gap-7 mb-8"
-        style={{
-          borderBottom: `1px solid ${palette.border}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
-          background: palette.bg,
-          paddingTop: "6px",
-        }}
-      >
-        {tabs.map((t) => {
-          const active = activeId === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onSelect(t.id)}
-              className={TAP}
-              style={{
-                background: "transparent",
-                border: "none",
-                borderBottom: `2.5px solid ${active ? palette.gold : "transparent"}`,
-                color: active ? palette.text : palette.textFaint,
-                fontFamily: display,
-                fontSize: "14.5px",
-                fontWeight: active ? 700 : 500,
-                padding: "0 2px 14px 2px",
-                marginBottom: "-1px",
-                cursor: "pointer",
-                transition: "color 0.15s ease, border-color 0.15s ease",
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-    ) : (
-      <div className="flex gap-2 mb-6">
-        {tabs.map((t) => {
-          const active = activeId === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onSelect(t.id)}
-              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
-              style={{
-                background: active ? palette.gold : palette.field,
-                color: active ? palette.letterbox : palette.textMuted,
-                border: `1px solid ${active ? palette.gold : palette.border}`,
-                fontFamily: mono,
-                fontSize: "13px",
-                fontWeight: 600,
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-    );
-
   let body = null;
 
   if (activeTab === "risk") {
@@ -10675,22 +9902,33 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
 
     body = (
       <>
-        {renderSubNav(RISK_SUB_TABS, riskSubTab, setRiskSubTab)}
+        <div className="flex gap-2 mb-6">
+          {RISK_SUB_TABS.map((s) => {
+            const active = riskSubTab === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setRiskSubTab(s.id)}
+                className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
+                style={{
+                  background: active ? palette.gold : palette.field,
+                  color: active ? palette.letterbox : palette.textMuted,
+                  border: `1px solid ${active ? palette.gold : palette.border}`,
+                  fontFamily: mono,
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
 
         {riskSubTab === "challenge" ? (
           <>
             <Readout isDesktop={isDesktop}
-              icon={Target}
-              progress={hasTarget && hasBoth ? progressPct : undefined}
-              statusLabel={
-                hasTarget && hasBoth
-                  ? progressPct >= 100
-                    ? "TARGET HIT"
-                    : totalProfit < 0
-                    ? "BELOW START"
-                    : "IN PROGRESS"
-                  : undefined
-              }
               eyebrow={!hasTarget ? (hasBoth && totalProfit < 0 ? "You Need More for Payout" : "Your Profit Amount") : "Profit Target Progress"}
               value={
                 !hasTarget
@@ -10698,9 +9936,10 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
                     ? `${totalProfit < 0 ? "-" : ""}$${fmt(Math.abs(totalProfit))}`
                     : "Instant"
                   : hasBoth
-                  ? `${totalProfit < 0 ? "-" : ""}$${fmt(Math.abs(totalProfit))}`
-                  : "$0"
+                  ? progressPct.toFixed(1)
+                  : "0.0"
               }
+              unit={!hasTarget ? undefined : "%"}
               sub={
                 !hasTarget
                   ? hasBoth
@@ -10709,18 +9948,8 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
                       : "No profit target required for this challenge type"
                     : "Enter starting & current balance below"
                   : hasBoth
-                  ? undefined
+                  ? `$${fmt(totalProfit)} of $${fmt(targetAmount)} target ($${fmt(remainingToTarget)} to go)`
                   : "Enter starting & current balance below"
-              }
-              statLeft={
-                hasTarget && hasBoth && progressPct < 100
-                  ? { value: `$${fmt(remainingToTarget)}`, unit: "to go" }
-                  : undefined
-              }
-              statRight={
-                hasTarget && hasBoth && bestDay > 0
-                  ? { value: `$${fmt(bestDay)}`, unit: "best day" }
-                  : undefined
               }
               tone={
                 !hasTarget
@@ -11596,8 +10825,6 @@ rightContent={
             <CartesianGrid stroke={palette.border} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="trade"
-              type="number"
-              domain={[0, "dataMax"]}
               stroke={palette.textFaint}
               tick={{ fill: palette.textFaint, fontSize: 10, fontFamily: mono }}
               tickLine={false}
@@ -11842,7 +11069,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
       body = (
         <>
           <Readout
-            icon={Building2}
             eyebrow="Prop Firm"
             value={String(PROP_FIRMS.length)}
             unit={PROP_FIRMS.length === 1 ? "firm mapped" : "firms mapped"}
@@ -12431,7 +11657,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
           )}
 
           <Readout
-            icon={Building2}
             eyebrow={`${firm.name} · ${plan.label} · $${(pfSizeAmount / 1000).toFixed(0)}K`}
             value={phase.targetPct === "instant" ? "Instant" : `${phase.targetPct}%`}
             unit={phase.targetPct === "instant" ? undefined : "target"}
@@ -12521,7 +11746,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
           persistSettings={persistSettings}
         />
         <Readout isDesktop={isDesktop}
-          icon={ArrowLeftRight}
           eyebrow={`${fx.from} \u2192 ${fx.to}`}
           value={sameCurrency ? fmtThousands(amount) : fmtThousands(converted)}
           unit={fx.to}
@@ -12715,7 +11939,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
        />
 
         <Readout
-          icon={TrendingUp}
           eyebrow="Equity"
           value={`${netPnl >= 0 ? "+" : "-"}$${fmtMoney(netPnl)}`}
           sub={
@@ -13813,17 +13036,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ];
 
     const insightsSubNav = isDesktop ? (
-      <div
-        className="flex items-center gap-7 mb-8"
-        style={{
-          borderBottom: `1px solid ${palette.border}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
-          background: palette.bg,
-          paddingTop: "6px",
-        }}
-      >
+      <div className="flex items-center gap-7 mb-8" style={{ borderBottom: `1px solid ${palette.border}` }}>
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
           return (
@@ -13852,19 +13065,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         })}
       </div>
     ) : (
-      <div
-        className="flex gap-2 mb-6"
-        style={{
-          overflowX: "auto",
-          WebkitOverflowScrolling: "touch",
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
-          background: palette.bg,
-          paddingTop: "8px",
-          paddingBottom: "8px",
-        }}
-      >
+      <div className="flex gap-2 mb-6" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {INSIGHTS_SUB_TABS.map((s) => {
           const active = insightsSubTab === s.id;
           return (
@@ -13889,7 +13090,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         })}
       </div>
     );
-
 
     const metricCard = (key, label, valueText, tier) => (
       <div
@@ -13926,7 +13126,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         {expandedMetric === key && METRIC_INFO[label] && (
           <div className="text-xs mt-2" style={{ color: palette.textFaint }}>
             {METRIC_INFO[label]}
-            {tier === "Early" && ` Based on fewer than ${MIN_TRADES_FOR_TIERS} trades, so treat this as a first look, not a verdict.`}
           </div>
         )}
       </div>
@@ -14086,10 +13285,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 <span style={{ color: palette.textMuted, fontSize: "12px" }}>{row.label}</span>
                 <div className="flex items-center gap-2">
                   <span style={{ fontFamily: mono, fontSize: "13px", color: palette.text }}>{row.fmt(row.thisV)}</span>
-                  <span style={{ fontSize: "11px", color: flat || monthCmp.lastMonth.count === 0 ? palette.textFaint : up ? palette.green : palette.red }}>
-                    {monthCmp.lastMonth.count === 0
-                      ? "no trades last month"
-                      : `${flat ? "\u2014" : up ? "\u2191" : "\u2193"} vs ${row.fmt(row.lastV)}`}
+                  <span style={{ fontSize: "11px", color: flat ? palette.textFaint : up ? palette.green : palette.red }}>
+                    {flat ? "\u2014" : up ? "\u2191" : "\u2193"} vs {row.fmt(row.lastV)}
                   </span>
                 </div>
               </div>
@@ -14137,7 +13334,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ) : (
       <>
         <Readout
-          icon={ShieldAlert}
           eyebrow="Discipline Grade"
           value={grade.grade}
           unit={grade.grade !== "N/A" ? `${grade.score}/100` : undefined}
@@ -14443,7 +13639,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     ) : (
       <>
         <Readout
-          icon={ClipboardCheck}
           eyebrow="Journal Entries"
           value={String(journalRows.length)}
           unit={journalRows.length === 1 ? "row" : "rows"}
@@ -15220,105 +14415,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       </div>
     ) : (
       <div className="flex flex-col" style={{ minHeight: "420px" }}>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <button
-            type="button"
-            onClick={() => setCoachHistoryOpen((o) => !o)}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 min-w-0 ${TAP}`}
-            style={{
-              background: palette.field,
-              border: `1px solid ${palette.border}`,
-              color: palette.text,
-              fontFamily: mono,
-              fontSize: "12.5px",
-              maxWidth: "70%",
-            }}
-            aria-label="Saved chats"
-          >
-            <Clock size={14} style={{ flexShrink: 0, color: palette.textMuted }} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {coachChats.find((c) => c.id === coachChatId)?.title || "New chat"}
-            </span>
-            <ChevronDown size={14} style={{ flexShrink: 0, color: palette.textMuted }} />
-          </button>
-          <button
-            type="button"
-            onClick={newCoachChat}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${TAP}`}
-            style={{
-              background: palette.gold,
-              color: palette.letterbox,
-              fontFamily: mono,
-              fontSize: "12.5px",
-              fontWeight: 600,
-              opacity: coachChats.length >= coachChatsMax ? 0.6 : 1,
-            }}
-          >
-            <Plus size={14} />
-            New chat
-          </button>
-        </div>
-
-        {coachHistoryOpen && (
-          <div
-            className="rounded-2xl p-2 mb-3"
-            style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
-          >
-            {coachChats.length === 0 ? (
-              <p className="text-xs px-2 py-3" style={{ color: palette.textFaint }}>
-                No saved chats yet — your conversations are saved automatically.
-              </p>
-            ) : (
-              coachChats.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center gap-2 rounded-lg px-2 py-2"
-                  style={{ background: c.id === coachChatId ? palette.field : "transparent" }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => openCoachChat(c.id)}
-                    className={`flex-1 min-w-0 text-left ${TAP}`}
-                    style={{ color: palette.text, fontFamily: mono, fontSize: "12.5px" }}
-                  >
-                    <span className="block" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.title}
-                    </span>
-                    <span className="block" style={{ color: palette.textFaint, fontSize: "10.5px" }}>
-                      {new Date(c.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                    </span>
-                  </button>
-                  {coachDeleteConfirmId === c.id ? (
-                    <button
-                      type="button"
-                      onClick={() => deleteCoachChat(c.id)}
-                      className={`rounded-md px-2 py-1 ${TAP}`}
-                      style={{ background: palette.red, color: "#FFFFFF", fontFamily: mono, fontSize: "11px", fontWeight: 600 }}
-                    >
-                      Delete?
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setCoachDeleteConfirmId(c.id)}
-                      className={TAP}
-                      style={{ color: palette.textFaint, padding: "4px" }}
-                      aria-label="Delete chat"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-            <p className="text-xs px-2 pt-2" style={{ color: palette.textFaint }}>
-              {coachChats.length}/{coachChatsMax} saved chats
-            </p>
-          </div>
-        )}
-
         <div
-          ref={coachScrollRef}
           className="rounded-2xl p-4 mb-3 flex-1 flex flex-col gap-3"
           style={{
             background: palette.surface,
@@ -15332,8 +14429,8 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
               <Sparkles size={24} style={{ color: palette.textFaint, marginBottom: "8px" }} />
               <p className="text-xs" style={{ color: palette.textFaint, maxWidth: "260px" }}>
-                Chat about anything, or ask about your setups, moods, and patterns - e.g. "What's my best setup?"
-                or "Explain risk of ruin".
+                Ask about your setups, moods, or patterns \u2014 e.g. "What's my best setup?" or "Why do my Tuesday
+                trades underperform?"
               </p>
             </div>
           ) : (
@@ -15360,7 +14457,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
               className="rounded-xl px-3 py-2"
               style={{ alignSelf: "flex-start", background: palette.field, color: palette.textFaint, fontSize: "13px" }}
             >
-              Thinking...
+              Thinking\u2026
             </div>
           )}
         </div>
@@ -15382,7 +14479,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
                 sendCoachMessage();
               }
             }}
-            placeholder="Message the Coach..."
+            placeholder="Ask the Coach about your trades\u2026"
             disabled={coachLoading}
             className="flex-1 rounded-lg px-3 py-2.5"
             style={{
@@ -15496,7 +14593,31 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "playbook", label: "Playbook" },
     ];
 
-    const journalSubNav = renderSubNav(JOURNAL_SUB_TABS, journalSubTab, setJournalSubTab);
+    const journalSubNav = (
+      <div className="flex gap-2 mb-6">
+        {JOURNAL_SUB_TABS.map((s) => {
+          const active = journalSubTab === s.id;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setJournalSubTab(s.id)}
+              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
+              style={{
+                background: active ? palette.gold : palette.field,
+                color: active ? palette.letterbox : palette.textMuted,
+                border: `1px solid ${active ? palette.gold : palette.border}`,
+                fontFamily: mono,
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+    );
 
     if (journalSubTab === "playbook") {
       const stats = computePlaybookStats(playbookRules, playbookCheckins);
@@ -15970,7 +15091,7 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
         JOURNAL_TOGGLE_COL_WIDTH + JOURNAL_COLUMNS.reduce((s, c) => s + journalColWidths[c.id], 0) + 36;
 
       const cellInputStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "14px" : "12px", border: "none" };
-      const detailFieldStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "14px" : "13px", border: "none" }; // desktop matches cellInputStyle (14px) so expanding a row doesn't change text size
+      const detailFieldStyle = { color: palette.text, fontFamily: mono, fontSize: isDesktop ? "15px" : "13px", border: "none" };
 
       const autoResizeTextarea = (el) => {
         if (!el) return;
@@ -16118,13 +15239,12 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
           ...detailFieldStyle,
           border: `1px solid ${palette.border}`,
           borderRadius: "6px",
-          padding: isDesktop ? "6px 10px" : "4px 8px",
+          padding: "4px 8px",
           width: "100%",
           display: "block",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          ...(isDesktop ? { lineHeight: "1.5", minHeight: "34px", boxSizing: "border-box" } : {}),
         };
 
         if (field.id === "session") {
@@ -17113,7 +16233,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             persistSettings={persistSettings}
           />
           <Readout
-            icon={FileText}
             eyebrow="Notepad"
             value={String(notepadNotes.length)}
             unit={notepadNotes.length === 1 ? "note" : "notes"}
@@ -17506,7 +16625,31 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       { id: "news", label: "News" },
     ];
 
-    const sessionsSubNav = renderSubNav(SESSIONS_SUB_TABS, sessionsSubTab, setSessionsSubTab);
+    const sessionsSubNav = (
+      <div className="flex gap-2 mb-6">
+        {SESSIONS_SUB_TABS.map((s) => {
+          const active = sessionsSubTab === s.id;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSessionsSubTab(s.id)}
+              className={`flex-1 px-3 py-2 rounded-full transition-colors ${TAP}`}
+              style={{
+                background: active ? palette.gold : palette.field,
+                color: active ? palette.letterbox : palette.textMuted,
+                border: `1px solid ${active ? palette.gold : palette.border}`,
+                fontFamily: mono,
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+    );
 
     let newsBody = null;
     {
@@ -17533,7 +16676,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
       newsBody = (
         <>
           <Readout
-            icon={Newspaper}
             eyebrow="Next USD Event"
             value={next ? formatCountdown(nextMs) : "N/A"}
             sub={next ? `${next.ev.name}  ${nextLabel}` : "No upcoming events, add one below"}
@@ -17917,7 +17059,6 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
             persistSettings={persistSettings}
           />
           <Readout
-            icon={Clock}
             eyebrow="Your Local Time"
             value={localTimeLabel}
             sub={
@@ -19582,54 +18723,39 @@ if (activeTab === "community") {
                       {!isMe && !grouped && (
                         <button type="button" onClick={() => openCommunityMemberProfile(m.author)} className={TAP} style={{ color: palette.gold, fontSize: "11.5px", fontWeight: 700, marginBottom: "3px", marginLeft: "3px", background: "none", border: "none", padding: 0 }}>{m.author}</button>
                       )}
-                      {m.type === "sticker" ? (
-                        <div style={{ display: "inline-block" }}>
-                          {m.replyToAuthor && (
-                            <div
-                              className="px-3 py-1.5 rounded-lg mb-1"
-                              style={{ background: palette.field, borderLeft: `3px solid ${palette.gold}`, display: "inline-block", maxWidth: "160px" }}
-                            >
-                              <div style={{ fontSize: "10px", fontWeight: 700, color: palette.gold }}>{m.replyToAuthor}</div>
-                              <div className="truncate" style={{ fontSize: "11px", color: palette.textMuted }}>{m.replyToText}</div>
+                      <div
+                        className="rounded-2xl px-4 py-2.5"
+                        style={{
+                          background: bubbleColor,
+                          color: textColor,
+                          fontSize: "14px",
+                          lineHeight: 1.45,
+                          boxShadow: isMe ? `0 3px 10px ${palette.gold}33` : palette.shadow,
+                          borderTopRightRadius: isMe && grouped ? "6px" : "16px",
+                          borderTopLeftRadius: !isMe && grouped ? "6px" : "16px",
+                        }}
+                      >
+                        {m.replyToAuthor && (
+                          <div
+                            className="px-4 py-2"
+                            style={{
+                              margin: "-10px -16px 6px -16px",
+                              background: isMe ? "rgba(0,0,0,0.14)" : palette.field,
+                              borderLeft: `3px solid ${isMe ? palette.letterbox : palette.gold}`,
+                              borderTopLeftRadius: !isMe && grouped ? "6px" : "14px",
+                              borderTopRightRadius: isMe && grouped ? "6px" : "14px",
+                              borderBottomLeftRadius: "4px",
+                              borderBottomRightRadius: "4px",
+                            }}
+                          >
+                            <div style={{ fontSize: "10px", fontWeight: 700, color: isMe ? palette.letterbox : palette.gold, opacity: 0.9 }}>
+                              {m.replyToAuthor}
                             </div>
-                          )}
-                          <img src={m.text} alt="Sticker" style={{ width: "120px", height: "120px", objectFit: "contain", display: "block" }} />
-                        </div>
-                      ) : (
-                        <div
-                          className="rounded-2xl px-4 py-2.5"
-                          style={{
-                            background: bubbleColor,
-                            color: textColor,
-                            fontSize: "14px",
-                            lineHeight: 1.45,
-                            boxShadow: isMe ? `0 3px 10px ${palette.gold}33` : palette.shadow,
-                            borderTopRightRadius: isMe && grouped ? "6px" : "16px",
-                            borderTopLeftRadius: !isMe && grouped ? "6px" : "16px",
-                          }}
-                        >
-                          {m.replyToAuthor && (
-                            <div
-                              className="px-4 py-2"
-                              style={{
-                                margin: "-10px -16px 6px -16px",
-                                background: isMe ? "rgba(0,0,0,0.14)" : palette.field,
-                                borderLeft: `3px solid ${isMe ? palette.letterbox : palette.gold}`,
-                                borderTopLeftRadius: !isMe && grouped ? "6px" : "14px",
-                                borderTopRightRadius: isMe && grouped ? "6px" : "14px",
-                                borderBottomLeftRadius: "4px",
-                                borderBottomRightRadius: "4px",
-                              }}
-                            >
-                              <div style={{ fontSize: "10px", fontWeight: 700, color: isMe ? palette.letterbox : palette.gold, opacity: 0.9 }}>
-                                {m.replyToAuthor}
-                              </div>
-                              <div className="truncate" style={{ fontSize: "11px", opacity: 0.85, color: isMe ? palette.letterbox : palette.textMuted }}>{m.replyToText}</div>
-                            </div>
-                          )}
-                          {m.text}
-                        </div>
-                      )}
+                            <div className="truncate" style={{ fontSize: "11px", opacity: 0.85, color: isMe ? palette.letterbox : palette.textMuted }}>{m.replyToText}</div>
+                          </div>
+                        )}
+                        {m.text}
+                      </div>
                       {Object.keys(m.reactions || {}).length > 0 && (
                         <div
                           className="flex items-center gap-1 flex-wrap"
@@ -19667,7 +18793,7 @@ if (activeTab === "community") {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setReplyingTo({ id: m.id, author: m.author, preview: m.type === "sticker" ? "🖼️ Sticker" : (m.text || "").slice(0, 60) })}
+                          onClick={() => setReplyingTo({ id: m.id, author: m.author, preview: (m.text || "").slice(0, 60) })}
                           className={TAP}
                           style={{ color: palette.textFaint, fontSize: "9.5px", fontFamily: mono }}
                         >
@@ -19790,143 +18916,10 @@ if (activeTab === "community") {
               </button>
             </div>
           )}
-          <input ref={stickerFileInputRef} type="file" accept="image/*" onChange={handleStickerFileChange} style={{ display: "none" }} />
-          {stickerPickerOpen && (
-            <div
-              className="rounded-2xl mb-2"
-              style={{
-                background: palette.surface,
-                border: `1px solid ${palette.border}`,
-                boxShadow: palette.shadow,
-                padding: "10px",
-                maxHeight: "280px",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-                  {stickerPacks.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setStickerActivePackId(p.id)}
-                      className={`flex-shrink-0 rounded-full px-2.5 py-1 ${TAP}`}
-                      style={{
-                        background: stickerActivePackId === p.id ? palette.gold : palette.field,
-                        color: stickerActivePackId === p.id ? palette.letterbox : palette.textMuted,
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setStickerManageMode((v) => !v)}
-                  className={TAP}
-                  style={{ color: stickerManageMode ? palette.gold : palette.textFaint, fontSize: "11px", fontWeight: 700, flexShrink: 0, marginLeft: "8px" }}
-                >
-                  {stickerManageMode ? "Done" : "Manage"}
-                </button>
-              </div>
-
-              {stickerManageMode && (
-                <div className="flex items-center gap-1.5 mb-2">
-                  <input
-                    type="text"
-                    value={stickerNewPackName}
-                    onChange={(e) => setStickerNewPackName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") createStickerPack(); }}
-                    placeholder="New pack name"
-                    className="flex-1 bg-transparent outline-none rounded-lg px-2.5 py-1.5"
-                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "12px" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={createStickerPack}
-                    disabled={!stickerNewPackName.trim()}
-                    className={TAP}
-                    style={{ background: palette.gold, color: palette.letterbox, borderRadius: "8px", padding: "6px 10px", fontSize: "11px", fontWeight: 700, opacity: !stickerNewPackName.trim() ? 0.5 : 1 }}
-                  >
-                    Add
-                  </button>
-                </div>
-              )}
-
-              {stickerError && (
-                <p className="text-xs mb-2" style={{ color: palette.red }}>{stickerError}</p>
-              )}
-
-              <div style={{ overflowY: "auto", flex: 1 }}>
-                {!stickerActivePackId ? (
-                  <p className="text-xs text-center py-6" style={{ color: palette.textFaint }}>
-                    {stickerPacks.length === 0 ? "Tap Manage to create your first sticker pack." : "Pick a pack above."}
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-4 gap-2">
-                    {(stickerPacks.find((p) => p.id === stickerActivePackId)?.stickers || []).map((s) => (
-                      <div key={s.id} className="relative">
-                        <button
-                          type="button"
-                          onClick={() => (stickerManageMode ? deleteSticker(s.id, stickerActivePackId) : sendSticker(s.image))}
-                          className={TAP}
-                          style={{ width: "100%", aspectRatio: "1 / 1", background: "transparent", border: "none", padding: "4px" }}
-                        >
-                          <img src={s.image} alt="Sticker" style={{ width: "100%", height: "100%", objectFit: "contain", opacity: stickerManageMode ? 0.5 : 1 }} />
-                          {stickerManageMode && (
-                            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: palette.red }}>
-                              <Trash2 size={16} />
-                            </span>
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                    {stickerManageMode && (
-                      <button
-                        type="button"
-                        onClick={() => stickerFileInputRef.current && stickerFileInputRef.current.click()}
-                        disabled={stickerUploading}
-                        className={`flex items-center justify-center rounded-lg ${TAP}`}
-                        style={{ aspectRatio: "1 / 1", background: palette.field, border: `1px dashed ${palette.border}`, color: palette.textMuted }}
-                      >
-                        {stickerUploading ? <Sparkles size={16} /> : <Plus size={18} />}
-                      </button>
-                    )}
-                  </div>
-                )}
-                {stickerActivePackId && stickerManageMode && (
-                  <button
-                    type="button"
-                    onClick={() => deleteStickerPack(stickerActivePackId)}
-                    className={TAP}
-                    style={{ marginTop: "10px", color: palette.red, fontSize: "11px", fontWeight: 600, background: "none", border: "none", padding: 0 }}
-                  >
-                    Delete this pack
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
           <div
             className="flex items-center gap-2 rounded-2xl"
-            style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px" }}
+            style={{ background: palette.field, border: `1px solid ${palette.border}`, padding: "4px 4px 4px 16px" }}
           >
-            <button
-              type="button"
-              onClick={() => {
-                if (!stickerPacksLoaded) fetchStickerPacks();
-                setStickerPickerOpen((v) => !v);
-              }}
-              className={`flex items-center justify-center rounded-full flex-shrink-0 ${TAP}`}
-              style={{ width: "32px", height: "32px", marginLeft: "4px", color: stickerPickerOpen ? palette.gold : palette.textFaint }}
-              aria-label="Stickers"
-            >
-              <Sticker size={18} />
-            </button>
             <input
               type="text"
               value={communityMsgText}
@@ -21502,7 +20495,7 @@ if (activeTab === "community") {
   className={`${tourActive ? "" : "ledger-page-transition"} ${
     communityFullBleed
       ? (isDesktop ? "" : "px-0")
-      : (isDesktop ? "px-8 pt-0 pb-6" : "px-5 pt-0 pb-5")
+      : (isDesktop ? "px-8 py-6" : "px-5 py-5")
   }`}
               style={{
                 flex: "1 1 auto",
@@ -21518,12 +20511,10 @@ if (activeTab === "community") {
                 paddingBottom: communityFullBleed ? (isDesktop ? "6px" : MOBILE_NAV_SPACE) : (!isDesktop ? MOBILE_NAV_SPACE : undefined),
               }}
             >
-              {communityFullBleed ? (
+              {communityFullBleed || !isDesktop ? (
                 body
-              ) : !isDesktop ? (
-                <div style={{ paddingTop: "20px" }}>{body}</div>
               ) : (
-                <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto", paddingTop: "24px" }}>
+                <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
                   {body}
                 </div>
               )}

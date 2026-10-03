@@ -700,7 +700,7 @@ const avatarStyleFor = (seed) => {
 };
 
 function Avatar({ name, size = 40, ring, online, src, frame }) {
-  if (frame) return <AnimatedFrame size={size} frame={frame}><Avatar name={name} size={size} online={online} src={src} /></AnimatedFrame>;
+  if (frame && frame !== "none") { const inner = Math.round(size / 1.36); return <AnimatedFrame size={inner} frame={frame}><Avatar name={name} size={inner} src={src} /></AnimatedFrame>; }
   const a = avatarStyleFor(name || "?");
   return (
     <span className="relative inline-flex flex-shrink-0" style={{ width: `${size}px`, height: `${size}px` }}>
@@ -813,81 +813,85 @@ const CX_METERS = {
   glass: { label: "Glass", track: "rgba(163,174,196,0.18)", glow: false, ticks: "#A3AEC4" },
 };
 
-function ChallengeTrack({ progress = 0, skin = "circuit", label }) {
+function MiniTrack({ progress = 0, skin = "circuit" }) {
   const s = CX_TRACKS[skin] || CX_TRACKS.circuit;
-  const pathRef = useRef(null);
-  const [pt, setPt] = useState({ x: 14, y: 52 });
+  const ref = useRef(null);
   const pct = Math.max(0, Math.min(100, progress));
-  const d = "M14 52 C 60 8, 100 8, 140 46 S 220 92, 262 44 S 300 20, 326 30";
+  const [pt, setPt] = useState({ x: 8, y: 27 });
+  const [nodes, setNodes] = useState([]);
+  const d = "M8 27 C 48 3, 92 3, 132 19 S 208 35, 250 17 S 312 5, 332 11";
   useEffect(() => {
-    const el = pathRef.current;
+    const el = ref.current;
     if (!el) return;
-    const p = el.getPointAtLength((pct / 100) * el.getTotalLength());
-    setPt({ x: p.x, y: p.y });
+    const L = el.getTotalLength();
+    const at = (m) => el.getPointAtLength((m / 100) * L);
+    setPt(at(pct));
+    setNodes([25, 50, 75, 100].map((m) => ({ m, ...at(m) })));
   }, [pct]);
-  const marks = [25, 50, 75, 100];
   return (
-    <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-      <div className="flex items-center justify-between mb-1">
-        <span style={{ color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>{label || "Challenge track"}</span>
-        <span style={{ color: s.fill, fontFamily: mono, fontSize: "12px", fontWeight: 700 }}>{pct.toFixed(0)}%</span>
-      </div>
-      <svg viewBox="0 0 340 110" style={{ width: "100%", display: "block" }}>
-        <defs><filter id="cxg"><feGaussianBlur stdDeviation="3" /></filter></defs>
-        {s.peaks && <path d="M0 110 L50 70 L80 92 L130 48 L180 96 L230 58 L280 90 L340 62 L340 110Z" fill={s.base} opacity="0.55" />}
-        {s.road && <path d={d} fill="none" stroke={s.base} strokeWidth="18" strokeLinecap="round" />}
-        <path ref={pathRef} d={d} fill="none" stroke={s.road ? "#3A3D46" : s.base} strokeWidth={s.road ? 2 : 6} strokeLinecap="round" strokeDasharray={s.road ? "10 8" : s.dash || undefined} />
-        <path d={d} pathLength="100" fill="none" stroke={s.glow} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${pct} 100`} filter="url(#cxg)" opacity="0.55" />
-        <path d={d} pathLength="100" fill="none" stroke={s.fill} strokeWidth={s.road ? 3 : 4} strokeLinecap="round" strokeDasharray={`${pct} 100`} />
-        {marks.map((m) => {
-          const el = pathRef.current;
-          if (!el) return null;
-          const p = el.getPointAtLength((m / 100) * el.getTotalLength());
-          const done = pct >= m;
+    <div className="relative mt-3" style={{ maxWidth: 420 }}>
+      <svg viewBox="0 0 340 42" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+        <defs><filter id="cxgm"><feGaussianBlur stdDeviation="2.2" /></filter></defs>
+        {s.peaks && <path d="M0 42 L40 26 L70 36 L120 18 L170 38 L225 22 L280 36 L340 24 L340 42Z" fill={s.base} opacity="0.5" />}
+        {s.road && <path d={d} fill="none" stroke={s.base} strokeWidth="12" strokeLinecap="round" />}
+        <path ref={ref} d={d} fill="none" stroke={s.road ? "#3A3D46" : s.base} strokeWidth={s.road ? 1.5 : 4} strokeLinecap="round" strokeDasharray={s.road ? "8 6" : s.dash || undefined} />
+        <path d={d} pathLength="100" fill="none" stroke={s.glow} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${pct} 100`} filter="url(#cxgm)" opacity="0.55" />
+        <path d={d} pathLength="100" fill="none" stroke={s.fill} strokeWidth={s.road ? 2.5 : 3} strokeLinecap="round" strokeDasharray={`${pct} 100`} />
+        {nodes.map((n) => {
+          const done = pct >= n.m;
           return s.node === "square"
-            ? <rect key={m} x={p.x - 4} y={p.y - 4} width="8" height="8" rx="1.5" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.5" />
-            : <circle key={m} cx={p.x} cy={p.y} r="4.5" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.5" />;
+            ? <rect key={n.m} x={n.x - 3} y={n.y - 3} width="6" height="6" rx="1" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.2" />
+            : <circle key={n.m} cx={n.x} cy={n.y} r="3.4" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.2" />;
         })}
         <g className="cx-bob">
-          <circle cx={pt.x} cy={pt.y} r="9" fill={s.fill} opacity="0.25" className="cx-dot" />
-          <circle cx={pt.x} cy={pt.y} r="5" fill={palette.text} stroke={s.fill} strokeWidth="2.5" />
+          <circle cx={pt.x} cy={pt.y} r="7" fill={s.fill} opacity="0.25" className="cx-dot" />
+          <circle cx={pt.x} cy={pt.y} r="4" fill={palette.text} stroke={s.fill} strokeWidth="2" />
         </g>
       </svg>
     </div>
   );
 }
 
-function DrawdownMeter({ used = 0, limit = 1, label = "Max drawdown", caption, skin = "neon" }) {
+function MeterDial({ pct = 0, tone, skin = "neon" }) {
   const s = CX_METERS[skin] || CX_METERS.neon;
-  const pct = Math.max(0, Math.min(1, limit > 0 ? used / limit : 0));
-  const tone = pct < 0.6 ? palette.green : pct < 0.85 ? "#F2B35E" : palette.red;
   const arc = "M20 100 A80 80 0 0 1 180 100";
-  const ang = -90 + pct * 180;
-  const ticks = Array.from({ length: 21 }, (_, i) => i);
   return (
-    <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
-      <div style={{ color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>{label}</div>
-      <svg viewBox="0 0 200 122" style={{ width: "100%", maxWidth: 320, display: "block", margin: "4px auto 0" }}>
-        <defs><filter id="cxm"><feGaussianBlur stdDeviation="2.5" /></filter></defs>
-        <path d={arc} pathLength="100" fill="none" stroke={s.track} strokeWidth="12" strokeLinecap="round" />
-        <path d={arc} pathLength="100" fill="none" stroke={palette.green} strokeWidth="2" strokeDasharray="60 100" opacity="0.5" transform="translate(0,-10)" />
-        <path d={arc} pathLength="100" fill="none" stroke="#F2B35E" strokeWidth="2" strokeDasharray="0 60 25 100" opacity="0.5" transform="translate(0,-10)" />
-        <path d={arc} pathLength="100" fill="none" stroke={palette.red} strokeWidth="2" strokeDasharray="0 85 15 100" opacity="0.5" transform="translate(0,-10)" />
-        {s.glow && <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} filter="url(#cxm)" opacity="0.6" />}
-        <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} />
-        {ticks.map((i) => {
-          const a = (-180 + i * 9) * (Math.PI / 180);
-          const long = i % 5 === 0;
-          const r1 = 70, r2 = long ? 62 : 66;
-          return <line key={i} x1={100 + r1 * Math.cos(a)} y1={100 + r1 * Math.sin(a)} x2={100 + r2 * Math.cos(a)} y2={100 + r2 * Math.sin(a)} stroke={s.ticks} strokeWidth={long ? 1.4 : 0.8} opacity="0.7" />;
-        })}
-        <g className="cx-needle" style={{ transform: `rotate(${ang}deg)`, transformOrigin: "100px 100px" }}>
-          <path d="M98 100 L100 34 L102 100Z" fill={palette.text} />
-        </g>
-        <circle cx="100" cy="100" r="6" fill={palette.surface} stroke={palette.text} strokeWidth="2" />
-        <text x="100" y="118" textAnchor="middle" fill={tone} style={{ fontFamily: mono, fontSize: 13, fontWeight: 700 }}>{(pct * 100).toFixed(0)}% used</text>
-      </svg>
-      {caption && <div className="text-center" style={{ color: palette.textFaint, fontSize: "11.5px", marginTop: 2 }}>{caption}</div>}
+    <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
+      <defs><filter id="cxm"><feGaussianBlur stdDeviation="2.5" /></filter></defs>
+      <path d={arc} pathLength="100" fill="none" stroke={s.track} strokeWidth="14" strokeLinecap="round" />
+      {s.glow && <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="14" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} filter="url(#cxm)" opacity="0.6" />}
+      <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="14" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} />
+      {Array.from({ length: 21 }, (_, i) => {
+        const a = (-180 + i * 9) * (Math.PI / 180), long = i % 5 === 0, r1 = 68, r2 = long ? 58 : 63;
+        return <line key={i} x1={100 + r1 * Math.cos(a)} y1={100 + r1 * Math.sin(a)} x2={100 + r2 * Math.cos(a)} y2={100 + r2 * Math.sin(a)} stroke={s.ticks} strokeWidth={long ? 1.6 : 0.9} opacity="0.7" />;
+      })}
+      <g className="cx-needle" style={{ transform: `rotate(${-90 + pct * 180}deg)`, transformOrigin: "100px 100px" }}>
+        <path d="M97.5 100 L100 30 L102.5 100Z" fill={palette.text} />
+      </g>
+      <circle cx="100" cy="100" r="7" fill={palette.surface} stroke={palette.text} strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+function DrawdownMeter({ label, detail, pass, used = 0, limit = 0, skin = "neon", chip }) {
+  const armed = limit > 0 && pass !== undefined;
+  const pct = armed ? Math.max(0, Math.min(1, used / limit)) : 0;
+  const tone = pass === undefined ? palette.textFaint : pass === false ? palette.red : pct < 0.6 ? palette.green : pct < 0.85 ? "#F2B35E" : palette.red;
+  const badge = pass === undefined ? "—" : pass ? "OK" : "FAIL";
+  return (
+    <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, borderLeft: `3px solid ${tone}`, boxShadow: palette.shadow }}>
+      <div style={{ width: 112, flexShrink: 0 }}>
+        <MeterDial pct={pct} tone={tone} skin={skin} />
+        <div style={{ textAlign: "center", color: tone, fontFamily: mono, fontSize: 11, fontWeight: 700, marginTop: -4 }}>{armed ? `${Math.round(pct * 100)}% used` : "idle"}</div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span style={{ color: palette.text, fontSize: 14 }}>{label}</span>
+          <span style={{ fontFamily: mono, fontSize: 11, letterSpacing: "0.06em", color: tone, border: `1px solid ${tone}`, borderRadius: 999, padding: "3px 8px", flexShrink: 0 }}>{badge}</span>
+        </div>
+        <div style={{ color: palette.textMuted, fontSize: 12, marginTop: 2 }}>{detail}</div>
+        {chip && <div className="mt-1.5">{chip}</div>}
+      </div>
     </div>
   );
 }
@@ -1068,53 +1072,96 @@ function Certificate({ name = "Trader", firm = "Prop firm challenge", accountSiz
   );
 }
 
-// --- Picker + preview panel used on the Challenge tab ---
-function CosmeticsPanel({ prefs, setPrefs, username, members, streak, bestStreak, progress, ddUsed, ddLimit, firm, accountSize, phase }) {
+// --- Challenge certificate row (lives on the Challenge tab) ---
+function CertificateCard({ unlocked, hasTarget, progress = 0, name, firm, accountSize, phase }) {
   const [open, setOpen] = useState(false);
-  const pick = (key, val) => setPrefs({ ...prefs, [key]: val });
-  const Row = ({ title, opts, k }) => (
-    <div className="mb-3">
-      <div style={{ color: palette.textMuted, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{title}</div>
-      <div className="flex gap-2 flex-wrap">
-        {Object.entries(opts).map(([id, o]) => (
-          <button key={id} type="button" onClick={() => pick(k, id)} className={`px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: prefs[k] === id ? `${palette.gold}33` : palette.field, border: `1px solid ${prefs[k] === id ? palette.goldBright : palette.border}`, color: prefs[k] === id ? palette.text : palette.textMuted, fontSize: 12.5, fontWeight: 600 }}>{o.label}</button>
-        ))}
-      </div>
-    </div>
-  );
   return (
-    <>
-      <ChallengeTrack progress={progress} skin={prefs.track} />
-      <DrawdownMeter used={ddUsed} limit={ddLimit} skin={prefs.meter} caption={ddLimit > 0 ? `$${fmt(Math.max(0, ddLimit - ddUsed))} of room left before the floor` : "Enter your balances to arm the meter"} />
-      <DisciplineSeason streak={streak} best={bestStreak} />
-      <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
-        <div className="flex items-center justify-between mb-3">
-          <span style={{ color: palette.text, fontWeight: 700, fontSize: 14 }}>Your look</span>
-          <div className="flex gap-1.5 flex-wrap justify-end">
-            {streak >= 3 && <StatusChip kind="disciplined" />}
-            {progress >= 100 && <StatusChip kind="passed" />}
-            {ddLimit > 0 && ddUsed / ddLimit >= 0.85 && <StatusChip kind="locked" />}
-            {streak >= 7 && <StatusChip kind="zone" />}
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-3 rounded-xl p-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: palette.text, fontSize: 14, fontWeight: 600 }}>Challenge certificate</span>
+            {unlocked && <StatusChip kind="passed" />}
+          </div>
+          <div style={{ color: palette.textMuted, fontSize: 12, marginTop: 2 }}>
+            {unlocked ? "You passed this phase. Your certificate is ready." : hasTarget ? `Unlocks at 100% of your profit target (${Math.round(progress)}% now).` : "This plan has no profit target, so this is a preview."}
           </div>
         </div>
-        <div className="flex items-center gap-4 mb-3">
-          <AnimatedFrame size={56} frame={prefs.frame}><Avatar name={username || "Trader"} size={56} /></AnimatedFrame>
-          <div style={{ color: palette.textFaint, fontSize: 12 }}>Frame shows on your profile photo.</div>
-        </div>
-        <Row title="Avatar frame" opts={CX_FRAMES} k="frame" />
-        <Row title="Challenge track" opts={CX_TRACKS} k="track" />
-        <Row title="Drawdown meter" opts={CX_METERS} k="meter" />
-      </div>
-      <Campfire members={members} streak={streak} />
-      {progress >= 100 ? (
-        <Certificate name={username || "Trader"} firm={firm} accountSize={accountSize} phase={phase} profitPct={undefined} />
-      ) : (
-        <button type="button" onClick={() => setOpen(!open)} className={`w-full rounded-lg py-2.5 mb-3 ${TAP}`} style={{ background: "transparent", border: `1px dashed ${palette.border}`, color: palette.textMuted, fontSize: 12.5 }}>
-          {open ? "Hide certificate preview" : "Preview your challenge certificate"}
+        <button type="button" onClick={() => setOpen(!open)} className={`px-3 py-2 rounded-lg flex-shrink-0 ${TAP}`} style={{ background: unlocked ? palette.gold : "transparent", color: unlocked ? palette.letterbox : palette.textMuted, border: unlocked ? "none" : `1px solid ${palette.border}`, fontFamily: mono, fontSize: 12.5, fontWeight: 600 }}>
+          {open ? "Hide" : unlocked ? "View & save" : "Preview"}
         </button>
-      )}
-      {open && progress < 100 && <Certificate name={username || "Trader"} firm={firm} accountSize={accountSize} phase={phase} />}
+      </div>
+      {open && <div className="mt-2"><Certificate name={name} firm={firm || "Prop firm challenge"} accountSize={accountSize} phase={phase} /></div>}
+    </div>
+  );
+}
+
+// --- Skin pickers (Settings → Appearance) ---
+function CosmeticsPicker({ prefs, setPrefs }) {
+  const tile = (active) => ({ background: active ? `${palette.gold}26` : palette.field, border: `1px solid ${active ? palette.goldBright : palette.border}`, borderRadius: 12, padding: "8px 10px", textAlign: "left", flex: "1 1 120px", minWidth: 110 });
+  return (
+    <>
+      <SettingsSubLabel>Challenge track</SettingsSubLabel>
+      <div className="flex gap-2 flex-wrap mb-3">
+        {Object.entries(CX_TRACKS).map(([id, t]) => (
+          <button key={id} type="button" onClick={() => setPrefs({ ...prefs, track: id })} className={TAP} style={tile(prefs.track === id)}>
+            <div style={{ color: palette.text, fontSize: 12.5, fontWeight: 600 }}>{t.label}</div>
+            <MiniTrack progress={62} skin={id} />
+          </button>
+        ))}
+      </div>
+      <SettingsSubLabel>Drawdown meter</SettingsSubLabel>
+      <div className="flex gap-2 flex-wrap mb-1">
+        {Object.entries(CX_METERS).map(([id, m]) => (
+          <button key={id} type="button" onClick={() => setPrefs({ ...prefs, meter: id })} className={TAP} style={tile(prefs.meter === id)}>
+            <div style={{ color: palette.text, fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>{m.label}</div>
+            <div style={{ width: 84 }}><MeterDial pct={0.62} tone="#F2B35E" skin={id} /></div>
+          </button>
+        ))}
+      </div>
     </>
+  );
+}
+
+// --- Edit profile sheet: photo, avatar frame, bio ---
+function ProfileEditSheet({ username, avatarSrc, frame, setFrame, onPickPhoto, uploading, bio, setBio, onSave, onClose, saving }) {
+  const opts = [["none", "None"], ...Object.entries(CX_FRAMES).map(([k, v]) => [k, v.label])];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6" style={{ background: "rgba(5,7,12,0.72)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={onClose}>
+      <div className="w-full modal-in rounded-t-2xl sm:rounded-2xl p-5" style={{ maxWidth: 440, maxHeight: "92vh", overflowY: "auto", background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <span style={{ color: palette.text, fontSize: 17, fontWeight: 800 }}>Edit profile</span>
+          <button type="button" onClick={onClose} className={TAP} style={{ color: palette.textFaint }} aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="flex items-center gap-4 mb-5">
+          <Avatar name={username} size={104} src={avatarSrc} frame={frame} />
+          <div>
+            <button type="button" onClick={onPickPhoto} disabled={uploading} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg ${TAP}`} style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: 13, fontWeight: 600, opacity: uploading ? 0.6 : 1 }}>
+              <Camera size={14} /> {uploading ? "Uploading…" : "Change photo"}
+            </button>
+            <div style={{ color: palette.textFaint, fontSize: 11.5, marginTop: 6 }}>Frames show on your profile.</div>
+          </div>
+        </div>
+        <div style={{ color: palette.textMuted, fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Avatar frame</div>
+        <div className="grid grid-cols-4 gap-2 mb-5">
+          {opts.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setFrame(id)} className={`flex flex-col items-center py-2 rounded-xl ${TAP}`} style={{ background: frame === id ? `${palette.gold}26` : palette.field, border: `1px solid ${frame === id ? palette.goldBright : palette.border}` }}>
+              {id === "none" ? <span style={{ width: 52, height: 52, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Avatar name={username} size={36} src={avatarSrc} /></span> : <AnimatedFrame size={36} frame={id}><Avatar name={username} size={36} src={avatarSrc} /></AnimatedFrame>}
+              <span style={{ color: frame === id ? palette.text : palette.textMuted, fontSize: 11.5, marginTop: 2 }}>{label}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ color: palette.textMuted, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Bio</div>
+        <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 160))} rows={3} placeholder="Tell people what you trade and how you think about risk…" className="w-full rounded-xl px-3 py-2 outline-none" style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: 13, resize: "none", lineHeight: 1.45 }} />
+        <div className="flex items-center justify-between mt-2">
+          <span style={{ color: palette.textFaint, fontSize: 11, fontFamily: mono }}>{bio.length}/160</span>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className={`px-4 py-2 rounded-lg ${TAP}`} style={{ background: "transparent", border: `1px solid ${palette.border}`, color: palette.textMuted, fontSize: 13 }}>Cancel</button>
+            <button type="button" onClick={onSave} disabled={saving} className={`px-5 py-2 rounded-lg ${TAP}`} style={{ background: palette.gold, color: palette.letterbox, fontSize: 13, fontWeight: 700, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 // ================= /COSMETICS =================
@@ -1182,7 +1229,7 @@ function RuleRow({ label, detail, pass }) {
   );
 }
 
-function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel, statLeft, statRight }) {
+function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, icon: Icon, progress, statusLabel, statLeft, statRight, trackSkin, trackProgress }) {
   const toneColor =
     tone === "good" ? palette.green : tone === "bad" ? palette.red : palette.goldBright;
   const hasProgress = typeof progress === "number" && !Number.isNaN(progress);
@@ -1261,7 +1308,8 @@ function Readout({ eyebrow, value, unit, sub, tone, isDesktop, rightContent, ico
           </span>
         )}
       </div>
-      {hasProgress && (
+      {trackSkin && typeof trackProgress === "number" && <MiniTrack progress={trackProgress} skin={trackSkin} />}
+      {hasProgress && !trackSkin && (
         <div
           className="relative mt-3"
           style={{ height: "6px", borderRadius: "999px", background: palette.field, border: `1px solid ${palette.border}`, overflow: "hidden" }}
@@ -11072,6 +11120,8 @@ const edgeCurveData = Array.from({ length: EDGE_CURVE_POINTS + 1 }, (_, i) => {
             <Readout isDesktop={isDesktop}
               icon={Target}
               progress={hasTarget && hasBoth ? progressPct : undefined}
+              trackSkin={cxPrefs.track}
+              trackProgress={hasTarget ? (hasBoth ? progressPct : 0) : 100}
               statusLabel={
                 hasTarget && hasBoth
                   ? progressPct >= 100
@@ -11188,58 +11238,47 @@ rightContent={
 }
             />
 
-            <RuleRow
-              label="Daily Drawdown"
-              detail={
-                dailyPass === undefined
-                  ? "Enter starting balance below"
-                  : dailyPass
-                  ? `$${fmt(dailyRemaining)} of daily buffer left`
-                  : `Over by $${fmt(todayLoss - dailyLossAllowed)}`
-              }
-              pass={dailyPass}
-            />
-            <RuleRow
-              label="Max Drawdown"
-              detail={
-                overallPass === undefined
-                  ? "Enter both balances below"
-                  : overallPass
-                  ? `$${fmt(overallRemaining)} of loss buffer left`
-                  : `Below floor by $${fmt(floorBalance - currentBal)}`
-              }
-              pass={overallPass}
-            />
-            <RuleRow
-              label="Consistency Rule"
-              detail={
-                consistencyPass === undefined
-                  ? "Needs positive total profit"
-                  : rule === 0
-                  ? "No consistency rule set"
-                  : consistencyPass
-                  ? `${consistencyScore.toFixed(1)}% within the ${rule}% rule`
-                  : `Need $${fmt(moreNeededForConsistency)} more total profit`
-              }
-              pass={consistencyPass}
-            />
-
-            <div className="mt-6">
-              <CosmeticsPanel
-                prefs={cxPrefs}
-                setPrefs={setCxPrefs}
-                username={communityUsername}
-                members={groupMembersList}
-                streak={computeDisciplineStreak(trades).current}
-                bestStreak={computeDisciplineStreak(trades).best}
-                progress={hasTarget && hasBoth ? progressPct : 0}
-                ddUsed={hasBoth ? Math.max(0, peakBalance - currentBal) : 0}
-                ddLimit={hasStart ? maxDrawdownAllowed : 0}
-                firm={linkedFirm?.firmName}
-                accountSize={startBal}
-                phase={linkedFirm?.planLabel || "Evaluation"}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+              <DrawdownMeter
+                skin={cxPrefs.meter}
+                label="Daily Drawdown"
+                used={todayLoss}
+                limit={dailyLossAllowed}
+                pass={dailyPass}
+                detail={dailyPass === undefined ? "Enter starting balance below" : dailyPass ? `$${fmt(dailyRemaining)} of daily buffer left` : `Over by $${fmt(todayLoss - dailyLossAllowed)}`}
+              />
+              <DrawdownMeter
+                skin={cxPrefs.meter}
+                label="Max Drawdown"
+                used={hasBoth ? Math.max(0, peakBalance - currentBal) : 0}
+                limit={maxDrawdownAllowed}
+                pass={overallPass}
+                detail={overallPass === undefined ? "Enter both balances below" : overallPass ? `$${fmt(overallRemaining)} of loss buffer left` : `Below floor by $${fmt(floorBalance - currentBal)}`}
+                chip={(() => {
+                  if (!overallPass || !(maxDrawdownAllowed > 0)) return null;
+                  const r = (peakBalance - currentBal) / maxDrawdownAllowed;
+                  return r >= 0.85 ? <StatusChip kind="locked" text="Near the floor" /> : r >= 0.6 ? <StatusChip kind="cooling" text="Caution" /> : null;
+                })()}
+              />
+              <DrawdownMeter
+                skin={cxPrefs.meter}
+                label="Consistency Rule"
+                used={consistencyScore}
+                limit={rule}
+                pass={consistencyPass}
+                detail={consistencyPass === undefined ? "Needs positive total profit" : rule === 0 ? "No consistency rule set" : consistencyPass ? `${consistencyScore.toFixed(1)}% within the ${rule}% rule` : `Need $${fmt(moreNeededForConsistency)} more total profit`}
               />
             </div>
+
+            <CertificateCard
+              unlocked={hasTarget && hasBoth && progressPct >= 100}
+              hasTarget={hasTarget}
+              progress={hasTarget && hasBoth ? progressPct : 0}
+              name={communityUsername || "Trader"}
+              firm={linkedFirm?.firmName}
+              accountSize={startBal}
+              phase={linkedFirm?.planLabel || "Evaluation"}
+            />
             <span className="block mt-6 mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
               Recovery
             </span>
@@ -13224,6 +13263,8 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
             </p>
           )}
         </div>
+
+        <DisciplineSeason streak={disciplineCurrent} best={disciplineBest} />
 
         <span
           className="block mb-1.5 uppercase"
@@ -19837,6 +19878,7 @@ if (activeTab === "community") {
 
         ) : communityPanelTab === "leaderboard" ? (
           <>
+            <Campfire members={groupMembersList.length ? groupMembersList : (communityUsername ? [{ username: communityUsername, avatar: communityAvatar, isOnline: true }] : [])} streak={computeDisciplineStreak(trades).current} />
             {(() => {
               const members = groupMembersList.length ? groupMembersList : (communityUsername ? [{ username: communityUsername, avatar: communityAvatar }] : []);
               const rows = members.map((member) => ({ member, stats: getCommunityMemberStats(member) }));
@@ -20736,16 +20778,7 @@ if (activeTab === "community") {
               {isMe && (
                 <>
                   <input ref={profileAvatarInputRef} type="file" accept="image/*" onChange={handleCommunityAvatarChange} style={{ display: "none" }} />
-                  <button
-                    type="button"
-                    onClick={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
-                    disabled={communityAvatarUploading}
-                    className={`absolute flex items-center justify-center rounded-full ${TAP}`}
-                    style={{ right: isDesktop ? "8px" : "0px", bottom: isDesktop ? "8px" : "0px", width: isDesktop ? "30px" : "26px", height: isDesktop ? "30px" : "26px", background: palette.gold, color: palette.letterbox, border: `2px solid ${palette.bg}`, opacity: communityAvatarUploading ? 0.6 : 1 }}
-                    aria-label="Change profile photo"
-                  >
-                    <Camera size={12} />
-                  </button>
+                  
                 </>
               )}
             </div>
@@ -20753,26 +20786,19 @@ if (activeTab === "community") {
           const bioBlock = (
             <>
               {isMe && bioEditing ? (
-                <div className="mt-2">
-                  <textarea
-                    value={bioDraft}
-                    onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
-                    rows={3}
-                    autoFocus
-                    placeholder="Tell people what you trade and how you think about risk…"
-                    className="w-full rounded-xl px-3 py-2 outline-none"
-                    style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontSize: "13px", fontFamily: sans, resize: "none", lineHeight: 1.45, maxWidth: isDesktop ? "360px" : "none" }}
-                  />
-                  <div className="flex items-center justify-between mt-1.5" style={{ maxWidth: isDesktop ? "360px" : "none" }}>
-                    <span style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}>{bioDraft.length}/160</span>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setBioEditing(false)} className={TAP} style={{ ...pill(false, false), height: "30px", padding: "0 14px" }}>Cancel</button>
-                      <button type="button" onClick={saveProfileBio} disabled={bioSaving} className={TAP} style={{ ...pill(true, bioSaving), height: "30px", padding: "0 16px" }}>
-                        {bioSaving ? "Saving…" : "Save"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ProfileEditSheet
+                  username={p.username}
+                  avatarSrc={avatarSrc}
+                  frame={cxPrefs.frame}
+                  setFrame={(f) => setCxPrefs({ ...cxPrefs, frame: f })}
+                  onPickPhoto={() => profileAvatarInputRef.current && profileAvatarInputRef.current.click()}
+                  uploading={communityAvatarUploading}
+                  bio={bioDraft}
+                  setBio={setBioDraft}
+                  onSave={saveProfileBio}
+                  onClose={() => setBioEditing(false)}
+                  saving={bioSaving}
+                />
               ) : p.bio ? (
                 <p className="mt-1.5" style={{ color: palette.text, fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.bio}</p>
               ) : isMe ? (
@@ -20797,7 +20823,7 @@ if (activeTab === "community") {
           const actionButton = isMe ? (
             !bioEditing && (
               <button type="button" onClick={() => { setBioDraft(p.bio || ""); setBioEditing(true); }} className={`flex items-center justify-center gap-1.5 ${TAP}`} style={{ ...pill(false, false), flex: isDesktop ? "none" : 1 }}>
-                <Pencil size={12} /> Edit bio
+                <Pencil size={12} /> Edit profile
               </button>
             )
           ) : (
@@ -20817,6 +20843,7 @@ if (activeTab === "community") {
           const nameRow = (
             <div className="flex items-center gap-2 flex-wrap">
               <span style={{ color: palette.text, fontSize: isDesktop ? "20px" : "18px", fontWeight: 800 }}>{p.username}</span>
+              {isMe && (() => { const st = computeDisciplineStreak(trades).current; return (<>{st >= 3 && <StatusChip kind="disciplined" />}{st >= 7 && <StatusChip kind="zone" />}</>); })()}
               {p.verifiedPnl && <span style={chip}>Verified P&L</span>}
               {!isMe && p.followsMe && <span style={{ color: palette.textMuted, background: palette.field, border: `1px solid ${palette.border}`, borderRadius: "999px", padding: "2px 8px", fontSize: "10.5px", fontWeight: 600 }}>Follows you</span>}
             </div>
@@ -22855,6 +22882,7 @@ if (activeTab === "community") {
               );
             })}
           </div>
+        <CosmeticsPicker prefs={cxPrefs} setPrefs={setCxPrefs} />
         </SettingsSection>
 
         {/* NAVIGATION */}

@@ -803,17 +803,25 @@ function AnimatedFrame({ size = 64, frame = "aurora", children }) {
 
 // --- Track + meter skins ---
 const CX_TRACKS = {
-  circuit: { label: "Circuit", base: "#2A3350", fill: "#5B8AC4", dash: "6 5", node: "square", glow: "#5B8AC4" },
-  asphalt: { label: "Asphalt", base: "#2B2D33", fill: "#F2B35E", dash: "10 8", node: "round", glow: "#F2B35E", road: true },
-  alpine: { label: "Alpine", base: "#24324A", fill: "#9FE3FF", dash: null, node: "round", glow: "#9FE3FF", peaks: true },
+  mountain: { label: "Mountain climb", kind: "mountain", base: "#7C879E", fill: "#4A90E2" },
+  road: { label: "Road to the flag", kind: "path", base: "#4A4D56", fill: "#1FA57A", glow: "#1FA57A", node: "round", road: true, flag: true },
+  rocket: { label: "Rocket launch", kind: "rocket", base: "#6B7488", fill: "#E2622D" },
+  ladder: { label: "Ladder", kind: "ladder", base: "#6B7488", fill: "#1FA57A" },
+  circuit: { label: "Circuit", kind: "path", base: "#2A3350", fill: "#5B8AC4", dash: "6 5", node: "square", glow: "#5B8AC4" },
+  asphalt: { label: "Asphalt", kind: "path", base: "#2B2D33", fill: "#F2B35E", dash: "10 8", node: "round", glow: "#F2B35E", road: true },
+  alpine: { label: "Alpine", kind: "path", base: "#24324A", fill: "#9FE3FF", dash: null, node: "round", glow: "#9FE3FF", peaks: true },
 };
 const CX_METERS = {
-  neon: { label: "Neon", track: "#232A3F", glow: true, ticks: "#5B8AC4" },
-  carbon: { label: "Carbon", track: "#1A1D26", glow: false, ticks: "#68738F" },
-  glass: { label: "Glass", track: "rgba(163,174,196,0.18)", glow: false, ticks: "#A3AEC4" },
+  fuel: { label: "Fuel gauge", kind: "fuel" },
+  battery: { label: "Battery", kind: "battery" },
+  health: { label: "Health bar", kind: "health" },
+  shield: { label: "Cracking shield", kind: "shield" },
+  neon: { label: "Neon", kind: "gauge", track: "#232A3F", glow: true, ticks: "#5B8AC4" },
+  carbon: { label: "Carbon", kind: "gauge", track: "#1A1D26", glow: false, ticks: "#68738F" },
+  glass: { label: "Glass", kind: "gauge", track: "rgba(163,174,196,0.18)", glow: false, ticks: "#A3AEC4" },
 };
 
-function MiniTrack({ progress = 0, skin = "circuit" }) {
+function PathTrack({ progress = 0, skin = "circuit" }) {
   const s = CX_TRACKS[skin] || CX_TRACKS.circuit;
   const ref = useRef(null);
   const pct = Math.max(0, Math.min(100, progress));
@@ -843,6 +851,12 @@ function MiniTrack({ progress = 0, skin = "circuit" }) {
             ? <rect key={n.m} x={n.x - 3} y={n.y - 3} width="6" height="6" rx="1" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.2" />
             : <circle key={n.m} cx={n.x} cy={n.y} r="3.4" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.2" />;
         })}
+        {s.flag && nodes[3] && (
+          <g>
+            <line x1={nodes[3].x} y1={nodes[3].y} x2={nodes[3].x} y2={nodes[3].y - 16} stroke={palette.textMuted} strokeWidth="1.4" />
+            <path d={`M${nodes[3].x} ${nodes[3].y - 16} l13 4.5 l-13 4.5Z`} fill="#E24D4D" />
+          </g>
+        )}
         <g className="cx-bob">
           <circle cx={pt.x} cy={pt.y} r="7" fill={s.fill} opacity="0.25" className="cx-dot" />
           <circle cx={pt.x} cy={pt.y} r="4" fill={palette.text} stroke={s.fill} strokeWidth="2" />
@@ -852,7 +866,82 @@ function MiniTrack({ progress = 0, skin = "circuit" }) {
   );
 }
 
-function MeterDial({ pct = 0, tone, skin = "neon" }) {
+function MountainTrack({ progress = 0, skin = "mountain" }) {
+  const s = CX_TRACKS[skin] || CX_TRACKS.mountain;
+  const t = Math.max(0, Math.min(100, progress)) / 100;
+  const A = { x: 8, y: 52 }, B = { x: 204, y: 10 };
+  const P = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t };
+  return (
+    <div className="relative mt-3" style={{ maxWidth: 420 }}>
+      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+        <path d="M4 54 L86 26 L118 42 L204 10 L336 54" fill={`${s.base}1F`} stroke={s.base} strokeWidth="1.6" strokeLinejoin="round" />
+        <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={s.fill} strokeWidth="1.6" strokeDasharray="4 4" opacity="0.5" />
+        <line x1={A.x} y1={A.y} x2={P.x} y2={P.y} stroke={s.fill} strokeWidth="3" strokeLinecap="round" />
+        <line x1={B.x} y1={B.y} x2={B.x} y2={B.y - 16} stroke={palette.textMuted} strokeWidth="1.4" />
+        <path d={`M${B.x} ${B.y - 16} l13 4.5 l-13 4.5Z`} fill="#E24D4D" />
+        <g className="cx-bob">
+          <circle cx={P.x} cy={P.y} r="8" fill={s.fill} opacity="0.25" className="cx-dot" />
+          <circle cx={P.x} cy={P.y} r="4.5" fill={s.fill} stroke={palette.bg} strokeWidth="1.5" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function RocketTrack({ progress = 0, skin = "rocket" }) {
+  const s = CX_TRACKS[skin] || CX_TRACKS.rocket;
+  const t = Math.max(0, Math.min(100, progress)) / 100;
+  const x0 = 16, x1 = 300, x = x0 + (x1 - x0) * t;
+  return (
+    <div className="relative mt-3" style={{ maxWidth: 420 }}>
+      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+        {[[60, 12], [120, 46], [180, 10], [240, 48], [275, 16]].map(([sx, sy], i) => <circle key={i} cx={sx} cy={sy} r="1" fill={palette.textFaint} opacity="0.6" />)}
+        <line x1={x0} y1="29" x2={x1} y2="29" stroke={s.base} strokeWidth="1.6" strokeDasharray="3 5" />
+        <line x1={x0} y1="29" x2={x} y2="29" stroke={s.fill} strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+        <circle cx="320" cy="29" r="12" fill="#C9C2FF" />
+        <circle cx="316" cy="25" r="3" fill="#A79EF0" opacity="0.7" />
+        <g transform={`translate(${x} 29) rotate(90)`}>
+          <g className="cx-flame" style={{ "--d": "0.5s" }}><path d="M-3.2 9 L0 21 L3.2 9Z" fill="#FFC24A" /><path d="M-1.6 9 L0 15 L1.6 9Z" fill="#FFF1B8" /></g>
+          <path d="M0 -11 C6 -5 6 4 3.6 9 L-3.6 9 C-6 4 -6 -5 0 -11Z" fill="#E8EAF2" stroke={palette.border} strokeWidth="0.6" />
+          <path d="M-3.6 3 L-8 9 L-3.6 8Z M3.6 3 L8 9 L3.6 8Z" fill={s.fill} />
+          <circle cx="0" cy="-2" r="2.2" fill={s.fill} />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function LadderTrack({ progress = 0, skin = "ladder" }) {
+  const s = CX_TRACKS[skin] || CX_TRACKS.ladder;
+  const pct = Math.max(0, Math.min(100, progress));
+  const n = 12, x0 = 10, x1 = 330, dx = (x1 - x0) / n, px = x0 + ((x1 - x0) * pct) / 100;
+  return (
+    <div className="relative mt-3" style={{ maxWidth: 420 }}>
+      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+        <line x1={x0} y1="12" x2={x1} y2="12" stroke={s.base} strokeWidth="3" strokeLinecap="round" />
+        <line x1={x0} y1="46" x2={x1} y2="46" stroke={s.base} strokeWidth="3" strokeLinecap="round" />
+        {Array.from({ length: n + 1 }, (_, i) => {
+          const rx = x0 + i * dx, lit = (i / n) * 100 <= pct;
+          return <line key={i} x1={rx} y1="12" x2={rx} y2="46" stroke={lit ? s.fill : s.base} strokeWidth={lit ? 3 : 2} strokeLinecap="round" opacity={lit ? 1 : 0.7} />;
+        })}
+        <g className="cx-bob">
+          <circle cx={px} cy="29" r="9" fill={s.fill} opacity="0.25" className="cx-dot" />
+          <circle cx={px} cy="29" r="5" fill={s.fill} stroke={palette.bg} strokeWidth="1.5" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function MiniTrack({ progress = 0, skin = "mountain" }) {
+  const kind = (CX_TRACKS[skin] || CX_TRACKS.mountain).kind;
+  if (kind === "mountain") return <MountainTrack progress={progress} skin={skin} />;
+  if (kind === "rocket") return <RocketTrack progress={progress} skin={skin} />;
+  if (kind === "ladder") return <LadderTrack progress={progress} skin={skin} />;
+  return <PathTrack progress={progress} skin={skin} />;
+}
+
+function GaugeDial({ pct = 0, tone, skin = "neon" }) {
   const s = CX_METERS[skin] || CX_METERS.neon;
   const arc = "M20 100 A80 80 0 0 1 180 100";
   return (
@@ -871,6 +960,64 @@ function MeterDial({ pct = 0, tone, skin = "neon" }) {
       <circle cx="100" cy="100" r="7" fill={palette.surface} stroke={palette.text} strokeWidth="2.5" />
     </svg>
   );
+}
+
+function FuelGauge({ pct = 0 }) {
+  const arc = "M20 100 A80 80 0 0 1 180 100";
+  return (
+    <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
+      <path d={arc} pathLength="100" fill="none" stroke="#1FA57A" strokeWidth="13" strokeDasharray="59 100" />
+      <path d={arc} pathLength="100" fill="none" stroke="#F2A33A" strokeWidth="13" strokeDasharray="0 60 24 100" />
+      <path d={arc} pathLength="100" fill="none" stroke="#E24D4D" strokeWidth="13" strokeDasharray="0 85 15 100" />
+      <g className="cx-needle" style={{ transform: `rotate(${-90 + pct * 180}deg)`, transformOrigin: "100px 100px" }}>
+        <path d="M97.5 100 L100 34 L102.5 100Z" fill={palette.text} />
+      </g>
+      <circle cx="100" cy="100" r="7" fill={palette.text} />
+    </svg>
+  );
+}
+
+function CellMeter({ pct = 0, style = "battery" }) {
+  const left = 1 - pct, cells = left <= 0 ? 0 : Math.max(1, Math.round(left * 5));
+  const col = cells <= 1 ? "#E24D4D" : cells <= 2 ? "#F2A33A" : "#1FA57A";
+  if (style === "battery") {
+    return (
+      <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
+        <rect x="18" y="32" width="152" height="50" rx="9" fill="none" stroke={palette.textMuted} strokeWidth="3.5" />
+        <rect x="174" y="46" width="11" height="22" rx="3" fill={palette.textMuted} />
+        {Array.from({ length: 5 }, (_, i) => (
+          <rect key={i} x={26 + i * 28.5} y="40" width="23" height="34" rx="4" fill={i < cells ? col : "none"} stroke={i < cells ? col : palette.border} strokeWidth="1.2" className={i === cells - 1 && cells <= 1 ? "cx-dot" : ""} />
+        ))}
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <rect key={i} x={10 + i * 37} y="38" width="30" height="40" rx="7" fill={i < cells ? col : "none"} stroke={i < cells ? col : "#E24D4D"} strokeWidth="2.4" className={i === cells - 1 && cells <= 1 ? "cx-dot" : ""} />
+      ))}
+    </svg>
+  );
+}
+
+function ShieldMeter({ pct = 0, tone }) {
+  const shield = "M100 8 L150 22 V58 C150 83 129 99 100 108 C71 99 50 83 50 58 V22Z";
+  const cracks = [["M100 22 L93 44 L105 59 L96 78", 0.12], ["M105 59 L122 67 L117 86", 0.5], ["M93 44 L75 53 L80 72", 0.8]];
+  return (
+    <svg viewBox="0 0 200 116" style={{ width: "100%", display: "block" }}>
+      <path d={shield} fill={`${tone}26`} stroke={tone} strokeWidth="4" strokeLinejoin="round" />
+      <path d="M100 18 L141 29 V58 C141 77 125 90 100 98 C75 90 59 77 59 58 V29Z" fill="none" stroke={tone} strokeWidth="1" opacity="0.35" />
+      {cracks.map(([d, at], i) => pct >= at && <path key={i} d={d} fill="none" stroke="#B3402F" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />)}
+    </svg>
+  );
+}
+
+function MeterDial({ pct = 0, tone, skin = "fuel" }) {
+  const kind = (CX_METERS[skin] || CX_METERS.fuel).kind;
+  if (kind === "fuel") return <FuelGauge pct={pct} />;
+  if (kind === "battery" || kind === "health") return <CellMeter pct={pct} style={kind} />;
+  if (kind === "shield") return <ShieldMeter pct={pct} tone={tone} />;
+  return <GaugeDial pct={pct} tone={tone} skin={skin} />;
 }
 
 function DrawdownMeter({ label, detail, pass, used = 0, limit = 0, skin = "neon", chip }) {
@@ -1096,29 +1243,41 @@ function CertificateCard({ unlocked, hasTarget, progress = 0, name, firm, accoun
   );
 }
 
-// --- Skin pickers (Settings → Appearance) ---
-function CosmeticsPicker({ prefs, setPrefs }) {
-  const tile = (active) => ({ background: active ? `${palette.gold}26` : palette.field, border: `1px solid ${active ? palette.goldBright : palette.border}`, borderRadius: 12, padding: "8px 10px", textAlign: "left", flex: "1 1 120px", minWidth: 110 });
+// --- Settings -> Cosmetics ---
+function CosmeticsSettings({ prefs, setPrefs, username, avatarSrc }) {
+  const tile = (active) => ({ background: active ? `${palette.gold}26` : palette.field, border: `1.5px solid ${active ? palette.goldBright : palette.border}`, borderRadius: 14, padding: "10px 8px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", minHeight: 108 });
+  const label = (t, on) => <span style={{ color: on ? palette.text : palette.textMuted, fontSize: 12.5, fontWeight: 600, marginTop: 6, textAlign: "center" }}>{t}</span>;
+  const grid = "grid grid-cols-2 md:grid-cols-4 gap-2 mb-4";
   return (
     <>
-      <SettingsSubLabel>Challenge track</SettingsSubLabel>
-      <div className="flex gap-2 flex-wrap mb-3">
+      <SettingsSubLabel>Avatar frame</SettingsSubLabel>
+      <div className={grid}>
+        {[["none", "None"], ...Object.entries(CX_FRAMES).map(([k, v]) => [k, v.label])].map(([id, name]) => (
+          <button key={id} type="button" onClick={() => setPrefs({ ...prefs, frame: id })} className={TAP} style={tile(prefs.frame === id)}>
+            {id === "none" ? <span style={{ width: 62, height: 62, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Avatar name={username} size={44} src={avatarSrc} /></span> : <AnimatedFrame size={44} frame={id}><Avatar name={username} size={44} src={avatarSrc} /></AnimatedFrame>}
+            {label(name, prefs.frame === id)}
+          </button>
+        ))}
+      </div>
+      <SettingsSubLabel>Profit target track</SettingsSubLabel>
+      <div className={grid}>
         {Object.entries(CX_TRACKS).map(([id, t]) => (
           <button key={id} type="button" onClick={() => setPrefs({ ...prefs, track: id })} className={TAP} style={tile(prefs.track === id)}>
-            <div style={{ color: palette.text, fontSize: 12.5, fontWeight: 600 }}>{t.label}</div>
-            <MiniTrack progress={62} skin={id} />
+            <div style={{ width: "100%" }}><MiniTrack progress={65} skin={id} /></div>
+            {label(t.label, prefs.track === id)}
           </button>
         ))}
       </div>
-      <SettingsSubLabel>Drawdown meter</SettingsSubLabel>
-      <div className="flex gap-2 flex-wrap mb-1">
+      <SettingsSubLabel>Drawdown buffer meter</SettingsSubLabel>
+      <div className={grid}>
         {Object.entries(CX_METERS).map(([id, m]) => (
           <button key={id} type="button" onClick={() => setPrefs({ ...prefs, meter: id })} className={TAP} style={tile(prefs.meter === id)}>
-            <div style={{ color: palette.text, fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>{m.label}</div>
-            <div style={{ width: 84 }}><MeterDial pct={0.62} tone="#F2B35E" skin={id} /></div>
+            <div style={{ width: 104 }}><MeterDial pct={0.4} tone={palette.green} skin={id} /></div>
+            {label(m.label, prefs.meter === id)}
           </button>
         ))}
       </div>
+      <p style={{ color: palette.textFaint, fontSize: 11.5 }}>Previews show 65% of the way to target and 40% of the drawdown buffer used. Your choices apply to the Challenge tab.</p>
     </>
   );
 }
@@ -4951,7 +5110,7 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [communityUsernameError, setCommunityUsernameError] = useState("");
   const [communityUsernameBusy, setCommunityUsernameBusy] = useState(false);
   const [communityAvatar, setCommunityAvatar] = useState("");
-  const [cxPrefs, setCxPrefsRaw] = useState({ frame: "aurora", track: "circuit", meter: "neon" });
+  const [cxPrefs, setCxPrefsRaw] = useState({ frame: "aurora", track: "mountain", meter: "fuel" });
   useEffect(() => { (async () => { try { const r = await window.storage.get("cosmetics:prefs", false); setCxPrefsRaw((c) => ({ ...c, ...JSON.parse(r.value) })); } catch (e) {} })(); }, []);
   const setCxPrefs = (p) => { setCxPrefsRaw(p); try { window.storage.set("cosmetics:prefs", JSON.stringify(p), false); } catch (e) {} };
   const [communityAvatarUploading, setCommunityAvatarUploading] = useState(false);
@@ -22343,6 +22502,7 @@ if (activeTab === "community") {
     { id: "accounts", label: "Accounts", icon: Building2, group: "Account", subtitle: "Balances & active account" },
     session && !communityUsername && { id: "community", label: "Community", icon: Users, group: "Account", subtitle: "Public profile & handle" },
     { id: "appearance", label: "Appearance", icon: Palette, group: "Preferences", subtitle: "Theme & color palette" },
+    { id: "cosmetics", label: "Cosmetics", icon: Sparkles, group: "Preferences", subtitle: "Frames, tracks & meters" },
     { id: "navigation", label: "Navigation", icon: LayoutGrid, group: "Preferences", subtitle: "Tabs & default screens" },
     { id: "trading-defaults", label: "Trading Defaults", icon: Scale, group: "Trading", subtitle: "Balance, period, sizing" },
     { id: "risk-discipline", label: "Risk & Discipline", icon: ShieldAlert, group: "Trading", subtitle: "Cooldowns & daily limits" },
@@ -22882,7 +23042,10 @@ if (activeTab === "community") {
               );
             })}
           </div>
-        <CosmeticsPicker prefs={cxPrefs} setPrefs={setCxPrefs} />
+        </SettingsSection>
+
+        <SettingsSection icon={Sparkles} title="Cosmetics" defaultOpen isDesktop={isDesktop} hidden={!isDesktop && settingsMobileSection !== "cosmetics"}>
+          <CosmeticsSettings prefs={cxPrefs} setPrefs={setCxPrefs} username={communityUsername || "Trader"} avatarSrc={communityAvatar || undefined} />
         </SettingsSection>
 
         {/* NAVIGATION */}

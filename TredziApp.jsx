@@ -699,7 +699,8 @@ const avatarStyleFor = (seed) => {
   return AVATAR_HUES[h % AVATAR_HUES.length];
 };
 
-function Avatar({ name, size = 40, ring, online, src }) {
+function Avatar({ name, size = 40, ring, online, src, frame }) {
+  if (frame) return <AnimatedFrame size={size} frame={frame}><Avatar name={name} size={size} online={online} src={src} /></AnimatedFrame>;
   const a = avatarStyleFor(name || "?");
   return (
     <span className="relative inline-flex flex-shrink-0" style={{ width: `${size}px`, height: `${size}px` }}>
@@ -746,6 +747,377 @@ function Avatar({ name, size = 40, ring, online, src }) {
   );
 }
 
+
+// ================= COSMETICS =================
+// Animated frames, track skins, drawdown meter, campfire, status chips, discipline season, certificate.
+const COSMETICS_CSS = `
+@media (prefers-reduced-motion: no-preference) {
+  .cx-spin { animation: cxSpin 5s linear infinite; }
+  .cx-spin-rev { animation: cxSpin 9s linear infinite reverse; }
+  .cx-glow { animation: cxPulse 2.4s ease-in-out infinite; }
+  .cx-orbit { animation: cxSpin var(--d, 4s) linear infinite; }
+  .cx-bob { animation: cxBob 3.2s ease-in-out infinite; }
+  .cx-flame { animation: cxFlame var(--d, 1.6s) ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+  .cx-spark { animation: cxSpark var(--d, 3s) ease-out infinite; }
+  .cx-dot { animation: cxPulse 1.6s ease-in-out infinite; }
+  .cx-shimmer { animation: cxShimmer 3.5s ease-in-out infinite; }
+  .cx-needle { transition: transform 0.9s cubic-bezier(.2,.9,.25,1.1); }
+}
+@keyframes cxSpin { to { transform: rotate(360deg); } }
+@keyframes cxPulse { 0%,100% { opacity: .35; transform: scale(.96); } 50% { opacity: .85; transform: scale(1.06); } }
+@keyframes cxBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes cxFlame { 0%,100% { transform: scale(1,1) skewX(0); } 25% { transform: scale(1.06,.94) skewX(-3deg); } 50% { transform: scale(.94,1.08) skewX(2deg); } 75% { transform: scale(1.04,.97) skewX(-1deg); } }
+@keyframes cxSpark { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-46px) translateX(var(--x, 6px)); opacity: 0; } }
+@keyframes cxShimmer { 0% { transform: translateX(-120%); } 60%,100% { transform: translateX(220%); } }
+`;
+
+const CX_FRAMES = {
+  aurora: { label: "Aurora", colors: ["#63D4A4", "#5B8AC4", "#C792E4", "#63D4A4"] },
+  ember: { label: "Ember", colors: ["#F0897E", "#F2B35E", "#FFE08A", "#F0897E"] },
+  prism: { label: "Prism", colors: ["#9FE3FF", "#C792E4", "#F2B35E", "#63D4A4", "#9FE3FF"] },
+};
+
+function AnimatedFrame({ size = 64, frame = "aurora", children }) {
+  const f = CX_FRAMES[frame] || CX_FRAMES.aurora;
+  const pad = Math.round(size * 0.18);
+  const box = size + pad * 2;
+  const grad = `conic-gradient(${f.colors.join(",")})`;
+  const ringW = pad * 0.62;
+  const mask = `radial-gradient(farthest-side, transparent calc(100% - ${ringW}px), #000 calc(100% - ${ringW - 1}px))`;
+  return (
+    <span style={{ position: "relative", display: "inline-flex", width: box, height: box, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <span className="cx-glow" style={{ position: "absolute", inset: pad * 0.2, borderRadius: "50%", background: grad, filter: `blur(${Math.max(6, size * 0.14)}px)`, opacity: 0.55 }} />
+      <span className="cx-spin" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: grad, WebkitMask: mask, mask }} />
+      <svg className="cx-spin-rev" viewBox="0 0 100 100" style={{ position: "absolute", inset: pad * 0.28, width: box - pad * 0.56, height: box - pad * 0.56 }}>
+        <circle cx="50" cy="50" r="48" fill="none" stroke={f.colors[1]} strokeWidth="1.2" strokeDasharray="2 5 14 5" strokeLinecap="round" opacity="0.9" />
+      </svg>
+      {[0, 1, 2].map((i) => (
+        <span key={i} className="cx-orbit" style={{ position: "absolute", inset: 0, "--d": `${3.2 + i * 1.3}s`, animationDirection: i === 1 ? "reverse" : "normal", animationDelay: `${-i * 0.9}s` }}>
+          <span style={{ position: "absolute", top: -2, left: "50%", width: 6 - i, height: 6 - i, marginLeft: -3, borderRadius: "50%", background: f.colors[i % f.colors.length], boxShadow: `0 0 8px 2px ${f.colors[i % f.colors.length]}` }} />
+        </span>
+      ))}
+      <span style={{ position: "relative", width: size, height: size, borderRadius: "50%", overflow: "hidden", boxShadow: `0 0 0 2px ${palette.bg}` }}>{children}</span>
+    </span>
+  );
+}
+
+// --- Track + meter skins ---
+const CX_TRACKS = {
+  circuit: { label: "Circuit", base: "#2A3350", fill: "#5B8AC4", dash: "6 5", node: "square", glow: "#5B8AC4" },
+  asphalt: { label: "Asphalt", base: "#2B2D33", fill: "#F2B35E", dash: "10 8", node: "round", glow: "#F2B35E", road: true },
+  alpine: { label: "Alpine", base: "#24324A", fill: "#9FE3FF", dash: null, node: "round", glow: "#9FE3FF", peaks: true },
+};
+const CX_METERS = {
+  neon: { label: "Neon", track: "#232A3F", glow: true, ticks: "#5B8AC4" },
+  carbon: { label: "Carbon", track: "#1A1D26", glow: false, ticks: "#68738F" },
+  glass: { label: "Glass", track: "rgba(163,174,196,0.18)", glow: false, ticks: "#A3AEC4" },
+};
+
+function ChallengeTrack({ progress = 0, skin = "circuit", label }) {
+  const s = CX_TRACKS[skin] || CX_TRACKS.circuit;
+  const pathRef = useRef(null);
+  const [pt, setPt] = useState({ x: 14, y: 52 });
+  const pct = Math.max(0, Math.min(100, progress));
+  const d = "M14 52 C 60 8, 100 8, 140 46 S 220 92, 262 44 S 300 20, 326 30";
+  useEffect(() => {
+    const el = pathRef.current;
+    if (!el) return;
+    const p = el.getPointAtLength((pct / 100) * el.getTotalLength());
+    setPt({ x: p.x, y: p.y });
+  }, [pct]);
+  const marks = [25, 50, 75, 100];
+  return (
+    <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+      <div className="flex items-center justify-between mb-1">
+        <span style={{ color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>{label || "Challenge track"}</span>
+        <span style={{ color: s.fill, fontFamily: mono, fontSize: "12px", fontWeight: 700 }}>{pct.toFixed(0)}%</span>
+      </div>
+      <svg viewBox="0 0 340 110" style={{ width: "100%", display: "block" }}>
+        <defs><filter id="cxg"><feGaussianBlur stdDeviation="3" /></filter></defs>
+        {s.peaks && <path d="M0 110 L50 70 L80 92 L130 48 L180 96 L230 58 L280 90 L340 62 L340 110Z" fill={s.base} opacity="0.55" />}
+        {s.road && <path d={d} fill="none" stroke={s.base} strokeWidth="18" strokeLinecap="round" />}
+        <path ref={pathRef} d={d} fill="none" stroke={s.road ? "#3A3D46" : s.base} strokeWidth={s.road ? 2 : 6} strokeLinecap="round" strokeDasharray={s.road ? "10 8" : s.dash || undefined} />
+        <path d={d} pathLength="100" fill="none" stroke={s.glow} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${pct} 100`} filter="url(#cxg)" opacity="0.55" />
+        <path d={d} pathLength="100" fill="none" stroke={s.fill} strokeWidth={s.road ? 3 : 4} strokeLinecap="round" strokeDasharray={`${pct} 100`} />
+        {marks.map((m) => {
+          const el = pathRef.current;
+          if (!el) return null;
+          const p = el.getPointAtLength((m / 100) * el.getTotalLength());
+          const done = pct >= m;
+          return s.node === "square"
+            ? <rect key={m} x={p.x - 4} y={p.y - 4} width="8" height="8" rx="1.5" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.5" />
+            : <circle key={m} cx={p.x} cy={p.y} r="4.5" fill={done ? s.fill : palette.bg} stroke={done ? s.fill : palette.border} strokeWidth="1.5" />;
+        })}
+        <g className="cx-bob">
+          <circle cx={pt.x} cy={pt.y} r="9" fill={s.fill} opacity="0.25" className="cx-dot" />
+          <circle cx={pt.x} cy={pt.y} r="5" fill={palette.text} stroke={s.fill} strokeWidth="2.5" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function DrawdownMeter({ used = 0, limit = 1, label = "Max drawdown", caption, skin = "neon" }) {
+  const s = CX_METERS[skin] || CX_METERS.neon;
+  const pct = Math.max(0, Math.min(1, limit > 0 ? used / limit : 0));
+  const tone = pct < 0.6 ? palette.green : pct < 0.85 ? "#F2B35E" : palette.red;
+  const arc = "M20 100 A80 80 0 0 1 180 100";
+  const ang = -90 + pct * 180;
+  const ticks = Array.from({ length: 21 }, (_, i) => i);
+  return (
+    <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+      <div style={{ color: palette.textMuted, fontSize: "12px", fontWeight: 600 }}>{label}</div>
+      <svg viewBox="0 0 200 122" style={{ width: "100%", maxWidth: 320, display: "block", margin: "4px auto 0" }}>
+        <defs><filter id="cxm"><feGaussianBlur stdDeviation="2.5" /></filter></defs>
+        <path d={arc} pathLength="100" fill="none" stroke={s.track} strokeWidth="12" strokeLinecap="round" />
+        <path d={arc} pathLength="100" fill="none" stroke={palette.green} strokeWidth="2" strokeDasharray="60 100" opacity="0.5" transform="translate(0,-10)" />
+        <path d={arc} pathLength="100" fill="none" stroke="#F2B35E" strokeWidth="2" strokeDasharray="0 60 25 100" opacity="0.5" transform="translate(0,-10)" />
+        <path d={arc} pathLength="100" fill="none" stroke={palette.red} strokeWidth="2" strokeDasharray="0 85 15 100" opacity="0.5" transform="translate(0,-10)" />
+        {s.glow && <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} filter="url(#cxm)" opacity="0.6" />}
+        <path d={arc} pathLength="100" fill="none" stroke={tone} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${pct * 100} 100`} />
+        {ticks.map((i) => {
+          const a = (-180 + i * 9) * (Math.PI / 180);
+          const long = i % 5 === 0;
+          const r1 = 70, r2 = long ? 62 : 66;
+          return <line key={i} x1={100 + r1 * Math.cos(a)} y1={100 + r1 * Math.sin(a)} x2={100 + r2 * Math.cos(a)} y2={100 + r2 * Math.sin(a)} stroke={s.ticks} strokeWidth={long ? 1.4 : 0.8} opacity="0.7" />;
+        })}
+        <g className="cx-needle" style={{ transform: `rotate(${ang}deg)`, transformOrigin: "100px 100px" }}>
+          <path d="M98 100 L100 34 L102 100Z" fill={palette.text} />
+        </g>
+        <circle cx="100" cy="100" r="6" fill={palette.surface} stroke={palette.text} strokeWidth="2" />
+        <text x="100" y="118" textAnchor="middle" fill={tone} style={{ fontFamily: mono, fontSize: 13, fontWeight: 700 }}>{(pct * 100).toFixed(0)}% used</text>
+      </svg>
+      {caption && <div className="text-center" style={{ color: palette.textFaint, fontSize: "11.5px", marginTop: 2 }}>{caption}</div>}
+    </div>
+  );
+}
+
+// --- Campfire ---
+function Campfire({ members = [], streak = 0 }) {
+  const online = members.filter((m) => m.isOnline).length;
+  const heat = Math.min(1, 0.55 + online * 0.12 + Math.min(streak, 10) * 0.02);
+  const seats = members.slice(0, 8);
+  const W = 320, H = 190, cx = W / 2, cy = 96;
+  return (
+    <div className="rounded-2xl mb-3 overflow-hidden" style={{ background: "linear-gradient(180deg,#0B1020 0%,#151B2E 100%)", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, position: "relative" }}>
+      <div style={{ position: "absolute", left: 14, top: 12, zIndex: 2 }}>
+        <div style={{ color: "#F5F6F9", fontWeight: 700, fontSize: 13 }}>Group campfire</div>
+        <div style={{ color: "#A3AEC4", fontSize: 11.5 }}>{online} online{streak > 0 ? ` · ${streak}-day fire` : ""}</div>
+      </div>
+      <div style={{ position: "relative", width: "100%", maxWidth: W, height: H, margin: "0 auto" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+          <defs>
+            <radialGradient id="cxfl"><stop offset="0" stopColor="#F2B35E" stopOpacity={0.55 * heat} /><stop offset="1" stopColor="#F2B35E" stopOpacity="0" /></radialGradient>
+          </defs>
+          <ellipse cx={cx} cy={cy + 22} rx={120 * heat + 20} ry={56 * heat + 10} fill="url(#cxfl)" className="cx-glow" />
+          <ellipse cx={cx} cy={cy + 30} rx="44" ry="10" fill="#05070C" opacity="0.6" />
+          <rect x={cx - 30} y={cy + 24} width="60" height="7" rx="3.5" fill="#6B4A32" transform={`rotate(-8 ${cx} ${cy + 27})`} />
+          <rect x={cx - 30} y={cy + 24} width="60" height="7" rx="3.5" fill="#85603F" transform={`rotate(8 ${cx} ${cy + 27})`} />
+          <g transform={`translate(${cx} ${cy + 26}) scale(${0.75 + heat * 0.4})`}>
+            <path className="cx-flame" style={{ "--d": "1.9s" }} d="M0 0 C-30 -4 -26 -34 -8 -52 C-10 -34 4 -34 0 -62 C22 -42 32 -16 22 -4 C14 4 -14 4 0 0Z" fill="#F0897E" />
+            <path className="cx-flame" style={{ "--d": "1.4s" }} d="M0 0 C-20 -2 -18 -24 -4 -38 C-6 -24 6 -24 2 -44 C16 -28 22 -10 14 -2 C8 3 -8 3 0 0Z" fill="#F2B35E" />
+            <path className="cx-flame" style={{ "--d": "1.1s" }} d="M0 0 C-10 -1 -9 -12 -1 -22 C-2 -13 5 -12 3 -26 C10 -14 11 -4 6 -1 C3 2 -4 2 0 0Z" fill="#FFE9A8" />
+          </g>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <circle key={i} className="cx-spark" cx={cx - 12 + i * 6} cy={cy - 6} r="1.6" fill="#FFD27A" style={{ "--d": `${2.4 + i * 0.5}s`, "--x": `${(i - 2) * 6}px`, animationDelay: `${-i * 0.6}s` }} />
+          ))}
+        </svg>
+        {seats.map((m, i) => {
+          const a = Math.PI * (0.12 + (0.76 * (seats.length === 1 ? 0.5 : i / (seats.length - 1))));
+          const x = cx + Math.cos(a + Math.PI) * 118 * -1;
+          const y = cy + 24 + Math.sin(a) * 52;
+          const size = 30;
+          return (
+            <span key={m.username || i} style={{ position: "absolute", left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, transform: "translate(-50%,-50%)", opacity: m.isOnline ? 1 : 0.5, filter: m.isOnline ? `drop-shadow(0 0 6px rgba(242,179,94,${0.5 * heat}))` : "none" }}>
+              <Avatar name={m.username} size={size} src={m.avatar} online={m.isOnline} />
+            </span>
+          );
+        })}
+      </div>
+      {seats.length === 0 && <div className="text-center pb-4" style={{ color: "#A3AEC4", fontSize: 12 }}>Join a group to light the fire.</div>}
+    </div>
+  );
+}
+
+// --- Status chips ---
+const CX_CHIPS = {
+  disciplined: { label: "Disciplined", c: "#63D4A4", live: true },
+  zone: { label: "In the zone", c: "#5B8AC4", live: true },
+  cooling: { label: "Cooling off", c: "#F2B35E" },
+  locked: { label: "Risk locked", c: "#F0897E" },
+  funded: { label: "Funded", c: "#C792E4", shine: true },
+  passed: { label: "Phase passed", c: "#9FE3FF", shine: true },
+};
+function StatusChip({ kind = "disciplined", text }) {
+  const k = CX_CHIPS[kind] || CX_CHIPS.disciplined;
+  return (
+    <span style={{ position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 8px", borderRadius: 999, background: `${k.c}1F`, border: `1px solid ${k.c}66`, color: k.c, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      <span className={k.live ? "cx-dot" : ""} style={{ width: 7, height: 7, borderRadius: 99, background: k.c, boxShadow: k.live ? `0 0 8px ${k.c}` : "none" }} />
+      {text || k.label}
+      {k.shine && <span className="cx-shimmer" style={{ position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(100deg,transparent,rgba(255,255,255,0.35),transparent)", pointerEvents: "none" }} />}
+    </span>
+  );
+}
+
+// --- Discipline season (one season per calendar month) ---
+const CX_TIERS = [
+  { name: "Bronze", at: 0, c: "#C98A5B" },
+  { name: "Silver", at: 3, c: "#B8C2D6" },
+  { name: "Gold", at: 7, c: "#F2C25E" },
+  { name: "Platinum", at: 14, c: "#9FE3FF" },
+  { name: "Obsidian", at: 21, c: "#C792E4" },
+];
+function DisciplineSeason({ streak = 0, best = 0 }) {
+  const now = new Date();
+  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const left = dim - now.getDate();
+  const month = now.toLocaleString([], { month: "long" });
+  const idx = CX_TIERS.reduce((a, t, i) => (streak >= t.at ? i : a), 0);
+  const cur = CX_TIERS[idx], nxt = CX_TIERS[idx + 1];
+  const prog = nxt ? (streak - cur.at) / (nxt.at - cur.at) : 1;
+  const hex = (c, on) => (
+    <svg viewBox="0 0 36 40" width="30" height="33"><polygon points="18,2 33,10 33,30 18,38 3,30 3,10" fill={on ? `${c}33` : "transparent"} stroke={on ? c : palette.border} strokeWidth="2" /><circle cx="18" cy="20" r="4" fill={on ? c : palette.border} /></svg>
+  );
+  return (
+    <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <div style={{ color: palette.text, fontWeight: 700, fontSize: 15 }}>{month} discipline season</div>
+          <div style={{ color: palette.textFaint, fontSize: 11.5 }}>{left === 0 ? "Final day" : `${left} days left`} · best streak {best}</div>
+        </div>
+        <span style={{ color: cur.c, fontWeight: 800, fontSize: 14 }}>{cur.name}</span>
+      </div>
+      <div style={{ height: 8, borderRadius: 99, background: palette.field, margin: "12px 0 6px", overflow: "hidden" }}>
+        <div style={{ width: `${Math.round(prog * 100)}%`, height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${cur.c},${(nxt || cur).c})`, transition: "width .8s ease" }} />
+      </div>
+      <div style={{ color: palette.textMuted, fontSize: 12 }}>
+        {nxt ? `${nxt.at - streak} clean day${nxt.at - streak === 1 ? "" : "s"} to ${nxt.name}` : "Top tier reached this season"}
+      </div>
+      <div className="flex justify-between mt-3">
+        {CX_TIERS.map((t, i) => (
+          <div key={t.name} className="flex flex-col items-center" style={{ opacity: i <= idx ? 1 : 0.5 }}>
+            {hex(t.c, i <= idx)}
+            <span style={{ color: i <= idx ? t.c : palette.textFaint, fontSize: 10.5, marginTop: 2 }}>{t.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Certificate ---
+function Certificate({ name = "Trader", firm = "Prop firm challenge", accountSize, phase = "Evaluation", profitPct, date }) {
+  const ref = useRef(null);
+  const when = date || new Date().toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" });
+  const gold = "#C9A24B";
+  const download = () => {
+    const svg = ref.current;
+    if (!svg) return;
+    const xml = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = 1600; c.height = 1132;
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob((b) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        a.download = `certificate-${(name || "trader").replace(/\s+/g, "-")}.png`;
+        a.click();
+      });
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+  };
+  const rosette = (x, y) => (
+    <g transform={`translate(${x} ${y})`} opacity="0.5" fill="none" stroke={gold} strokeWidth="0.6">
+      {Array.from({ length: 12 }, (_, i) => <ellipse key={i} rx="26" ry="9" transform={`rotate(${i * 15})`} />)}
+    </g>
+  );
+  const star = Array.from({ length: 32 }, (_, i) => { const a = (i * Math.PI) / 16, r = i % 2 ? 40 : 46; return `${Math.cos(a) * r},${Math.sin(a) * r}`; }).join(" ");
+  return (
+    <div className="rounded-2xl p-3 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow }}>
+      <svg ref={ref} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 566" style={{ width: "100%", display: "block", borderRadius: 8 }}>
+        <rect width="800" height="566" fill="#0F1421" />
+        <rect x="14" y="14" width="772" height="538" fill="none" stroke={gold} strokeWidth="3" />
+        <rect x="26" y="26" width="748" height="514" fill="none" stroke={gold} strokeWidth="0.8" />
+        {rosette(60, 60)}{rosette(740, 60)}{rosette(60, 506)}{rosette(740, 506)}
+        <text x="400" y="104" textAnchor="middle" fill={gold} style={{ fontFamily: "Georgia,'Times New Roman',serif", fontSize: 15, letterSpacing: 6 }}>CERTIFICATE OF ACHIEVEMENT</text>
+        <line x1="270" y1="122" x2="530" y2="122" stroke={gold} strokeWidth="1" />
+        <text x="400" y="170" textAnchor="middle" fill="#A3AEC4" style={{ fontFamily: "Georgia,serif", fontSize: 15 }}>This certifies that</text>
+        <text x="400" y="244" textAnchor="middle" fill="#F5F6F9" style={{ fontFamily: "Georgia,'Times New Roman',serif", fontSize: 54, fontStyle: "italic" }}>{name}</text>
+        <line x1="190" y1="266" x2="610" y2="266" stroke={gold} strokeWidth="0.8" />
+        <text x="400" y="306" textAnchor="middle" fill="#A3AEC4" style={{ fontFamily: "Georgia,serif", fontSize: 16 }}>passed the {phase.toLowerCase()} of</text>
+        <text x="400" y="344" textAnchor="middle" fill="#F5F6F9" style={{ fontFamily: "Georgia,serif", fontSize: 28, fontWeight: 700 }}>{firm}{accountSize ? ` · $${Number(accountSize).toLocaleString()}` : ""}</text>
+        {Number.isFinite(profitPct) && <text x="400" y="380" textAnchor="middle" fill="#63D4A4" style={{ fontFamily: "Georgia,serif", fontSize: 18 }}>with a verified profit of {profitPct.toFixed(1)}% inside every drawdown rule</text>}
+        <text x="150" y="486" textAnchor="middle" fill="#F5F6F9" style={{ fontFamily: "Georgia,serif", fontSize: 15 }}>{when}</text>
+        <line x1="80" y1="494" x2="220" y2="494" stroke={gold} strokeWidth="0.8" />
+        <text x="150" y="512" textAnchor="middle" fill="#68738F" style={{ fontFamily: "Georgia,serif", fontSize: 11 }}>Date issued</text>
+        <g transform="translate(400 468)">
+          <path d="M-22 30 L-34 86 L-14 74 L0 90 L0 30Z" fill="#2E5C9A" /><path d="M22 30 L34 86 L14 74 L0 90 L0 30Z" fill="#5B8AC4" />
+          <polygon points={star} fill={gold} /><circle r="33" fill="#0F1421" stroke="#F2D58A" strokeWidth="1.5" />
+          <path d="M-14 2 L-4 12 L16 -12" fill="none" stroke="#F2D58A" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+        <text x="650" y="486" textAnchor="middle" fill="#F5F6F9" style={{ fontFamily: "Georgia,serif", fontSize: 15, fontStyle: "italic" }}>Tredzi</text>
+        <line x1="580" y1="494" x2="720" y2="494" stroke={gold} strokeWidth="0.8" />
+        <text x="650" y="512" textAnchor="middle" fill="#68738F" style={{ fontFamily: "Georgia,serif", fontSize: 11 }}>Trade with calculation</text>
+      </svg>
+      <button type="button" onClick={download} className={`w-full rounded-lg py-2.5 mt-3 ${TAP}`} style={{ background: palette.gold, color: palette.letterbox, fontFamily: mono, fontSize: "13px", fontWeight: 600 }}>
+        Save certificate as PNG
+      </button>
+    </div>
+  );
+}
+
+// --- Picker + preview panel used on the Challenge tab ---
+function CosmeticsPanel({ prefs, setPrefs, username, members, streak, bestStreak, progress, ddUsed, ddLimit, firm, accountSize, phase }) {
+  const [open, setOpen] = useState(false);
+  const pick = (key, val) => setPrefs({ ...prefs, [key]: val });
+  const Row = ({ title, opts, k }) => (
+    <div className="mb-3">
+      <div style={{ color: palette.textMuted, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{title}</div>
+      <div className="flex gap-2 flex-wrap">
+        {Object.entries(opts).map(([id, o]) => (
+          <button key={id} type="button" onClick={() => pick(k, id)} className={`px-3 py-1.5 rounded-lg ${TAP}`} style={{ background: prefs[k] === id ? `${palette.gold}33` : palette.field, border: `1px solid ${prefs[k] === id ? palette.goldBright : palette.border}`, color: prefs[k] === id ? palette.text : palette.textMuted, fontSize: 12.5, fontWeight: 600 }}>{o.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <>
+      <ChallengeTrack progress={progress} skin={prefs.track} />
+      <DrawdownMeter used={ddUsed} limit={ddLimit} skin={prefs.meter} caption={ddLimit > 0 ? `$${fmt(Math.max(0, ddLimit - ddUsed))} of room left before the floor` : "Enter your balances to arm the meter"} />
+      <DisciplineSeason streak={streak} best={bestStreak} />
+      <div className="rounded-2xl p-4 mb-3" style={{ background: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <span style={{ color: palette.text, fontWeight: 700, fontSize: 14 }}>Your look</span>
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {streak >= 3 && <StatusChip kind="disciplined" />}
+            {progress >= 100 && <StatusChip kind="passed" />}
+            {ddLimit > 0 && ddUsed / ddLimit >= 0.85 && <StatusChip kind="locked" />}
+            {streak >= 7 && <StatusChip kind="zone" />}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 mb-3">
+          <AnimatedFrame size={56} frame={prefs.frame}><Avatar name={username || "Trader"} size={56} /></AnimatedFrame>
+          <div style={{ color: palette.textFaint, fontSize: 12 }}>Frame shows on your profile photo.</div>
+        </div>
+        <Row title="Avatar frame" opts={CX_FRAMES} k="frame" />
+        <Row title="Challenge track" opts={CX_TRACKS} k="track" />
+        <Row title="Drawdown meter" opts={CX_METERS} k="meter" />
+      </div>
+      <Campfire members={members} streak={streak} />
+      {progress >= 100 ? (
+        <Certificate name={username || "Trader"} firm={firm} accountSize={accountSize} phase={phase} profitPct={undefined} />
+      ) : (
+        <button type="button" onClick={() => setOpen(!open)} className={`w-full rounded-lg py-2.5 mb-3 ${TAP}`} style={{ background: "transparent", border: `1px dashed ${palette.border}`, color: palette.textMuted, fontSize: 12.5 }}>
+          {open ? "Hide certificate preview" : "Preview your challenge certificate"}
+        </button>
+      )}
+      {open && progress < 100 && <Certificate name={username || "Trader"} firm={firm} accountSize={accountSize} phase={phase} />}
+    </>
+  );
+}
+// ================= /COSMETICS =================
 
 function PillGroup({ options, value, onChange, suffix = "%" }) {
   return (
@@ -4531,6 +4903,9 @@ RUNTIME.ALARM_LEAD_MS = RUNTIME.ALARM_LEAD_MINUTES * 60 * 1000;
   const [communityUsernameError, setCommunityUsernameError] = useState("");
   const [communityUsernameBusy, setCommunityUsernameBusy] = useState(false);
   const [communityAvatar, setCommunityAvatar] = useState("");
+  const [cxPrefs, setCxPrefsRaw] = useState({ frame: "aurora", track: "circuit", meter: "neon" });
+  useEffect(() => { (async () => { try { const r = await window.storage.get("cosmetics:prefs", false); setCxPrefsRaw((c) => ({ ...c, ...JSON.parse(r.value) })); } catch (e) {} })(); }, []);
+  const setCxPrefs = (p) => { setCxPrefsRaw(p); try { window.storage.set("cosmetics:prefs", JSON.stringify(p), false); } catch (e) {} };
   const [communityAvatarUploading, setCommunityAvatarUploading] = useState(false);
 
   // --- Community auth state ---
@@ -10849,6 +11224,22 @@ rightContent={
               pass={consistencyPass}
             />
 
+            <div className="mt-6">
+              <CosmeticsPanel
+                prefs={cxPrefs}
+                setPrefs={setCxPrefs}
+                username={communityUsername}
+                members={groupMembersList}
+                streak={computeDisciplineStreak(trades).current}
+                bestStreak={computeDisciplineStreak(trades).best}
+                progress={hasTarget && hasBoth ? progressPct : 0}
+                ddUsed={hasBoth ? Math.max(0, peakBalance - currentBal) : 0}
+                ddLimit={hasStart ? maxDrawdownAllowed : 0}
+                firm={linkedFirm?.firmName}
+                accountSize={startBal}
+                phase={linkedFirm?.planLabel || "Evaluation"}
+              />
+            </div>
             <span className="block mt-6 mb-1.5 uppercase" style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}>
               Recovery
             </span>
@@ -20332,13 +20723,13 @@ if (activeTab === "community") {
               {isDesktop ? (
                 <span className={`inline-flex rounded-full ${profileStoryAction ? TAP : ""}`} style={{ padding: "3px", background: profileRingGradient, cursor: profileStoryAction ? "pointer" : "default" }} {...avatarRingHandlers}>
                   <span className="inline-flex rounded-full" style={{ padding: "4px", background: palette.bg }}>
-                    <Avatar name={p.username} size={150} src={avatarSrc} online={p.isOnline} />
+                    <Avatar name={p.username} size={150} src={avatarSrc} online={p.isOnline} frame={isMe ? cxPrefs.frame : undefined} />
                   </span>
                 </span>
               ) : (
                 <span className={`inline-flex rounded-full ${profileStoryAction ? TAP : ""}`} style={{ padding: "2px", background: profileRingGradient, cursor: profileStoryAction ? "pointer" : "default" }} {...avatarRingHandlers}>
                   <span className="inline-flex rounded-full" style={{ padding: "3px", background: palette.bg }}>
-                    <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} />
+                    <Avatar name={p.username} size={80} src={avatarSrc} online={p.isOnline} frame={isMe ? cxPrefs.frame : undefined} />
                   </span>
                 </span>
               )}
@@ -21222,6 +21613,7 @@ if (activeTab === "community") {
     >
 <style>{`
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap');
+  ${COSMETICS_CSS}
 
   html, body, * { font-variant-numeric: normal; font-feature-settings: "zero" 0, "ss01" 0, "ss02" 0, "salt" 0; }
 

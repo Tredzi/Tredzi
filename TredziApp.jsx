@@ -700,7 +700,7 @@ const avatarStyleFor = (seed) => {
 };
 
 function Avatar({ name, size = 40, ring, online, src, frame }) {
-  if (frame && frame !== "none") { const inner = Math.round(size / 1.36); return <AnimatedFrame size={inner} frame={frame}><Avatar name={name} size={inner} src={src} /></AnimatedFrame>; }
+  if (frame && frame !== "none") { const inner = Math.round(size / 1.4); return <AnimatedFrame size={inner} frame={frame}><Avatar name={name} size={inner} src={src} /></AnimatedFrame>; }
   const a = avatarStyleFor(name || "?");
   return (
     <span className="relative inline-flex flex-shrink-0" style={{ width: `${size}px`, height: `${size}px` }}>
@@ -763,6 +763,50 @@ const COSMETICS_CSS = `
   .cx-shimmer { animation: cxShimmer 3.5s ease-in-out infinite; }
   .cx-needle { transition: transform 0.9s cubic-bezier(.2,.9,.25,1.1); }
 }
+@media (prefers-reduced-motion: no-preference) {
+  .cx-ping { animation: cxPing 2.2s ease-out infinite; }
+  .cx-bounce { animation: cxBounce 0.55s ease-in-out infinite; }
+  .cx-wave { animation: cxWave 1.8s ease-in-out infinite; }
+  .cx-twinkle { animation: cxTwinkle 3s ease-in-out infinite; }
+  .cx-rung { animation: cxRung 2.4s ease-in-out infinite; }
+}
+@keyframes cxPing { 0% { transform: scale(.5); opacity: .55; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes cxBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+@keyframes cxWave { 0%,100% { transform: scaleX(1) skewY(0); } 50% { transform: scaleX(.88) skewY(-5deg); } }
+@keyframes cxTwinkle { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes cxRung { 0%,100% { opacity: .0; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: no-preference) {
+  .cx-alarm { animation: cxAlarm 0.9s ease-in-out infinite; }
+  .cx-sweep { animation: cxSweep 3.6s ease-in-out infinite; }
+  .cx-heart { animation: cxHeart 1.3s ease-in-out infinite; }
+  .cx-shake { animation: cxShake 0.5s linear infinite; }
+  .cx-float { animation: cxBob 4s ease-in-out infinite; }
+  .cx-crack { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cxCrack 0.9s ease-out forwards; }
+  .cx-needle-live { animation: cxJit 3.2s ease-in-out infinite; }
+}
+@keyframes cxAlarm { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes cxSweep { 0% { transform: translateX(0) skewX(-18deg); } 55%,100% { transform: translateX(300px) skewX(-18deg); } }
+@keyframes cxHeart { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes cxShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-1.5px) rotate(-1deg); } 75% { transform: translateX(1.5px) rotate(1deg); } }
+@keyframes cxCrack { to { stroke-dashoffset: 0; } }
+@keyframes cxJit { 0%,100% { translate: 0 0; } 20% { rotate: 0.8deg; } 40% { rotate: -0.6deg; } 60% { rotate: 0.5deg; } 80% { rotate: -0.3deg; } }
+@media (prefers-reduced-motion: no-preference) {
+  .cx-spin-fast { animation: cxSpin 2.6s linear infinite; }
+  .cx-breathe { animation: cxBreathe 3.2s ease-in-out infinite; }
+  .cx-rise { animation: cxRise var(--d, 2.4s) ease-out infinite; }
+  .cx-twinkle2 { animation: cxTw2 2.6s ease-in-out infinite; }
+}
+@keyframes cxBreathe { 0%,100% { opacity: .4; transform: scale(.97); } 50% { opacity: .8; transform: scale(1.05); } }
+@keyframes cxRise { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-13px) translateX(var(--x, 0px)); opacity: 0; } }
+@keyframes cxTw2 { 0%,100% { transform: scale(0) rotate(0deg); opacity: 0; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .cx-ember { animation: cxEmber var(--d, 3s) ease-out infinite; }
+  .cx-smoke { animation: cxSmoke 5s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+  .cx-warm { animation: cxWarm 2.2s ease-in-out infinite; }
+}
+@keyframes cxEmber { 0% { transform: translate(0,0); opacity: 0; } 12% { opacity: 1; } 100% { transform: translate(var(--x, 0px), -78px); opacity: 0; } }
+@keyframes cxSmoke { 0% { transform: translateY(0) scale(.6); opacity: 0; } 25% { opacity: .16; } 100% { transform: translateY(-46px) scale(2.2); opacity: 0; } }
+@keyframes cxWarm { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
 @keyframes cxSpin { to { transform: rotate(360deg); } }
 @keyframes cxPulse { 0%,100% { opacity: .35; transform: scale(.96); } 50% { opacity: .85; transform: scale(1.06); } }
 @keyframes cxBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
@@ -772,31 +816,77 @@ const COSMETICS_CSS = `
 `;
 
 const CX_FRAMES = {
-  aurora: { label: "Aurora", colors: ["#63D4A4", "#5B8AC4", "#C792E4", "#63D4A4"] },
-  ember: { label: "Ember", colors: ["#F0897E", "#F2B35E", "#FFE08A", "#F0897E"] },
-  prism: { label: "Prism", colors: ["#9FE3FF", "#C792E4", "#F2B35E", "#63D4A4", "#9FE3FF"] },
+  aurora: { label: "Aurora", fx: "wisps", colors: ["#63D4A4", "#5B8AC4", "#C792E4", "#7BE0F0", "#63D4A4"] },
+  ember: { label: "Ember", fx: "flames", colors: ["#FF4B2B", "#F2B35E", "#FFE08A", "#FF7A4A", "#FF4B2B"] },
+  prism: { label: "Prism", fx: "facets", colors: ["#9FE3FF", "#C792E4", "#FF9ECF", "#F2D35E", "#63D4A4", "#9FE3FF"] },
 };
+
+const Spark4 = ({ x, y, r = 3, c = "#fff", delay = 0 }) => (
+  <g transform={`translate(${x} ${y})`}>
+    <path className="cx-twinkle2" style={{ animationDelay: `${delay}s`, transformBox: "fill-box", transformOrigin: "center" }} d={`M0 ${-r} Q0 0 ${r} 0 Q0 0 0 ${r} Q0 0 ${-r} 0 Q0 0 0 ${-r}Z`} fill={c} />
+  </g>
+);
 
 function AnimatedFrame({ size = 64, frame = "aurora", children }) {
   const f = CX_FRAMES[frame] || CX_FRAMES.aurora;
-  const pad = Math.round(size * 0.18);
-  const box = size + pad * 2;
-  const grad = `conic-gradient(${f.colors.join(",")})`;
-  const ringW = pad * 0.62;
-  const mask = `radial-gradient(farthest-side, transparent calc(100% - ${ringW}px), #000 calc(100% - ${ringW - 1}px))`;
+  const pad = Math.round(size * 0.2), box = size + pad * 2, k = 100 / box;
+  const ringW = Math.max(3.5, size * 0.085), gap = 2;
+  const ringInset = pad - gap - ringW;
+  const ro = (size / 2 + gap + ringW) * k;                      // ring outer radius in viewBox units
+  const hard = f.fx === "facets";
+  const grad = hard
+    ? `conic-gradient(${f.colors.slice(0, -1).map((c, i, a) => `${c} ${(i / a.length) * 100}% ${((i + 1) / a.length) * 100}%`).join(",")})`
+    : `conic-gradient(${f.colors.join(",")})`;
+  const ringMask = `radial-gradient(farthest-side, transparent calc(100% - ${ringW}px), #000 calc(100% - ${ringW - 0.5}px))`;
+  const glint = `conic-gradient(from 0deg, transparent 0 82%, rgba(255,255,255,0.95) 92%, transparent 100%)`;
+  const ring = (extra) => ({ position: "absolute", borderRadius: "50%", WebkitMask: ringMask, mask: ringMask, ...extra });
+  const rot = { transformOrigin: "50px 50px", transformBox: "view-box" };
+  const flames = Array.from({ length: 16 }, (_, i) => i);
   return (
     <span style={{ position: "relative", display: "inline-flex", width: box, height: box, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <span className="cx-glow" style={{ position: "absolute", inset: pad * 0.2, borderRadius: "50%", background: grad, filter: `blur(${Math.max(6, size * 0.14)}px)`, opacity: 0.55 }} />
-      <span className="cx-spin" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: grad, WebkitMask: mask, mask }} />
-      <svg className="cx-spin-rev" viewBox="0 0 100 100" style={{ position: "absolute", inset: pad * 0.28, width: box - pad * 0.56, height: box - pad * 0.56 }}>
-        <circle cx="50" cy="50" r="48" fill="none" stroke={f.colors[1]} strokeWidth="1.2" strokeDasharray="2 5 14 5" strokeLinecap="round" opacity="0.9" />
+      <span className="cx-breathe" style={{ position: "absolute", inset: ringInset - 2, borderRadius: "50%", background: grad, filter: `blur(${Math.max(7, size * 0.16)}px)`, opacity: 0.6 }} />
+      <span className="cx-spin-rev" style={ring({ inset: ringInset - 1.5, background: grad, opacity: 0.45, filter: "blur(1.2px)" })} />
+      <span className="cx-spin" style={ring({ inset: ringInset, background: grad })} />
+      <span className="cx-spin-fast" style={ring({ inset: ringInset, background: glint })} />
+      <span style={{ position: "absolute", inset: pad - gap, borderRadius: "50%", boxShadow: `0 0 0 1.5px ${palette.bg}, inset 0 0 8px rgba(0,0,0,0.35)` }} />
+      <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}>
+        {f.fx === "wisps" && (
+          <>
+            {[0, 1, 2].map((i) => (
+              <g key={i} className="cx-orbit" style={{ ...rot, "--d": `${6 + i * 2.5}s`, animationDirection: i === 1 ? "reverse" : "normal", animationDelay: `${-i * 1.7}s` }}>
+                <path d={(() => { const r = ro + 3 + i * 1.6, a = (52 * Math.PI) / 180; return `M50 ${50 - r} A${r} ${r} 0 0 1 ${50 + r * Math.sin(a)} ${50 - r * Math.cos(a)}`; })()} fill="none" stroke={f.colors[i]} strokeWidth={1.8 - i * 0.35} strokeLinecap="round" opacity="0.85" />
+              </g>
+            ))}
+            {[[12, 14, 0], [88, 20, 0.8], [84, 86, 1.6], [10, 80, 2.2]].map(([x, y, d], i) => <Spark4 key={i} x={x} y={y} r={2.8} c={f.colors[i % 4]} delay={d} />)}
+          </>
+        )}
+        {f.fx === "flames" && (
+          <>
+            {flames.map((i) => (
+              <g key={i} transform={`rotate(${i * 22.5} 50 50)`}>
+                <path className="cx-flame" style={{ "--d": `${0.9 + (i % 5) * 0.23}s`, animationDelay: `${-(i % 7) * 0.17}s` }}
+                  d={`M${48.3} ${50 - ro + 1.2} Q${47.6} ${50 - ro - 3} 50 ${50 - ro - (6 + (i % 3) * 2)} Q${52.4} ${50 - ro - 3} ${51.7} ${50 - ro + 1.2}Z`}
+                  fill={i % 2 ? "#FFB347" : "#FF5A3C"} opacity="0.92" />
+              </g>
+            ))}
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => <circle key={i} className="cx-rise" cx={30 + i * 7} cy={14 + (i % 2) * 3} r={0.9 + (i % 3) * 0.35} fill="#FFD27A" style={{ "--d": `${2 + (i % 4) * 0.55}s`, "--x": `${(i - 3) * 1.6}px`, animationDelay: `${-i * 0.45}s` }} />)}
+          </>
+        )}
+        {f.fx === "facets" && (
+          <>
+            <g className="cx-orbit" style={{ ...rot, "--d": "9s" }}>
+              <circle cx="50" cy="50" r={ro + 2.6} fill="none" stroke="#fff" strokeWidth="0.7" strokeDasharray="0.8 5.4" strokeLinecap="round" opacity="0.8" />
+            </g>
+            {[[10, 12, 0, "#9FE3FF"], [90, 16, 0.6, "#FF9ECF"], [92, 84, 1.2, "#F2D35E"], [8, 88, 1.8, "#C792E4"], [50, 1, 0.9, "#fff"], [50, 99, 1.5, "#fff"]].map(([x, y, d, c], i) => <Spark4 key={i} x={x} y={y} r={3.4} c={c} delay={d} />)}
+          </>
+        )}
       </svg>
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="cx-orbit" style={{ position: "absolute", inset: 0, "--d": `${3.2 + i * 1.3}s`, animationDirection: i === 1 ? "reverse" : "normal", animationDelay: `${-i * 0.9}s` }}>
-          <span style={{ position: "absolute", top: -2, left: "50%", width: 6 - i, height: 6 - i, marginLeft: -3, borderRadius: "50%", background: f.colors[i % f.colors.length], boxShadow: `0 0 8px 2px ${f.colors[i % f.colors.length]}` }} />
+      {[0, 1].map((i) => (
+        <span key={i} className="cx-orbit" style={{ position: "absolute", inset: ringInset - 2, "--d": `${3.4 + i * 1.6}s`, animationDirection: i ? "reverse" : "normal", animationDelay: `${-i * 1.1}s` }}>
+          <span style={{ position: "absolute", top: -1, left: "50%", width: 5 - i, height: 5 - i, marginLeft: -2.5, borderRadius: "50%", background: f.colors[i + 1], boxShadow: `0 0 8px 2px ${f.colors[i + 1]}` }} />
         </span>
       ))}
-      <span style={{ position: "relative", width: size, height: size, borderRadius: "50%", overflow: "hidden", boxShadow: `0 0 0 2px ${palette.bg}` }}>{children}</span>
+      <span style={{ position: "relative", width: size, height: size, borderRadius: "50%", overflow: "hidden" }}>{children}</span>
     </span>
   );
 }
@@ -804,7 +894,7 @@ function AnimatedFrame({ size = 64, frame = "aurora", children }) {
 // --- Track + meter skins ---
 const CX_TRACKS = {
   mountain: { label: "Mountain climb", kind: "mountain", base: "#7C879E", fill: "#4A90E2" },
-  road: { label: "Road to the flag", kind: "path", base: "#4A4D56", fill: "#1FA57A", glow: "#1FA57A", node: "round", road: true, flag: true },
+  road: { label: "Road to the flag", kind: "road", base: "#4A4D56", fill: "#1FA57A" },
   rocket: { label: "Rocket launch", kind: "rocket", base: "#6B7488", fill: "#E2622D" },
   ladder: { label: "Ladder", kind: "ladder", base: "#6B7488", fill: "#1FA57A" },
   circuit: { label: "Circuit", kind: "path", base: "#2A3350", fill: "#5B8AC4", dash: "6 5", node: "square", glow: "#5B8AC4" },
@@ -832,9 +922,9 @@ function PathTrack({ progress = 0, skin = "circuit" }) {
     const el = ref.current;
     if (!el) return;
     const L = el.getTotalLength();
-    const at = (m) => el.getPointAtLength((m / 100) * L);
-    setPt(at(pct));
-    setNodes([25, 50, 75, 100].map((m) => ({ m, ...at(m) })));
+    const pp = (q) => { const p = el.getPointAtLength((q / 100) * L); return { x: p.x, y: p.y }; };
+    setPt(pp(pct));
+    setNodes([25, 50, 75, 100].map((m) => ({ m, ...pp(m) })));
   }, [pct]);
   return (
     <div className="relative mt-3" style={{ maxWidth: 420 }}>
@@ -866,76 +956,157 @@ function PathTrack({ progress = 0, skin = "circuit" }) {
   );
 }
 
+// ---- shared helpers for track skins ----
+const cxClamp = (v) => Math.max(0, Math.min(100, v));
+function useAlongPath(d, pct) {
+  const ref = useRef(null);
+  const [m, setM] = useState({ pt: { x: 0, y: 0 }, ang: 0, marks: [], end: { x: 0, y: 0 } });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const L = el.getTotalLength();
+    const at = (q) => { const p = el.getPointAtLength((q / 100) * L); return { x: p.x, y: p.y }; };
+    const a = at(Math.max(0, pct - 0.8)), b = at(Math.min(100, pct + 0.8));
+    setM({ pt: at(pct), ang: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI, marks: [25, 50, 75].map((q) => ({ q, ...at(q) })), end: at(100) });
+  }, [d, pct]);
+  return [ref, m];
+}
+const Flag = ({ x, y, h = 20, lit }) => (
+  <g transform={`translate(${x} ${y})`}>
+    <line x1="0" y1="0" x2="0" y2={-h} stroke={palette.textMuted} strokeWidth="1.6" strokeLinecap="round" />
+    <path className={lit ? "cx-wave" : ""} d={`M0 ${-h} C6 ${-h - 3}, 9 ${-h + 3}, 16 ${-h} L16 ${-h + 8} C9 ${-h + 11}, 6 ${-h + 5}, 0 ${-h + 8}Z`} fill={lit ? "#E24D4D" : "#B9B4A6"} style={{ transformBox: "fill-box", transformOrigin: "0% 50%" }} />
+    <circle cx="0" cy="0" r="2.2" fill={palette.textMuted} />
+  </g>
+);
+const TrackFrame = ({ children, h = 64 }) => (
+  <div className="relative mt-3" style={{ width: "100%", maxWidth: 440 }}>
+    <svg viewBox={`0 0 340 ${h}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>{children}</svg>
+  </div>
+);
+
 function MountainTrack({ progress = 0, skin = "mountain" }) {
-  const s = CX_TRACKS[skin] || CX_TRACKS.mountain;
-  const t = Math.max(0, Math.min(100, progress)) / 100;
-  const A = { x: 8, y: 52 }, B = { x: 204, y: 10 };
+  const s = CX_TRACKS[skin];
+  const t = cxClamp(progress) / 100;
+  const ridge = "M4 60 L70 30 L104 46 L150 14 L196 44 L226 26 L336 60";
+  const A = { x: 10, y: 57 }, B = { x: 150, y: 13 };
   const P = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t };
   return (
-    <div className="relative mt-3" style={{ maxWidth: 420 }}>
-      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
-        <path d="M4 54 L86 26 L118 42 L204 10 L336 54" fill={`${s.base}1F`} stroke={s.base} strokeWidth="1.6" strokeLinejoin="round" />
-        <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={s.fill} strokeWidth="1.6" strokeDasharray="4 4" opacity="0.5" />
-        <line x1={A.x} y1={A.y} x2={P.x} y2={P.y} stroke={s.fill} strokeWidth="3" strokeLinecap="round" />
-        <line x1={B.x} y1={B.y} x2={B.x} y2={B.y - 16} stroke={palette.textMuted} strokeWidth="1.4" />
-        <path d={`M${B.x} ${B.y - 16} l13 4.5 l-13 4.5Z`} fill="#E24D4D" />
+    <TrackFrame>
+      <defs>
+        <linearGradient id="cxmt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#C9D6EC" stopOpacity="0.9" /><stop offset="1" stopColor="#7C879E" stopOpacity="0.15" /></linearGradient>
+        <linearGradient id="cxmtl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor={s.fill} stopOpacity="0.3" /><stop offset="1" stopColor={s.fill} stopOpacity="0" /></linearGradient>
+      </defs>
+      <path d={`${ridge} L336 64 L4 64Z`} fill="url(#cxmt)" />
+      <path d="M150 14 L136 28 L144 26 L150 33 L157 26 L165 29Z" fill="#fff" opacity="0.85" />
+      <path d={ridge} fill="none" stroke={s.base} strokeWidth="1.8" strokeLinejoin="round" />
+      <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={s.fill} strokeWidth="1.6" strokeDasharray="3 5" opacity="0.55" strokeLinecap="round" />
+      <clipPath id="cxmtc"><path d={`${ridge} L336 64 L4 64Z`} /></clipPath>
+      <path clipPath="url(#cxmtc)" d={`M${A.x} ${A.y} L${P.x} ${P.y} L${P.x} 64 L${A.x} 64Z`} fill="url(#cxmtl)" />
+      <line x1={A.x} y1={A.y} x2={P.x} y2={P.y} stroke={s.fill} strokeWidth="3.4" strokeLinecap="round" />
+      {[0.25, 0.5, 0.75].map((q) => <circle key={q} cx={A.x + (B.x - A.x) * q} cy={A.y + (B.y - A.y) * q} r="2.6" fill={t >= q ? s.fill : palette.bg} stroke={t >= q ? s.fill : palette.border} strokeWidth="1.3" />)}
+      <Flag x={B.x} y={B.y + 1} h={20} lit={t >= 0.99} />
+      <g transform={`translate(${P.x} ${P.y})`}>
+        <circle r="11" fill={s.fill} opacity="0.22" className="cx-ping" style={{ transformBox: "fill-box", transformOrigin: "center" }} />
         <g className="cx-bob">
-          <circle cx={P.x} cy={P.y} r="8" fill={s.fill} opacity="0.25" className="cx-dot" />
-          <circle cx={P.x} cy={P.y} r="4.5" fill={s.fill} stroke={palette.bg} strokeWidth="1.5" />
+          <circle cx="0" cy="-5" r="3.2" fill="#F2C9A0" stroke={palette.bg} strokeWidth="1" />
+          <path d="M-3 -2 L3 -2 L2.4 5 L-2.4 5Z" fill={s.fill} stroke={palette.bg} strokeWidth="1" strokeLinejoin="round" />
         </g>
-      </svg>
-    </div>
+      </g>
+    </TrackFrame>
+  );
+}
+
+function RoadTrack({ progress = 0, skin = "road" }) {
+  const s = CX_TRACKS[skin];
+  const pct = cxClamp(progress);
+  const d = "M12 52 C 50 62, 74 22, 118 34 S 176 62, 214 40 S 276 14, 316 22";
+  const [ref, m] = useAlongPath(d, pct);
+  return (
+    <TrackFrame>
+      <path d={d} fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="17" strokeLinecap="round" transform="translate(0 2.5)" />
+      <path ref={ref} d={d} fill="none" stroke="#3E414A" strokeWidth="15" strokeLinecap="round" />
+      <path d={d} fill="none" stroke="#5C606B" strokeWidth="1" strokeLinecap="round" transform="translate(0 -6.5)" opacity="0.5" />
+      <path d={d} pathLength="100" fill="none" stroke="#8D93A3" strokeWidth="1.8" strokeDasharray="1.6 2.4" />
+      <path d={d} pathLength="100" fill="none" stroke={s.fill} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${pct} 100`} opacity="0.95" />
+      <path d={d} pathLength="100" fill="none" stroke="#fff" strokeWidth="1.4" strokeDasharray={`0.8 2.2`} opacity="0.55" style={{ clipPath: "none" }} />
+      {m.marks.map((k) => <g key={k.q}><rect x={k.x - 1} y={k.y - 12} width="2" height="6" fill={pct >= k.q ? s.fill : "#B9B4A6"} /><circle cx={k.x} cy={k.y - 13} r="2.4" fill={pct >= k.q ? s.fill : "#B9B4A6"} /></g>)}
+      <Flag x={m.end.x} y={m.end.y - 6} h={22} lit={pct >= 99} />
+      <g transform={`translate(${m.pt.x} ${m.pt.y}) rotate(${m.ang})`}>
+        <ellipse cx="0" cy="6" rx="9" ry="2.5" fill="rgba(0,0,0,0.25)" />
+        <g className="cx-bounce">
+          <rect x="-9" y="-5" width="18" height="9" rx="3.6" fill="#E8553D" stroke={palette.bg} strokeWidth="1" />
+          <path d="M-3 -5 L-1 -9 L5 -9 L7 -5Z" fill="#CFE9E0" stroke={palette.bg} strokeWidth="0.8" />
+          <circle cx="-5" cy="4" r="2.7" fill="#22252B" /><circle cx="5" cy="4" r="2.7" fill="#22252B" />
+          <circle cx="9.4" cy="-1" r="1.4" fill="#FFE08A" />
+          <path d="M9.4 -1 L24 -5 L24 3Z" fill="#FFE08A" opacity="0.16" />
+        </g>
+      </g>
+    </TrackFrame>
   );
 }
 
 function RocketTrack({ progress = 0, skin = "rocket" }) {
-  const s = CX_TRACKS[skin] || CX_TRACKS.rocket;
-  const t = Math.max(0, Math.min(100, progress)) / 100;
-  const x0 = 16, x1 = 300, x = x0 + (x1 - x0) * t;
+  const s = CX_TRACKS[skin];
+  const t = cxClamp(progress) / 100;
+  const x0 = 22, x1 = 296, y = 32, x = x0 + (x1 - x0) * t;
+  const stars = [[40, 10, 1.1], [84, 52, 0.9], [118, 14, 1.3], [160, 54, 1], [196, 8, 0.9], [232, 50, 1.2], [268, 12, 1], [300, 56, 0.8]];
   return (
-    <div className="relative mt-3" style={{ maxWidth: 420 }}>
-      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
-        {[[60, 12], [120, 46], [180, 10], [240, 48], [275, 16]].map(([sx, sy], i) => <circle key={i} cx={sx} cy={sy} r="1" fill={palette.textFaint} opacity="0.6" />)}
-        <line x1={x0} y1="29" x2={x1} y2="29" stroke={s.base} strokeWidth="1.6" strokeDasharray="3 5" />
-        <line x1={x0} y1="29" x2={x} y2="29" stroke={s.fill} strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
-        <circle cx="320" cy="29" r="12" fill="#C9C2FF" />
-        <circle cx="316" cy="25" r="3" fill="#A79EF0" opacity="0.7" />
-        <g transform={`translate(${x} 29) rotate(90)`}>
-          <g className="cx-flame" style={{ "--d": "0.5s" }}><path d="M-3.2 9 L0 21 L3.2 9Z" fill="#FFC24A" /><path d="M-1.6 9 L0 15 L1.6 9Z" fill="#FFF1B8" /></g>
-          <path d="M0 -11 C6 -5 6 4 3.6 9 L-3.6 9 C-6 4 -6 -5 0 -11Z" fill="#E8EAF2" stroke={palette.border} strokeWidth="0.6" />
-          <path d="M-3.6 3 L-8 9 L-3.6 8Z M3.6 3 L8 9 L3.6 8Z" fill={s.fill} />
-          <circle cx="0" cy="-2" r="2.2" fill={s.fill} />
+    <TrackFrame>
+      <defs>
+        <linearGradient id="cxrt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor={s.fill} stopOpacity="0" /><stop offset="1" stopColor="#FFC24A" stopOpacity="0.95" /></linearGradient>
+        <radialGradient id="cxmoon" cx="35%" cy="30%"><stop offset="0" stopColor="#EEEAFF" /><stop offset="1" stopColor="#A79EF0" /></radialGradient>
+      </defs>
+      {stars.map(([sx, sy, r], i) => <circle key={i} className="cx-twinkle" style={{ animationDelay: `${i * 0.37}s` }} cx={sx} cy={sy} r={r} fill={palette.textMuted} />)}
+      <line x1={x0} y1={y} x2={x1} y2={y} stroke={s.base} strokeWidth="1.5" strokeDasharray="1.5 6" strokeLinecap="round" opacity="0.7" />
+      <rect x={x0} y={y - 3} width={Math.max(0, x - x0 - 6)} height="6" rx="3" fill="url(#cxrt)" />
+      {[0.25, 0.5, 0.75].map((q) => <circle key={q} cx={x0 + (x1 - x0) * q} cy={y} r="2.3" fill={t >= q ? s.fill : palette.bg} stroke={t >= q ? s.fill : palette.border} strokeWidth="1.2" />)}
+      <circle cx="318" cy="32" r="15" fill="url(#cxmoon)" />
+      <circle cx="312" cy="27" r="3.4" fill="#8F86E0" opacity="0.5" /><circle cx="322" cy="39" r="2.4" fill="#8F86E0" opacity="0.45" />
+      <g transform={`translate(${x} ${y}) rotate(90)`}>
+        <g className="cx-flame" style={{ "--d": "0.45s" }}>
+          <path d="M-5 11 Q0 34 5 11Z" fill="#FF7A2F" /><path d="M-3 11 Q0 26 3 11Z" fill="#FFC24A" /><path d="M-1.4 11 Q0 19 1.4 11Z" fill="#FFF6C8" />
         </g>
-      </svg>
-    </div>
+        <path d="M-7 4 L-14 15 L-6 12Z M7 4 L14 15 L6 12Z" fill={s.fill} />
+        <path d="M0 -16 C9 -8 9 5 6 12 L-6 12 C-9 5 -9 -8 0 -16Z" fill="#F1F3F9" stroke="#B8BED0" strokeWidth="0.8" />
+        <path d="M0 -16 C5 -11 6 -6 6 -3 L-6 -3 C-6 -6 -5 -11 0 -16Z" fill={s.fill} />
+        <circle cx="0" cy="1.5" r="3.4" fill="#2A3350" stroke="#B8BED0" strokeWidth="1" /><circle cx="-1" cy="0.6" r="1" fill="#9FD8FF" />
+      </g>
+    </TrackFrame>
   );
 }
 
 function LadderTrack({ progress = 0, skin = "ladder" }) {
-  const s = CX_TRACKS[skin] || CX_TRACKS.ladder;
-  const pct = Math.max(0, Math.min(100, progress));
-  const n = 12, x0 = 10, x1 = 330, dx = (x1 - x0) / n, px = x0 + ((x1 - x0) * pct) / 100;
+  const s = CX_TRACKS[skin];
+  const pct = cxClamp(progress);
+  const n = 12, x0 = 14, x1 = 326, dx = (x1 - x0) / n, px = x0 + ((x1 - x0) * pct) / 100;
+  const done = Math.floor((pct / 100) * n);
   return (
-    <div className="relative mt-3" style={{ maxWidth: 420 }}>
-      <svg viewBox="0 0 340 58" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
-        <line x1={x0} y1="12" x2={x1} y2="12" stroke={s.base} strokeWidth="3" strokeLinecap="round" />
-        <line x1={x0} y1="46" x2={x1} y2="46" stroke={s.base} strokeWidth="3" strokeLinecap="round" />
-        {Array.from({ length: n + 1 }, (_, i) => {
-          const rx = x0 + i * dx, lit = (i / n) * 100 <= pct;
-          return <line key={i} x1={rx} y1="12" x2={rx} y2="46" stroke={lit ? s.fill : s.base} strokeWidth={lit ? 3 : 2} strokeLinecap="round" opacity={lit ? 1 : 0.7} />;
-        })}
+    <TrackFrame>
+      <defs><linearGradient id="cxwood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#C79B6B" /><stop offset="1" stopColor="#8E6A44" /></linearGradient></defs>
+      {[16, 48].map((yy) => <g key={yy}><rect x={x0 - 6} y={yy - 3} width={x1 - x0 + 12} height="6" rx="3" fill="url(#cxwood)" /><rect x={x0 - 6} y={yy - 3} width={x1 - x0 + 12} height="2" rx="1" fill="#fff" opacity="0.25" /></g>)}
+      {Array.from({ length: n + 1 }, (_, i) => {
+        const rx = x0 + i * dx, lit = i <= done && pct > 0;
+        return <g key={i}>
+          <rect x={rx - 2.4} y="16" width="4.8" height="32" rx="2.4" fill={lit ? s.fill : "#B7A98F"} opacity={lit ? 1 : 0.75} />
+          {lit && <rect x={rx - 2.4} y="16" width="4.8" height="32" rx="2.4" fill="#fff" opacity="0.22" className="cx-rung" style={{ animationDelay: `${(i % 6) * 0.18}s` }} />}
+        </g>;
+      })}
+      <g transform={`translate(${px} 32)`}>
+        <circle r="12" fill={s.fill} opacity="0.2" className="cx-ping" style={{ transformBox: "fill-box", transformOrigin: "center" }} />
         <g className="cx-bob">
-          <circle cx={px} cy="29" r="9" fill={s.fill} opacity="0.25" className="cx-dot" />
-          <circle cx={px} cy="29" r="5" fill={s.fill} stroke={palette.bg} strokeWidth="1.5" />
+          <circle cx="0" cy="-5" r="3.4" fill="#F2C9A0" stroke={palette.bg} strokeWidth="1" />
+          <rect x="-3.6" y="-1.5" width="7.2" height="9" rx="2.6" fill={s.fill} stroke={palette.bg} strokeWidth="1" />
         </g>
-      </svg>
-    </div>
+      </g>
+      <path d={`M${x1 + 8} 12 L${x1 + 8} 52`} stroke={palette.textFaint} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+    </TrackFrame>
   );
 }
 
 function MiniTrack({ progress = 0, skin = "mountain" }) {
   const kind = (CX_TRACKS[skin] || CX_TRACKS.mountain).kind;
   if (kind === "mountain") return <MountainTrack progress={progress} skin={skin} />;
+  if (kind === "road") return <RoadTrack progress={progress} skin={skin} />;
   if (kind === "rocket") return <RocketTrack progress={progress} skin={skin} />;
   if (kind === "ladder") return <LadderTrack progress={progress} skin={skin} />;
   return <PathTrack progress={progress} skin={skin} />;
@@ -963,16 +1134,28 @@ function GaugeDial({ pct = 0, tone, skin = "neon" }) {
 }
 
 function FuelGauge({ pct = 0 }) {
-  const arc = "M20 100 A80 80 0 0 1 180 100";
+  const arc = "M22 98 A78 78 0 0 1 178 98";
+  const danger = pct >= 0.85;
   return (
-    <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
-      <path d={arc} pathLength="100" fill="none" stroke="#1FA57A" strokeWidth="13" strokeDasharray="59 100" />
-      <path d={arc} pathLength="100" fill="none" stroke="#F2A33A" strokeWidth="13" strokeDasharray="0 60 24 100" />
-      <path d={arc} pathLength="100" fill="none" stroke="#E24D4D" strokeWidth="13" strokeDasharray="0 85 15 100" />
-      <g className="cx-needle" style={{ transform: `rotate(${-90 + pct * 180}deg)`, transformOrigin: "100px 100px" }}>
-        <path d="M97.5 100 L100 34 L102.5 100Z" fill={palette.text} />
+    <svg viewBox="0 0 200 116" style={{ width: "100%", display: "block", overflow: "visible" }}>
+      <defs>
+        <radialGradient id="cxfb" cx="50%" cy="100%" r="80%"><stop offset="0" stopColor={palette.surface} /><stop offset="1" stopColor={palette.field} /></radialGradient>
+        <linearGradient id="cxfg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#35D39C" /><stop offset="1" stopColor="#1FA57A" /></linearGradient>
+      </defs>
+      <path d="M8 100 A92 92 0 0 1 192 100 Z" fill="url(#cxfb)" stroke={palette.border} strokeWidth="1.5" />
+      <path d={arc} pathLength="100" fill="none" stroke="url(#cxfg)" strokeWidth="11" strokeDasharray="59 100" />
+      <path d={arc} pathLength="100" fill="none" stroke="#F2A33A" strokeWidth="11" strokeDasharray="0 60 24 100" />
+      <path className={danger ? "cx-alarm" : ""} d={arc} pathLength="100" fill="none" stroke="#E24D4D" strokeWidth="11" strokeDasharray="0 85 15 100" />
+      {Array.from({ length: 21 }, (_, i) => {
+        const a = (-180 + i * 9) * (Math.PI / 180), big = i % 5 === 0, r1 = 66, r2 = big ? 55 : 60;
+        return <line key={i} x1={100 + r1 * Math.cos(a)} y1={98 + r1 * Math.sin(a)} x2={100 + r2 * Math.cos(a)} y2={98 + r2 * Math.sin(a)} stroke={palette.textMuted} strokeWidth={big ? 1.6 : 0.8} opacity="0.75" />;
+      })}
+      <text x="22" y="111" fill={palette.textMuted} fontSize="9" fontWeight="700" textAnchor="middle" style={{ fontFamily: mono }}>F</text>
+      <text x="178" y="111" fill={palette.red} fontSize="9" fontWeight="700" textAnchor="middle" style={{ fontFamily: mono }}>E</text>
+      <g className="cx-needle cx-needle-live" style={{ transform: `rotate(${-90 + pct * 180}deg)`, transformOrigin: "100px 98px" }}>
+        <path d="M97.6 98 L100 36 L102.4 98Z" fill="#E24D4D" /><path d="M97.6 98 L100 98 L100 36Z" fill="#B83A3A" />
       </g>
-      <circle cx="100" cy="100" r="7" fill={palette.text} />
+      <circle cx="100" cy="98" r="8" fill={palette.surface} stroke={palette.text} strokeWidth="2.5" /><circle cx="100" cy="98" r="2.8" fill={palette.text} />
     </svg>
   );
 }
@@ -980,34 +1163,62 @@ function FuelGauge({ pct = 0 }) {
 function CellMeter({ pct = 0, style = "battery" }) {
   const left = 1 - pct, cells = left <= 0 ? 0 : Math.max(1, Math.round(left * 5));
   const col = cells <= 1 ? "#E24D4D" : cells <= 2 ? "#F2A33A" : "#1FA57A";
+  const col2 = cells <= 1 ? "#FF8A7A" : cells <= 2 ? "#FFD27A" : "#4BE0B0";
+  const low = cells <= 1;
   if (style === "battery") {
     return (
-      <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
-        <rect x="18" y="32" width="152" height="50" rx="9" fill="none" stroke={palette.textMuted} strokeWidth="3.5" />
-        <rect x="174" y="46" width="11" height="22" rx="3" fill={palette.textMuted} />
+      <svg viewBox="0 0 200 116" style={{ width: "100%", display: "block", overflow: "visible" }}>
+        <defs>
+          <linearGradient id="cxbc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={col2} /><stop offset="1" stopColor={col} /></linearGradient>
+          <clipPath id="cxbclip"><rect x="14" y="30" width="150" height="56" rx="12" /></clipPath>
+        </defs>
+        <rect x="14" y="30" width="150" height="56" rx="12" fill={palette.field} stroke={palette.textMuted} strokeWidth="3.5" />
+        <rect x="168" y="46" width="12" height="24" rx="4" fill={palette.textMuted} />
         {Array.from({ length: 5 }, (_, i) => (
-          <rect key={i} x={26 + i * 28.5} y="40" width="23" height="34" rx="4" fill={i < cells ? col : "none"} stroke={i < cells ? col : palette.border} strokeWidth="1.2" className={i === cells - 1 && cells <= 1 ? "cx-dot" : ""} />
+          <g key={i} className={low && i === 0 ? "cx-alarm" : ""}>
+            <rect x={22 + i * 28.6} y="38" width="23" height="40" rx="6" fill={i < cells ? "url(#cxbc)" : "none"} stroke={i < cells ? col : palette.border} strokeWidth="1.3" strokeDasharray={i < cells ? undefined : "3 3"} />
+            {i < cells && <rect x={24 + i * 28.6} y="40" width="19" height="9" rx="4" fill="#fff" opacity="0.28" />}
+          </g>
         ))}
-      </svg>
+        <g clipPath="url(#cxbclip)"><rect className="cx-sweep" x="-40" y="30" width="30" height="56" fill="#fff" opacity="0.28" transform="skewX(-18)" /></g>
+              </svg>
     );
   }
   return (
-    <svg viewBox="0 0 200 112" style={{ width: "100%", display: "block" }}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <rect key={i} x={10 + i * 37} y="38" width="30" height="40" rx="7" fill={i < cells ? col : "none"} stroke={i < cells ? col : "#E24D4D"} strokeWidth="2.4" className={i === cells - 1 && cells <= 1 ? "cx-dot" : ""} />
-      ))}
+    <svg viewBox="0 0 200 116" style={{ width: "100%", display: "block", overflow: "visible" }}>
+      <defs><linearGradient id="cxhc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={col2} /><stop offset="1" stopColor={col} /></linearGradient></defs>
+      <rect x="4" y="28" width="192" height="58" rx="14" fill={palette.field} stroke={palette.border} strokeWidth="1.6" />
+      {Array.from({ length: 5 }, (_, i) => {
+        const on = i < cells, last = i === cells - 1;
+        return (
+          <g key={i} className={last ? "cx-heart" : ""} style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+            <rect x={12 + i * 36.4} y="36" width="31" height="42" rx="8" fill={on ? "url(#cxhc)" : "none"} stroke={on ? col : "#E24D4D"} strokeWidth={on ? 1.2 : 2} strokeDasharray={on ? undefined : "4 3"} opacity={on ? 1 : 0.7} />
+            {on && <rect x={15 + i * 36.4} y="39" width="25" height="10" rx="5" fill="#fff" opacity="0.3" />}
+            {!on && <path d={`M${21 + i * 36.4} 50 l13 14 M${34 + i * 36.4} 50 l-13 14`} stroke="#E24D4D" strokeWidth="2" strokeLinecap="round" opacity="0.7" />}
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 function ShieldMeter({ pct = 0, tone }) {
-  const shield = "M100 8 L150 22 V58 C150 83 129 99 100 108 C71 99 50 83 50 58 V22Z";
-  const cracks = [["M100 22 L93 44 L105 59 L96 78", 0.12], ["M105 59 L122 67 L117 86", 0.5], ["M93 44 L75 53 L80 72", 0.8]];
+  const shield = "M100 8 L152 22 V58 C152 84 130 101 100 111 C70 101 48 84 48 58 V22Z";
+  const cracks = [["M100 20 L92 42 L106 58 L96 80", 0.12], ["M106 58 L124 66 L118 90", 0.5], ["M92 42 L72 52 L78 74", 0.8]];
+  const broken = pct >= 0.95;
   return (
-    <svg viewBox="0 0 200 116" style={{ width: "100%", display: "block" }}>
-      <path d={shield} fill={`${tone}26`} stroke={tone} strokeWidth="4" strokeLinejoin="round" />
-      <path d="M100 18 L141 29 V58 C141 77 125 90 100 98 C75 90 59 77 59 58 V29Z" fill="none" stroke={tone} strokeWidth="1" opacity="0.35" />
-      {cracks.map(([d, at], i) => pct >= at && <path key={i} d={d} fill="none" stroke="#B3402F" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />)}
+    <svg viewBox="0 0 200 120" style={{ width: "100%", display: "block", overflow: "visible" }}>
+      <defs>
+        <linearGradient id="cxsg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={tone} stopOpacity="0.5" /><stop offset="1" stopColor={tone} stopOpacity="0.12" /></linearGradient>
+        <clipPath id="cxsc"><path d={shield} /></clipPath>
+      </defs>
+      <g className={broken ? "cx-shake" : "cx-float"} style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+        <path d={shield} fill="url(#cxsg)" stroke={tone} strokeWidth="4.5" strokeLinejoin="round" />
+        <path d="M100 20 L142 31 V58 C142 78 124 91 100 100 C76 91 58 78 58 58 V31Z" fill="none" stroke={tone} strokeWidth="1.2" opacity="0.4" />
+        <path d="M100 38 L108 56 L128 58 L113 70 L117 90 L100 80 L83 90 L87 70 L72 58 L92 56Z" fill={tone} opacity="0.28" />
+        <g clipPath="url(#cxsc)"><rect className="cx-sweep" x="-60" y="0" width="26" height="120" fill="#fff" opacity="0.4" transform="skewX(-20)" /></g>
+        {cracks.map(([d, at], i) => pct >= at && <path key={i} className="cx-crack" d={d} pathLength="1" fill="none" stroke="#B3402F" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />)}
+      </g>
     </svg>
   );
 }
@@ -1046,41 +1257,55 @@ function DrawdownMeter({ label, detail, pass, used = 0, limit = 0, skin = "neon"
 // --- Campfire ---
 function Campfire({ members = [], streak = 0 }) {
   const online = members.filter((m) => m.isOnline).length;
-  const heat = Math.min(1, 0.55 + online * 0.12 + Math.min(streak, 10) * 0.02);
+  const heat = Math.min(1, 0.55 + online * 0.1 + Math.min(streak, 10) * 0.02);
   const seats = members.slice(0, 8);
-  const W = 320, H = 190, cx = W / 2, cy = 96;
+  const W = 320, H = 210, fx = 160, fy = 128, fs = 0.78 + heat * 0.42;
+  const stars = [[22, 20, 1.2], [58, 44, 0.9], [96, 16, 1.4], [132, 38, 1], [206, 14, 1.3], [244, 40, 0.9], [282, 22, 1.2], [300, 58, 1], [36, 70, 0.8], [270, 80, 0.9]];
+  const embers = Array.from({ length: 12 }, (_, i) => i);
   return (
-    <div className="rounded-2xl mb-3 overflow-hidden" style={{ background: "linear-gradient(180deg,#0B1020 0%,#151B2E 100%)", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, position: "relative" }}>
-      <div style={{ position: "absolute", left: 14, top: 12, zIndex: 2 }}>
+    <div className="rounded-2xl mb-3 overflow-hidden" style={{ background: "linear-gradient(180deg,#070A16 0%,#101830 55%,#1C1A2A 100%)", border: `1px solid ${palette.border}`, boxShadow: palette.shadow, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 14, top: 12, zIndex: 3 }}>
         <div style={{ color: "#F5F6F9", fontWeight: 700, fontSize: 13 }}>Group campfire</div>
         <div style={{ color: "#A3AEC4", fontSize: 11.5 }}>{online} online{streak > 0 ? ` · ${streak}-day fire` : ""}</div>
       </div>
-      <div style={{ position: "relative", width: "100%", maxWidth: W, height: H, margin: "0 auto" }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 480, margin: "0 auto", aspectRatio: `${W} / ${H}` }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}>
           <defs>
-            <radialGradient id="cxfl"><stop offset="0" stopColor="#F2B35E" stopOpacity={0.55 * heat} /><stop offset="1" stopColor="#F2B35E" stopOpacity="0" /></radialGradient>
+            <radialGradient id="cxfl" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#FFB347" stopOpacity={0.6 * heat} /><stop offset="0.55" stopColor="#E2622D" stopOpacity={0.2 * heat} /><stop offset="1" stopColor="#E2622D" stopOpacity="0" /></radialGradient>
+            <linearGradient id="cxf1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF7A4A" /><stop offset="1" stopColor="#E2402B" /></linearGradient>
+            <linearGradient id="cxf2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFD27A" /><stop offset="1" stopColor="#FF9A3C" /></linearGradient>
+            <linearGradient id="cxf3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFFBE0" /><stop offset="1" stopColor="#FFE08A" /></linearGradient>
           </defs>
-          <ellipse cx={cx} cy={cy + 22} rx={120 * heat + 20} ry={56 * heat + 10} fill="url(#cxfl)" className="cx-glow" />
-          <ellipse cx={cx} cy={cy + 30} rx="44" ry="10" fill="#05070C" opacity="0.6" />
-          <rect x={cx - 30} y={cy + 24} width="60" height="7" rx="3.5" fill="#6B4A32" transform={`rotate(-8 ${cx} ${cy + 27})`} />
-          <rect x={cx - 30} y={cy + 24} width="60" height="7" rx="3.5" fill="#85603F" transform={`rotate(8 ${cx} ${cy + 27})`} />
-          <g transform={`translate(${cx} ${cy + 26}) scale(${0.75 + heat * 0.4})`}>
-            <path className="cx-flame" style={{ "--d": "1.9s" }} d="M0 0 C-30 -4 -26 -34 -8 -52 C-10 -34 4 -34 0 -62 C22 -42 32 -16 22 -4 C14 4 -14 4 0 0Z" fill="#F0897E" />
-            <path className="cx-flame" style={{ "--d": "1.4s" }} d="M0 0 C-20 -2 -18 -24 -4 -38 C-6 -24 6 -24 2 -44 C16 -28 22 -10 14 -2 C8 3 -8 3 0 0Z" fill="#F2B35E" />
-            <path className="cx-flame" style={{ "--d": "1.1s" }} d="M0 0 C-10 -1 -9 -12 -1 -22 C-2 -13 5 -12 3 -26 C10 -14 11 -4 6 -1 C3 2 -4 2 0 0Z" fill="#FFE9A8" />
-          </g>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <circle key={i} className="cx-spark" cx={cx - 12 + i * 6} cy={cy - 6} r="1.6" fill="#FFD27A" style={{ "--d": `${2.4 + i * 0.5}s`, "--x": `${(i - 2) * 6}px`, animationDelay: `${-i * 0.6}s` }} />
+          {stars.map(([x, y, r], i) => <circle key={i} className="cx-twinkle" style={{ animationDelay: `${i * 0.43}s` }} cx={x} cy={y} r={r} fill="#DDE6FF" />)}
+          <path d="M262 24 a10 10 0 1 0 9 15 a8 8 0 1 1 -9 -15Z" fill="#E9EEFF" opacity="0.92" />
+          <path d="M-400 210 L-400 146 Q-200 130 0 150 Q50 126 110 142 T210 140 T320 144 Q520 130 720 148 L720 210Z" fill="#0A0E1A" />
+          <path d="M-400 210 L-400 178 Q-200 170 0 176 Q80 160 160 170 T320 166 Q520 172 720 176 L720 210Z" fill="#141022" />
+          <ellipse cx={fx} cy={fy + 8} rx={150 * heat + 20} ry={70 * heat + 10} fill="url(#cxfl)" className="cx-glow" />
+          <ellipse cx={fx} cy={fy + 20} rx="50" ry="9" fill="#05070C" opacity="0.7" />
+          {[[-22, 4, -14], [22, 4, 14], [-4, 7, 3]].map(([dx, dy, rot], i) => (
+            <g key={i} transform={`translate(${fx + dx} ${fy + 12 + dy}) rotate(${rot})`}>
+              <rect x="-26" y="-4.5" width="52" height="9" rx="4.5" fill={i === 2 ? "#6B4A32" : "#85603F"} />
+              <ellipse cx="26" cy="0" rx="2.6" ry="4.5" fill="#C9A06C" /><path d="M-18 -2 H14 M-14 2 H18" stroke="#4E3523" strokeWidth="0.8" opacity="0.6" />
+            </g>
           ))}
+          <g transform={`translate(${fx} ${fy + 16}) scale(${fs})`}>
+            <g className="cx-flame" style={{ "--d": "1.7s" }}><path d="M0 0 C-22 0 -30 -17 -23 -31 C-20 -39 -15 -43 -15 -52 C-9 -46 -5 -41 -4 -35 C-2 -49 1 -60 4 -70 C11 -55 16 -47 14 -41 C19 -45 21 -51 23 -54 C30 -41 31 -22 22 -10 C18 -2 10 0 0 0Z" fill="url(#cxf1)" /></g>
+            <g className="cx-flame" style={{ "--d": "1.25s" }}><path d="M0 0 C-14 0 -19 -11 -14 -21 C-11 -27 -8 -29 -8 -36 C-4 -32 -2 -28 -1 -24 C0 -33 2 -40 3 -46 C8 -36 11 -31 9 -26 C13 -29 14 -33 15 -36 C19 -27 20 -14 14 -7 C11 -2 6 0 0 0Z" fill="url(#cxf2)" /></g>
+            <g className="cx-flame" style={{ "--d": "0.9s" }}><path d="M0 0 C-7 0 -10 -6 -7 -12 C-5 -16 -3 -17 -3 -21 C0 -18 1 -15 1 -13 C3 -17 3 -21 4 -24 C7 -17 8 -9 5 -5 C3 -1 2 0 0 0Z" fill="url(#cxf3)" /></g>
+          </g>
+          {embers.map((i) => <circle key={i} className="cx-ember" cx={fx - 22 + (i * 4) % 44} cy={fy - 14} r={0.9 + (i % 3) * 0.45} fill={i % 2 ? "#FFD27A" : "#FF9A3C"} style={{ "--d": `${2.6 + (i % 5) * 0.5}s`, "--x": `${((i % 5) - 2) * 9}px`, animationDelay: `${-i * 0.37}s` }} />)}
+          {[0, 1, 2].map((i) => <circle key={i} className="cx-smoke" cx={fx + (i - 1) * 6} cy={fy - 40} r="7" fill="#9AA3B8" style={{ animationDelay: `${-i * 1.6}s` }} />)}
         </svg>
         {seats.map((m, i) => {
-          const a = Math.PI * (0.12 + (0.76 * (seats.length === 1 ? 0.5 : i / (seats.length - 1))));
-          const x = cx + Math.cos(a + Math.PI) * 118 * -1;
-          const y = cy + 24 + Math.sin(a) * 52;
-          const size = 30;
+          const a = ((18 + (seats.length === 1 ? 72 : (144 * i) / (seats.length - 1))) * Math.PI) / 180;
+          const x = fx + Math.cos(a) * 118, y = fy + 30 + Math.sin(a) * 34;
+          const sz = 26 + ((y - (fy + 30)) / 34) * 6;
           return (
-            <span key={m.username || i} style={{ position: "absolute", left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, transform: "translate(-50%,-50%)", opacity: m.isOnline ? 1 : 0.5, filter: m.isOnline ? `drop-shadow(0 0 6px rgba(242,179,94,${0.5 * heat}))` : "none" }}>
-              <Avatar name={m.username} size={size} src={m.avatar} online={m.isOnline} />
+            <span key={m.username || i} style={{ position: "absolute", left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, transform: "translate(-50%,-62%)", display: "flex", flexDirection: "column", alignItems: "center", opacity: m.isOnline ? 1 : 0.45, filter: m.isOnline ? "none" : "grayscale(0.7)" }}>
+              <span className={m.isOnline ? "cx-warm" : ""} style={{ borderRadius: "50%", display: "inline-flex", boxShadow: m.isOnline ? `0 0 0 2px rgba(255,179,71,0.55), 0 0 14px rgba(255,150,60,${0.55 * heat})` : "none" }}>
+                <Avatar name={m.username} size={Math.round(sz)} src={m.avatar} online={m.isOnline} />
+              </span>
+              <span style={{ marginTop: 3, color: "#C9D2E8", fontSize: 9.5, maxWidth: 64, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textShadow: "0 1px 2px #000" }}>{m.username}</span>
             </span>
           );
         })}
@@ -1092,20 +1317,36 @@ function Campfire({ members = [], streak = 0 }) {
 
 // --- Status chips ---
 const CX_CHIPS = {
-  disciplined: { label: "Disciplined", c: "#63D4A4", live: true },
-  zone: { label: "In the zone", c: "#5B8AC4", live: true },
-  cooling: { label: "Cooling off", c: "#F2B35E" },
-  locked: { label: "Risk locked", c: "#F0897E" },
-  funded: { label: "Funded", c: "#C792E4", shine: true },
-  passed: { label: "Phase passed", c: "#9FE3FF", shine: true },
+  disciplined: { label: "Disciplined", c: "#2FCB93", live: true, icon: "shield" },
+  zone: { label: "In the zone", c: "#5B9BE8", live: true, icon: "bolt" },
+  cooling: { label: "Cooling off", c: "#F2B35E", icon: "snow" },
+  locked: { label: "Risk locked", c: "#F0685A", live: true, icon: "lock" },
+  funded: { label: "Funded", c: "#C792E4", shine: true, icon: "crown" },
+  passed: { label: "Phase passed", c: "#7FD6F5", shine: true, icon: "check" },
+};
+const CxChipIcon = ({ kind, c }) => {
+  const p = { fill: "none", stroke: c, strokeWidth: 1.4, strokeLinecap: "round", strokeLinejoin: "round" };
+  return (
+    <svg viewBox="0 0 12 12" width="13" height="13" style={{ display: "block" }}>
+      {kind === "shield" && <><path {...p} d="M6 1 L10 2.6 V6 C10 8.5 8 10.2 6 11 C4 10.2 2 8.5 2 6 V2.6Z" fill={`${c}33`} /><path {...p} d="M4 6 l1.4 1.4 L8 4.6" /></>}
+      {kind === "bolt" && <path {...p} d="M7 1 L3 7 H5.6 L5 11 L9 5 H6.4Z" fill={`${c}55`} />}
+      {kind === "snow" && <path {...p} d="M6 1 V11 M1.7 3.5 L10.3 8.5 M10.3 3.5 L1.7 8.5" />}
+      {kind === "lock" && <><rect {...p} x="2.6" y="5.4" width="6.8" height="5" rx="1.2" fill={`${c}44`} /><path {...p} d="M4.2 5.4 V4 a1.8 1.8 0 0 1 3.6 0 V5.4" /></>}
+      {kind === "crown" && <path {...p} d="M1.5 9.5 L2.4 3.8 L4.8 6.4 L6 2.5 L7.2 6.4 L9.6 3.8 L10.5 9.5Z" fill={`${c}55`} />}
+      {kind === "check" && <><circle {...p} cx="6" cy="6" r="4.7" fill={`${c}33`} /><path {...p} d="M3.8 6.2 l1.6 1.6 L8.3 4.6" /></>}
+    </svg>
+  );
 };
 function StatusChip({ kind = "disciplined", text }) {
   const k = CX_CHIPS[kind] || CX_CHIPS.disciplined;
   return (
-    <span style={{ position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 8px", borderRadius: 999, background: `${k.c}1F`, border: `1px solid ${k.c}66`, color: k.c, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-      <span className={k.live ? "cx-dot" : ""} style={{ width: 7, height: 7, borderRadius: 99, background: k.c, boxShadow: k.live ? `0 0 8px ${k.c}` : "none" }} />
+    <span style={{ position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px 4px 7px", borderRadius: 999, background: `linear-gradient(180deg, ${k.c}38, ${k.c}14)`, border: `1px solid ${k.c}88`, boxShadow: `0 4px 12px -5px ${k.c}99, inset 0 1px 0 rgba(255,255,255,0.35)`, color: k.c, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap", letterSpacing: "0.01em" }}>
+      <span style={{ position: "relative", display: "inline-flex" }}>
+        {k.live && <span className="cx-ping" style={{ position: "absolute", inset: -2, borderRadius: 99, background: k.c, opacity: 0.4, transformOrigin: "center" }} />}
+        <CxChipIcon kind={k.icon} c={k.c} />
+      </span>
       {text || k.label}
-      {k.shine && <span className="cx-shimmer" style={{ position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(100deg,transparent,rgba(255,255,255,0.35),transparent)", pointerEvents: "none" }} />}
+      {k.shine && <span className="cx-shimmer" style={{ position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(100deg,transparent,rgba(255,255,255,0.5),transparent)", pointerEvents: "none" }} />}
     </span>
   );
 }

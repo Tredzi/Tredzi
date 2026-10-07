@@ -13867,6 +13867,22 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
     const monthGreenDays = monthDayKeys.filter((k) => tradesByDay[k].total > 0).length;
     const monthMaxAbs = Math.max(1, ...monthDayKeys.map((k) => Math.abs(tradesByDay[k].total)));
     const WEEK_LABELS_MON = ["M", "T", "W", "T", "F", "S", "S"];
+    const WEEK_GRID = "repeat(7, minmax(0, 1fr)) minmax(58px, 1.15fr)";
+    const weekRows = [];
+    for (let i = 0; i < monthCells.length; i += 7) weekRows.push(monthCells.slice(i, i + 7));
+    const isoWeekOf = (date) => {
+      const dt = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = dt.getUTCDay() || 7;
+      dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+      return Math.ceil(((dt - yearStart) / 86400000 + 1) / 7);
+    };
+    const tradeNumberById = {};
+    [...trades]
+      .sort((x, y) => x.ts - y.ts)
+      .forEach((t, i) => {
+        tradeNumberById[t.id] = i + 1;
+      });
 
     const todayKey = dayKeyFromDate(new Date());
     const selectedInfo = selectedDay ? tradesByDay[selectedDay] : null;
@@ -13898,6 +13914,34 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
   	settings={settings}
   	persistSettings={persistSettings}
        />
+
+        {hitDailyLossLimit && (
+          <div
+            className="rounded-2xl p-4 mb-4"
+            style={{ background: `${palette.red}14`, border: `1px solid ${palette.red}`, boxShadow: palette.shadow }}
+          >
+            <div style={{ color: palette.red, fontSize: "13px", fontWeight: 600, marginBottom: "2px" }}>
+              Daily loss limit reached
+            </div>
+            <div className="text-xs" style={{ color: palette.textMuted }}>
+              You've hit your ${fmt(dailyLossLimitNum, 0)} daily loss limit for today (${fmtMoney(todayLossTotal)}{" "}
+              so far). Consider stepping away for the rest of the day.
+            </div>
+          </div>
+        )}
+        {hitMaxTrades && (
+          <div
+            className="rounded-2xl p-4 mb-4"
+            style={{ background: `${palette.gold}14`, border: `1px solid ${palette.gold}`, boxShadow: palette.shadow }}
+          >
+            <div style={{ color: palette.gold, fontSize: "13px", fontWeight: 600, marginBottom: "2px" }}>
+              Trade limit reached
+            </div>
+            <div className="text-xs" style={{ color: palette.textMuted }}>
+              You've hit your limit of {maxTradesNum} trade{maxTradesNum === 1 ? "" : "s"} for today Consider stepping away for the rest of the day.
+          </div>
+         </div>
+        )}
 
         <div className="mb-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
@@ -14002,282 +14046,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
           </div>
         )}
 
-        <DisciplineSeason streak={disciplineCurrent} best={disciplineBest} />
-
-        <span
-          className="block mb-1.5 uppercase"
-          style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
-        >
-          Goals
-        </span>
-        <div
-          className={isDesktop ? "rounded-2xl p-6 mb-4" : "rounded-2xl p-4 mb-4"}
-          style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, transition: THEME_TRANSITION }}
-        >
-          {[
-            { key: "weeklyTargetPct", period: "week", label: "This Week" },
-            { key: "monthlyTargetPct", period: "month", label: "This Month" },
-          ].map(({ key, period, label }, idx) => {
-            const targetPct = num(goals[key]);
-            const progress = computeGoalProgress(trades, startBal, period);
-            const hasTarget = goals[key] !== "" && targetPct > 0;
-            const pct = progress ? progress.pct : 0;
-            const progressToward = hasTarget && targetPct > 0 ? Math.max(0, Math.min(100, (pct / targetPct) * 100)) : 0;
-            const met = hasTarget && pct >= targetPct;
-            return (
-              <div key={key} style={{ marginBottom: idx === 0 ? "16px" : 0 }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span style={{ color: palette.text, fontSize: "13px", fontWeight: 600 }}>{label}</span>
-                  <span
-                    style={{
-                      fontFamily: mono,
-                      fontSize: "12px",
-                      color: !startBal ? palette.textFaint : met ? palette.green : pct < 0 ? palette.red : palette.textMuted,
-                    }}
-                  >
-                    {startBal ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : "N/A"}
-                    {hasTarget ? ` / ${targetPct}%` : ""}
-                  </span>
-                </div>
-                {hasTarget && (
-                  <div style={{ height: "6px", borderRadius: "999px", background: palette.field, overflow: "hidden", marginBottom: "6px" }}>
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${progressToward}%`,
-                        background: met ? palette.green : palette.gold,
-                        borderRadius: "999px",
-                        transition: "width 0.3s ease",
-                      }}
-                    />
-                  </div>
-                )}
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={goals[key]}
-                  onChange={(e) => persistGoals({ ...goals, [key]: e.target.value })}
-                  placeholder="Set a target %"
-                  className="w-full rounded-lg px-3 py-2 bg-transparent outline-none"
-                  style={{ background: palette.field, border: `1px solid ${palette.border}`, color: palette.text, fontFamily: mono, fontSize: "13px" }}
-                />
-              </div>
-            );
-          })}
-          {!startBal && (
-            <p className="text-xs mt-3" style={{ color: palette.textFaint }}>
-              Set a starting balance below so goal progress can be calculated as a percentage.
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-2 mb-2">
-          <button
-            type="button"
-            onClick={generateWeeklyShare}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-3 ${TAP}`}
-            style={{
-              background: palette.gold,
-              border: `1px solid ${palette.gold}`,
-              color: palette.letterbox,
-              fontFamily: mono,
-              fontSize: "13px",
-              fontWeight: 600,
-              boxShadow: palette.shadow,
-              transition: `${THEME_TRANSITION}, transform 0.15s ease`,
-            }}
-          >
-            <Share2 size={16} />
-            Share My Week
-          </button>
-          <button
-            type="button"
-            onClick={copyWeekSummary}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-3 ${TAP}`}
-            style={{
-              background: palette.field,
-              border: `1px solid ${palette.border}`,
-              color: palette.text,
-              fontFamily: mono,
-              fontSize: "13px",
-              fontWeight: 600,
-              transition: `${THEME_TRANSITION}, transform 0.15s ease`,
-            }}
-          >
-            <Copy size={16} />
-            Copy Summary
-          </button>
-        </div>
-        {shareError && (
-          <p className="text-xs mb-2" style={{ color: palette.textFaint }}>
-            {shareError}
-          </p>
-        )}
-        {copyMsg && (
-          <p className="text-xs mb-2" style={{ color: palette.textFaint }}>
-            {copyMsg}
-          </p>
-        )}
-        {copyFallbackText && (
-          <div
-            className="rounded-lg p-3 mb-2"
-            style={{ background: palette.field, border: `1px solid ${palette.border}` }}
-          >
-            <textarea
-              readOnly
-              value={copyFallbackText}
-              onFocus={(e) => e.target.select()}
-              className="w-full bg-transparent outline-none"
-              style={{ color: palette.text, fontFamily: mono, fontSize: "12px", height: "132px", resize: "none" }}
-            />
-            <button
-              type="button"
-              onClick={() => setCopyFallbackText("")}
-              className={`mt-2 ${TAP}`}
-              style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-        {!shareError && !copyMsg && !copyFallbackText && <div className="mb-6" />}
-        {(shareError || copyMsg) && !copyFallbackText && <div className="mb-4" />}
-
-        <div
-          className="rounded-2xl p-4 mb-6"
-          style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, transition: THEME_TRANSITION }}
-        >
-          <span
-            className="block mb-1.5 uppercase"
-            style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
-          >
-            Backup &amp; Restore
-          </span>
-          <p className="text-xs mb-3" style={{ color: palette.textFaint }}>
-            Your data only lives in this browser. Export a backup file occasionally, or right before switching
-            phones.
-          </p>
-          <div className={isDesktop ? "flex gap-3" : "flex gap-2"}>
-            <button
-              type="button"
-              onClick={exportBackup}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-lg ${isDesktop ? "py-3.5" : "py-2.5"} ${TAP}`}
-              style={{
-                background: palette.field,
-                border: `1px solid ${palette.border}`,
-                color: palette.text,
-                fontFamily: mono,
-                fontSize: "13px",
-                transition: `${THEME_TRANSITION}, transform 0.15s ease`,
-              }}
-            >
-              <Download size={15} />
-              Export
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 ${TAP}`}
-              style={{
-                background: palette.field,
-                border: `1px solid ${palette.border}`,
-                color: palette.text,
-                fontFamily: mono,
-                fontSize: "13px",
-                transition: `${THEME_TRANSITION}, transform 0.15s ease`,
-              }}
-            >
-              <Upload size={15} />
-              Import
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              onChange={importBackup}
-              style={{ display: "none" }}
-            />
-          </div>
-          {backupMsg && (
-            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
-              {backupMsg}
-            </p>
-          )}
-          {pendingImport && (
-            <div
-              className="rounded-lg p-3 mt-3"
-              style={{ background: palette.field, border: `1px solid ${palette.gold}` }}
-            >
-              <p className="text-xs mb-3" style={{ color: palette.text }}>
-                This will replace your current trades, starting balance, news events, custom setups, journal
-                entries, playbook rules, notepad notes, and theme on this device with the backup file (
-                {pendingImport.trades.length} trade{pendingImport.trades.length === 1 ? "" : "s"}). This can't be
-                undone.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={confirmImport}
-                  className={`flex-1 rounded-lg py-2 ${TAP}`}
-                  style={{ background: palette.gold, color: palette.letterbox, fontFamily: mono, fontSize: "13px" }}
-                >
-                  Replace Data
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelImport}
-                  className={`flex-1 rounded-lg py-2 ${TAP}`}
-                  style={{
-                    background: "transparent",
-                    border: `1px solid ${palette.border}`,
-                    color: palette.textMuted,
-                    fontFamily: mono,
-                    fontSize: "13px",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <Field 
-          label="Starting Balance"
-          value={startingBalance}
-          suffix="$"
-          placeholder="10000"
-          onChange={(e) => persistStartingBalance(e.target.value)}
-        />
-
-        {hitDailyLossLimit && (
-          <div
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: `${palette.red}14`, border: `1px solid ${palette.red}`, boxShadow: palette.shadow }}
-          >
-            <div style={{ color: palette.red, fontSize: "13px", fontWeight: 600, marginBottom: "2px" }}>
-              Daily loss limit reached
-            </div>
-            <div className="text-xs" style={{ color: palette.textMuted }}>
-              You've hit your ${fmt(dailyLossLimitNum, 0)} daily loss limit for today (${fmtMoney(todayLossTotal)}{" "}
-              so far). Consider stepping away for the rest of the day.
-            </div>
-          </div>
-        )}
-        {hitMaxTrades && (
-          <div
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: `${palette.gold}14`, border: `1px solid ${palette.gold}`, boxShadow: palette.shadow }}
-          >
-            <div style={{ color: palette.gold, fontSize: "13px", fontWeight: 600, marginBottom: "2px" }}>
-              Trade limit reached
-            </div>
-            <div className="text-xs" style={{ color: palette.textMuted }}>
-              You've hit your limit of {maxTradesNum} trade{maxTradesNum === 1 ? "" : "s"} for today Consider stepping away for the rest of the day.
-          </div>
-         </div>
-        )}
-
         {screenshotError && (
           <p className="text-xs mb-4" style={{ color: palette.red }}>
             {screenshotError}
@@ -14347,16 +14115,28 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+              <div className="grid gap-1.5 mb-1.5" style={{ gridTemplateColumns: WEEK_GRID }}>
                 {WEEK_LABELS_MON.map((w, i) => (
                   <div key={i} className="text-center" style={{ fontSize: "11px", fontWeight: 600, color: palette.textMuted }}>
                     {w}
                   </div>
                 ))}
+                <div className="text-center" style={{ fontSize: "11px", fontWeight: 600, color: palette.textMuted }}>
+                  Week
+                </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1.5">
-                {monthCells.map((d, i) => {
+              <div>
+                {weekRows.map((row, wi) => {
+                  const wKeys = row
+                    .filter((d) => d !== null)
+                    .map((d) => `${monthPrefix}-${pad2(d)}`)
+                    .filter((k) => tradesByDay[k]);
+                  const wTotal = wKeys.reduce((x, k) => x + tradesByDay[k].total, 0);
+                  const wNum = isoWeekOf(new Date(viewYear, viewMonthIdx, 1 - firstWeekday + wi * 7));
+                  return (
+                    <div key={wi} className="grid gap-1.5 mb-1.5" style={{ gridTemplateColumns: WEEK_GRID }}>
+                {row.map((d, i) => {
                   if (d === null) return <div key={i} />;
                   const key = `${monthPrefix}-${pad2(d)}`;
                   const info = tradesByDay[key];
@@ -14430,6 +14210,39 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                     </button>
                   );
                 })}
+                      {wKeys.length > 0 ? (
+                        <div
+                          className="flex flex-col justify-between rounded-xl"
+                          style={{ padding: "5px 6px", background: palette.field, border: `1px solid ${palette.border}` }}
+                        >
+                          <span style={{ fontSize: "10px", fontWeight: 700, color: palette.textMuted }}>W{wNum}</span>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                fontFamily: mono,
+                                color: wTotal >= 0 ? palette.green : palette.red,
+                              }}
+                            >
+                              {wTotal >= 0 ? "+" : "-"}${fmtMoney(wTotal)}
+                            </div>
+                            <div style={{ fontSize: "9px", color: palette.textFaint }}>
+                              {wKeys.length} day{wKeys.length === 1 ? "" : "s"}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-xl"
+                          style={{ padding: "5px 6px", border: `1px dashed ${palette.border}` }}
+                        >
+                          <span style={{ fontSize: "10px", fontWeight: 700, color: palette.textFaint }}>W{wNum}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div
@@ -14489,41 +14302,110 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                   setStatementPeriod({ year: viewYear, type: "month", index: viewMonthIdx });
                 }
               };
+              const mTrades = trades.filter((t) => dayKeyFromTs(t.ts).startsWith(monthPrefix));
+              const mWins = mTrades.filter((t) => t.pnl > 0);
+              const mLosses = mTrades.filter((t) => t.pnl < 0);
+              const mGrossWin = mWins.reduce((x, t) => x + t.pnl, 0);
+              const mGrossLoss = Math.abs(mLosses.reduce((x, t) => x + t.pnl, 0));
+              const mAvgWin = mWins.length ? mGrossWin / mWins.length : 0;
+              const mAvgLoss = mLosses.length ? mGrossLoss / mLosses.length : 0;
+              let mRun = 0;
+              let mPeak = 0;
+              let mDd = 0;
+              [...mTrades]
+                .sort((x, y) => x.ts - y.ts)
+                .forEach((t) => {
+                  mRun += t.pnl;
+                  mPeak = Math.max(mPeak, mRun);
+                  mDd = Math.max(mDd, mPeak - mRun);
+                });
+              const dayTotals = monthDayKeys.map((k) => tradesByDay[k].total);
+              const bestDayTotal = dayTotals.length ? Math.max(...dayTotals) : null;
+              const worstDayTotal = dayTotals.length ? Math.min(...dayTotals) : null;
+              const cleanDays = monthDayKeys.filter((k) => !tradesByDay[k].trades.some((t) => revengeIds.has(t.id))).length;
+              const setupCount = {};
+              mTrades.forEach((t) => {
+                if (t.setup) setupCount[t.setup] = (setupCount[t.setup] || 0) + 1;
+              });
+              const topSetupId = Object.keys(setupCount).sort((x, y) => setupCount[y] - setupCount[x])[0];
+              const signed = (v) => `${v >= 0 ? "+" : "-"}$${fmtMoney(v)}`;
+              const tone = (v) => (v > 0 ? palette.green : v < 0 ? palette.red : palette.text);
+              const rows = [
+                ["Net P&L", signed(monthTotal), tone(monthTotal)],
+                ["Trades", String(mTrades.length)],
+                ["Win rate", mTrades.length ? `${((mWins.length / mTrades.length) * 100).toFixed(1)}%` : "N/A"],
+                ["Profit factor", mGrossLoss > 0 ? (mGrossWin / mGrossLoss).toFixed(2) : mGrossWin > 0 ? "\u221e" : "N/A"],
+                ["Avg win / loss", mTrades.length ? `$${fmt(mAvgWin, 0)} / $${fmt(mAvgLoss, 0)}` : "N/A"],
+                ["Max drawdown", mTrades.length ? `$${fmt(mDd, 0)}` : "N/A"],
+                ["Best day", bestDayTotal === null ? "N/A" : signed(bestDayTotal), bestDayTotal === null ? undefined : tone(bestDayTotal)],
+                ["Worst day", worstDayTotal === null ? "N/A" : signed(worstDayTotal), worstDayTotal === null ? undefined : tone(worstDayTotal)],
+                ["Top setup", topSetupId ? findSetupLabel(topSetupId) : "N/A"],
+                ["Clean days", monthTradingDays ? `${cleanDays} of ${monthTradingDays}` : "N/A"],
+              ];
               return (
-                <button
-                  type="button"
-                  onClick={openStatement}
-                  disabled={disabled}
-                  className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 mb-4 ${TAP}`}
-                  style={{
-                    background: palette.field,
-                    border: `1px solid ${palette.border}`,
-                    color: disabled ? palette.textFaint : palette.text,
-                    fontFamily: mono,
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    opacity: disabled ? 0.6 : 1,
-                  }}
+                <div
+                  className="rounded-2xl p-4 mb-4"
+                  style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, transition: THEME_TRANSITION }}
                 >
-                  <FileText size={14} />
-                  {periodLabel} Statement
-                </button>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div>
+                      <div style={{ color: palette.text, fontFamily: display, fontSize: "17px", fontWeight: 700 }}>
+                        Monthly statement
+                      </div>
+                      <div className="text-xs" style={{ color: palette.textFaint }}>
+                        {MONTH_NAMES[viewMonthIdx]} {viewYear}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openStatement}
+                      disabled={disabled}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${TAP}`}
+                      style={{
+                        background: palette.field,
+                        border: `1px solid ${palette.border}`,
+                        color: disabled ? palette.textFaint : palette.text,
+                        fontFamily: mono,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        opacity: disabled ? 0.6 : 1,
+                      }}
+                    >
+                      <FileText size={14} />
+                      {periodLabel} Statement
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                    {rows.map(([label, value, color]) => (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between py-2"
+                        style={{ borderBottom: `1px solid ${palette.border}`, fontSize: "14px" }}
+                      >
+                        <span style={{ color: palette.textMuted }}>{label}</span>
+                        <span style={{ color: color || palette.text, fontWeight: 700 }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               );
             })()}
 
             {selectedInfo && (
               <>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span
-                    className="uppercase"
-                    style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
-                  >
-                    {formatDayLabel(selectedDay)}
+                <div className="flex items-baseline justify-between mb-2">
+                  <span style={{ color: palette.text, fontSize: "14px" }}>
+                    <span style={{ fontWeight: 700 }}>{formatDayLabel(selectedDay)}</span>
+                    <span style={{ color: palette.textMuted }}>
+                      {" \u00b7 "}
+                      {selectedInfo.trades.some((t) => revengeIds.has(t.id)) ? "rule break" : "clean day"}
+                    </span>
                   </span>
                   <span
                     style={{
                       fontFamily: mono,
-                      fontSize: "12px",
+                      fontSize: "13px",
+                      fontWeight: 700,
                       color: selectedInfo.total >= 0 ? palette.green : palette.red,
                     }}
                   >
@@ -14539,128 +14421,102 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                     <div
                       key={t.id}
                       onClick={() => setExpandedTradeId(isExpanded ? null : t.id)}
-                      className="rounded-lg px-3 py-2.5 mb-2"
+                      className="rounded-2xl p-3.5 mb-2"
                       style={{
                         background: palette.surface,
-                        border: `1px solid ${isBeingEdited ? palette.gold : palette.border}`,
+                        border: `${isExpanded && !isBeingEdited ? 1.5 : 1}px solid ${
+                          isBeingEdited ? palette.gold : isExpanded ? palette.text : palette.border
+                        }`,
                         boxShadow: palette.shadow,
                         cursor: "pointer",
                         transition: THEME_TRANSITION,
                       }}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span
-                              style={{
-                                fontFamily: mono,
-                                fontSize: "14px",
-                                color: t.pnl >= 0 ? palette.green : palette.red,
+                          <div style={{ color: palette.text, fontSize: "15px", fontWeight: 700 }}>
+                            #{tradeNumberById[t.id]} {t.pair || "Trade"}
+                          </div>
+                          <div style={{ color: palette.textFaint, fontSize: "13px" }}>
+                            {new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0" style={{ marginLeft: "8px", gap: "6px" }}>
+                          <span
+                            style={{
+                              fontFamily: mono,
+                              fontSize: "15px",
+                              fontWeight: 700,
+                              color: t.pnl >= 0 ? palette.green : palette.red,
+                            }}
+                          >
+                            {t.pnl >= 0 ? "+" : "-"}${fmtMoney(t.pnl)}
+                          </span>
+                          <div className="flex items-center" style={{ gap: "10px" }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditTrade(t);
                               }}
+                              className={TAP}
+                              style={{ color: palette.textFaint }}
+                              aria-label="Edit trade"
                             >
-                              {t.pnl >= 0 ? "+" : "-"}${fmtMoney(t.pnl)}
-                            </span>
-                            {t.emotion && emotionMeta(t.emotion) && (
-                              <span style={{ fontSize: "13px" }}>{emotionMeta(t.emotion).emoji}</span>
-                            )}
-                            {t.pair && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontFamily: mono,
-                                  color: palette.gold,
-                                  border: `1px solid ${palette.gold}`,
-                                  borderRadius: "999px",
-                                  padding: "1px 6px",
-                                }}
-                              >
-                                {t.pair}
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTrade(t.id);
+                              }}
+                              className={TAP}
+                              style={{ color: palette.textFaint }}
+                              aria-label="Delete trade"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {t.note && (
+                        <div style={{ color: palette.text, fontSize: "14px", marginTop: "8px" }}>{t.note}</div>
+                      )}
+
+                      {(() => {
+                        const showRevenge = settings.showRevengeTag !== false && revengeIds.has(t.id);
+                        const mood = t.emotion ? emotionMeta(t.emotion) : null;
+                        if (!t.setup && !mood && !showRevenge && !isBeingEdited && shots.length === 0 && !savingThisTrade) return null;
+                        const chip = (color) => ({
+                          fontSize: "12px",
+                          color,
+                          border: `1px solid ${color === palette.textMuted ? palette.border : color}`,
+                          borderRadius: "999px",
+                          padding: "2px 10px",
+                        });
+                        return (
+                          <div className="flex gap-1.5 flex-wrap items-center" style={{ marginTop: "10px" }}>
+                            {t.setup && <span style={chip(palette.textMuted)}>{findSetupLabel(t.setup)}</span>}
+                            {mood && (
+                              <span style={chip(palette.textMuted)}>
+                                {mood.emoji} {mood.label}
                               </span>
                             )}
-                            {t.setup && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontFamily: mono,
-                                  color: palette.textMuted,
-                                  border: `1px solid ${palette.border}`,
-                                  borderRadius: "999px",
-                                  padding: "1px 6px",
-                                }}
-                              >
-                                {findSetupLabel(t.setup)}
-                              </span>
-                            )}
-                           {settings.showRevengeTag !== false && revengeIds.has(t.id) && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontFamily: mono,
-                                  color: palette.red,
-                                  border: `1px solid ${palette.red}`,
-                                  borderRadius: "999px",
-                                  padding: "1px 6px",
-                                }}
-                              >
-                                revenge
-                              </span>
-                            )}
-                            {isBeingEdited && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontFamily: mono,
-                                  color: palette.gold,
-                                  border: `1px solid ${palette.gold}`,
-                                  borderRadius: "999px",
-                                  padding: "1px 6px",
-                                }}
-                              >
-                                editing
-                              </span>
-                            )}
+                            {showRevenge && <span style={chip(palette.red)}>Revenge trade</span>}
+                            {isBeingEdited && <span style={chip(palette.gold)}>Editing</span>}
                             {shots.length > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <Camera size={11} style={{ color: palette.textFaint }} aria-label="Has screenshot" />
-                              </span>
+                              <Camera size={13} style={{ color: palette.textFaint }} aria-label="Has screenshot" />
                             )}
                             {savingThisTrade && (
-                              <span style={{ fontSize: "10px", color: palette.textFaint, fontFamily: mono }}>
-                                saving\u2026
+                              <span style={{ fontSize: "11px", color: palette.textFaint, fontFamily: mono }}>
+                                {"saving\u2026"}
                               </span>
                             )}
                           </div>
-                          {t.note && (
-                            <div style={{ color: palette.textMuted, fontSize: "12px" }}>{t.note}</div>
-                          )}
-                        </div>
-                        <div className="flex items-center flex-shrink-0" style={{ marginLeft: "8px", gap: "10px" }}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditTrade(t);
-                            }}
-                            className={TAP}
-                            style={{ color: palette.textFaint }}
-                            aria-label="Edit trade"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteTrade(t.id);
-                            }}
-                            className={TAP}
-                            style={{ color: palette.textFaint }}
-                            aria-label="Delete trade"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       {isExpanded && (
                         <div className="mt-2 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
@@ -14749,7 +14605,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
 
             {trades.length === 0 && (
               <p className="text-xs mb-4" style={{ color: palette.textFaint }}>
-                No trades logged yet. Log one below and it'll land on today's date.
+                No trades logged yet. Tap Log trade and it'll land on today's date.
               </p>
             )}
             {trades.length > 0 && !selectedInfo && (

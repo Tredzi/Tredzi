@@ -2273,7 +2273,6 @@ const TABS = [
   { id: "risk", label: "Challenge", icon: Scale },
   { id: "propfirm", label: "Prop Firm", icon: Building2 },
   { id: "fx", label: "Convert", icon: ArrowLeftRight },
-  { id: "curve", label: "Curve", icon: CurveIcon },
   { id: "insights", label: "Insights", icon: Lightbulb },
   { id: "journal", label: "Journal", icon: BookOpen },
   { id: "broker", label: "Broker", icon: Link2 },
@@ -2312,13 +2311,7 @@ const TOUR_STEPS = [
     text: "Convert between currencies using live daily rates, or override with your broker's exact rate.",
   },
   {
-    id: "tab-curve",
-    tabId: "curve",
-    target: "tab-curve",
-    title: "Equity Curve",
-    text: "Log trades, watch your equity curve build, check the calendar, and share a weekly recap.",
-  },
-  {
+
     id: "tab-insights",
     tabId: "insights",
     target: "tab-insights",
@@ -2330,7 +2323,7 @@ const TOUR_STEPS = [
     tabId: "journal",
     target: "tab-journal",
     title: "Trade Journal",
-    text: "A full spreadsheet-style journal, a Notepad for quick notes, and a Playbook to track how well you follow your own rules.",
+    text: "Log trades, watch your equity curve build, check the calendar and monthly statement, share a weekly recap, keep quick notes, and track how well you follow your Playbook.",
   },
   {
     id: "tab-broker",
@@ -5309,6 +5302,7 @@ const resetPropFirmWizard = () => {
   const coachScrollRef = useRef(null);
 
   const [journalSubTab, setJournalSubTab] = useState("log");
+  const [logSheetOpen, setLogSheetOpen] = useState(false);
   const [journalEntries, setJournalEntries] = useState([]);
   const [journalLoaded, setJournalLoaded] = useState(false);
   const [journalYear, setJournalYear] = useState(() => new Date().getFullYear());
@@ -7894,6 +7888,9 @@ useEffect(() => {
       if (landing === "notepad") {
         setActiveTab("journal");
         setJournalSubTab("notepad");
+      } else if (landing === "curve") {
+        setActiveTab("journal");
+        setJournalSubTab("log");
       } else {
         setActiveTab(landing);
       }
@@ -10722,6 +10719,7 @@ const updateSyncedJournalRow = (trade) => {
     setTradeEmotion(null);
     setTradeSetup(null);
     setEditingTradeId(null);
+    setLogSheetOpen(false);
   };
 
   const startEditTrade = (t) => {
@@ -10732,9 +10730,7 @@ const updateSyncedJournalRow = (trade) => {
     setTradeSetup(t.setup || null);
     setEditingTradeId(t.id);
     setExpandedTradeId((cur) => (cur === t.id ? null : cur));
-    if (logFormRef.current) {
-      logFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    setLogSheetOpen(true);
   };
 
   // Pulls a community signal into the trade log form, pre-filled, so a
@@ -10751,12 +10747,9 @@ const updateSyncedJournalRow = (trade) => {
     if (m.tp) parts.push(`TP ${m.tp}`);
     if (m.text) parts.push(`"${m.text}"`);
     setTradeNote(parts.join(" \u00b7 "));
-    setActiveTab("curve");
-    setTimeout(() => {
-      if (logFormRef.current) {
-        logFormRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 60);
+    setActiveTab("journal");
+    setJournalSubTab("log");
+    setLogSheetOpen(true);
   };
 
   const cancelEditTrade = () => {
@@ -13790,7 +13783,14 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
     );
   }
 
-  if (activeTab === "curve") {
+  const JOURNAL_SUB_TABS = [
+    { id: "log", label: "Journal" },
+    { id: "notepad", label: "Notepad" },
+    { id: "playbook", label: "Playbook" },
+  ];
+  const journalSubNav = renderSubNav(JOURNAL_SUB_TABS, journalSubTab, setJournalSubTab);
+
+  if (activeTab === "journal" && journalSubTab === "log") {
     const startBal = num(startingBalance);
     const wins = trades.filter((t) => t.pnl > 0);
     const losses = trades.filter((t) => t.pnl < 0);
@@ -13798,6 +13798,10 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
     const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : 0;
     const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
     const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((s, t) => s + t.pnl, 0) / losses.length) : 0;
+    const grossWin = wins.reduce((s, t) => s + t.pnl, 0);
+    const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
+    const profitFactor = grossLoss > 0 ? grossWin / grossLoss : null;
+    const expectancy = trades.length > 0 ? netPnl / trades.length : 0;
 
     let running = startBal;
     let peak = startBal;
@@ -13841,7 +13845,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
 
     const viewYear = calMonth.getFullYear();
     const viewMonthIdx = calMonth.getMonth();
-    const firstWeekday = new Date(viewYear, viewMonthIdx, 1).getDay();
+    const firstWeekday = (new Date(viewYear, viewMonthIdx, 1).getDay() + 6) % 7;
     const totalDaysInMonth = new Date(viewYear, viewMonthIdx + 1, 0).getDate();
     const monthCells = [];
     for (let i = 0; i < firstWeekday; i++) monthCells.push(null);
@@ -13857,6 +13861,12 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
       (sum, k) => (k.startsWith(monthPrefix) ? sum + tradesByDay[k].trades.length : sum),
       0
     );
+
+    const monthDayKeys = Object.keys(tradesByDay).filter((k) => k.startsWith(monthPrefix));
+    const monthTradingDays = monthDayKeys.length;
+    const monthGreenDays = monthDayKeys.filter((k) => tradesByDay[k].total > 0).length;
+    const monthMaxAbs = Math.max(1, ...monthDayKeys.map((k) => Math.abs(tradesByDay[k].total)));
+    const WEEK_LABELS_MON = ["M", "T", "W", "T", "F", "S", "S"];
 
     const todayKey = dayKeyFromDate(new Date());
     const selectedInfo = selectedDay ? tradesByDay[selectedDay] : null;
@@ -13880,6 +13890,7 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
 
     body = (
       <>
+        {journalSubNav}
 
       <OnboardingTip
   	id="curve-setup-mood"
@@ -13888,17 +13899,53 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
   	persistSettings={persistSettings}
        />
 
-        <Readout
-          icon={TrendingUp}
-          eyebrow="Equity"
-          value={`${netPnl >= 0 ? "+" : "-"}$${fmtMoney(netPnl)}`}
-          sub={
-            trades.length > 0
-              ? `${trades.length} trade${trades.length === 1 ? "" : "s"} logged, ${winRate.toFixed(1)}% win rate`
-              : "Log your first trade below to start the curve"
-          }
-          tone={netPnl > 0 ? "good" : netPnl < 0 ? "bad" : undefined}
-        />
+        <div className="mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
+            <StatChip label="Win Rate" value={trades.length ? `${winRate.toFixed(1)}%` : "N/A"} />
+            <StatChip label="Avg Win / Loss" value={trades.length ? `$${fmt(avgWin, 0)} / $${fmt(avgLoss, 0)}` : "N/A"} />
+            <StatChip label="Max Drawdown" value={trades.length ? `$${fmt(maxDrawdown, 0)}` : "N/A"} />
+            <StatChip
+              label="Best / Worst Streak"
+              value={trades.length ? `+${bestStreak} / ${worstStreak}` : "N/A"}
+              onClick={() => setShowStreakInfo((v) => !v)}
+            />
+            <StatChip
+              label="Discipline Streak"
+              value={disciplineHasData ? `${disciplineCurrent} day${disciplineCurrent === 1 ? "" : "s"}` : "N/A"}
+              onClick={() => setShowDisciplineInfo((v) => !v)}
+            />
+            <StatChip
+              label="Best Discipline Streak"
+              value={disciplineHasData ? `${disciplineBest} day${disciplineBest === 1 ? "" : "s"}` : "N/A"}
+            />
+            <StatChip
+              label="Profit Factor"
+              value={
+                trades.length === 0 || grossWin + grossLoss === 0
+                  ? "N/A"
+                  : profitFactor === null
+                  ? "\u221e"
+                  : profitFactor.toFixed(2)
+              }
+            />
+            <StatChip
+              label="Expectancy"
+              value={trades.length ? `${expectancy >= 0 ? "+" : "-"}$${fmtMoney(expectancy)} / trade` : "N/A"}
+            />
+          </div>
+          {showStreakInfo && (
+            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
+              Streaks count consecutive wins (positive) or losses (negative).
+            </p>
+          )}
+          {showDisciplineInfo && (
+            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
+              Consecutive trading days with no revenge trade (opened within {RUNTIME.REVENGE_WINDOW_MINUTES} minutes of a
+              loss) tracks behavior, not P&amp;L. Profit factor is gross wins divided by gross losses; expectancy is your
+              average result per trade.
+            </p>
+          )}
+        </div>
 
         {trades.length > 0 && (
           <div
@@ -13954,44 +14001,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
             </div>
           </div>
         )}
-
-        <div className="mb-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
-            <StatChip label="Win Rate" value={trades.length ? `${winRate.toFixed(1)}%` : "N/A"} />
-            <StatChip label="Avg Win / Loss" value={trades.length ? `$${fmt(avgWin, 0)} / $${fmt(avgLoss, 0)}` : "N/A"} />
-            <StatChip label="Max Drawdown" value={trades.length ? `$${fmt(maxDrawdown, 0)}` : "N/A"} />
-            <StatChip
-              label="Best / Worst Streak"
-              value={trades.length ? `+${bestStreak} / ${worstStreak}` : "N/A"}
-              onClick={() => setShowStreakInfo((v) => !v)}
-            />
-          </div>
-          {showStreakInfo && (
-            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
-              Streaks count consecutive wins (positive) or losses (negative).
-            </p>
-          )}
-        </div>
-
-        <div className="mb-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-2">
-            <StatChip
-              label="Discipline Streak"
-              value={disciplineHasData ? `${disciplineCurrent} day${disciplineCurrent === 1 ? "" : "s"}` : "N/A"}
-              onClick={() => setShowDisciplineInfo((v) => !v)}
-            />
-            <StatChip
-              label="Best Discipline Streak"
-              value={disciplineHasData ? `${disciplineBest} day${disciplineBest === 1 ? "" : "s"}` : "N/A"}
-            />
-          </div>
-          {showDisciplineInfo && (
-            <p className="text-xs mt-2" style={{ color: palette.textFaint }}>
-              Consecutive trading days with no revenge trade (opened within {RUNTIME.REVENGE_WINDOW_MINUTES} minutes of a
-              loss) tracks behavior, not P&amp;L.
-            </p>
-          )}
-        </div>
 
         <DisciplineSeason streak={disciplineCurrent} best={disciplineBest} />
 
@@ -14269,227 +14278,6 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
          </div>
         )}
 
-        <div ref={logFormRef} className="flex items-center justify-between mb-1.5">
-          <span
-            className="uppercase"
-            style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
-          >
-            {editingTradeId ? "Edit Trade" : "Log a Trade"}
-          </span>
-          {editingTradeId && (
-            <button
-              type="button"
-              onClick={cancelEditTrade}
-              className={TAP}
-              style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-        {editingTradeId && (
-          <p className="text-xs -mt-1 mb-2" style={{ color: palette.gold }}>
-            Editing a logged trade.
-          </p>
-        )}
-        <input
-          type="text"
-          value={tradePair}
-          onChange={(e) => setTradePair(e.target.value.toUpperCase())}
-          placeholder="Pair"
-          className="w-full rounded-lg px-3 py-2.5 mb-2 bg-transparent outline-none"
-          style={{
-            background: palette.field,
-            border: `1px solid ${palette.border}`,
-            color: palette.text,
-            fontFamily: mono,
-            fontSize: "14px",
-          }}
-        />
-        <div className="flex gap-2 mb-2">
-          <div
-            className="flex items-center rounded-lg px-3 flex-1"
-            style={{
-              background: palette.field,
-              border: `1px solid ${editingTradeId ? palette.gold : palette.border}`,
-            }}
-          >
-            <span className="text-sm pr-1" style={{ color: palette.textFaint }}>
-              $
-            </span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={tradeInput}
-              onChange={(e) => setTradeInput(e.target.value)}
-              placeholder="+120 or -60"
-              className="w-full bg-transparent py-3 outline-none"
-              style={{ color: palette.text, fontFamily: mono, fontSize: "16px" }}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={submitTrade}
-            className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
-            style={{
-              width: "46px",
-              background: palette.gold,
-              color: palette.letterbox,
-            }}
-            aria-label={editingTradeId ? "Save changes" : "Add trade"}
-          >
-            {editingTradeId ? <Check size={20} strokeWidth={2.4} /> : <Plus size={20} strokeWidth={2.4} />}
-          </button>
-        </div>
-        <input
-          type="text"
-          value={tradeNote}
-          onChange={(e) => setTradeNote(e.target.value)}
-          placeholder="Note (optional)"
-          className="w-full rounded-lg px-3 py-2.5 mb-2 bg-transparent outline-none"
-          style={{
-            background: palette.field,
-            border: `1px solid ${palette.border}`,
-            color: palette.textMuted,
-            fontSize: "13px",
-          }}
-        />
-
-        <div className="flex gap-2 flex-wrap mb-2">
-          {NOTE_TAGS.map((tag) => {
-            const active = tradeNote === tag;
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setTradeNote(active ? "" : tag)}
-                className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                style={{
-                  background: active ? palette.field : "transparent",
-                  color: active ? palette.text : palette.textFaint,
-                  border: `1px dashed ${active ? palette.textMuted : palette.border}`,
-                  fontSize: "12px",
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-
-        <span
-          className="block mb-1.5 uppercase"
-          style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10px" }}
-        >
-          Setup
-        </span>
-        <div className="flex gap-2 flex-wrap mb-2 items-center">
-          {SETUPS.map((s) => {
-            const active = tradeSetup === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setTradeSetup(active ? null : s.id)}
-                className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                style={{
-                  background: active ? palette.gold : palette.field,
-                  color: active ? palette.letterbox : palette.textMuted,
-                  border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontSize: "13px",
-                }}
-              >
-                {s.label}
-              </button>
-            );
-          })}
-
-          {customSetupsLoaded &&
-            customSetups.map((s) => {
-              const active = tradeSetup === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setTradeSetup(active ? null : s.id)}
-                  className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                  style={{
-                    background: active ? palette.gold : palette.field,
-                    color: active ? palette.letterbox : palette.textMuted,
-                    border: `1px dashed ${active ? palette.gold : palette.border}`,
-                    fontSize: "13px",
-                  }}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-        </div>
-
-        <span
-          className="block mb-1.5 uppercase"
-          style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10px" }}
-        >
-          Mood
-        </span>
-        <div className="flex gap-2 flex-wrap mb-2 items-center">
-          {EMOTIONS.map((e) => {
-            const active = tradeEmotion === e.id;
-            return (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => setTradeEmotion(active ? null : e.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                style={{
-                  background: active ? palette.gold : palette.field,
-                  color: active ? palette.letterbox : palette.textMuted,
-                  border: `1px solid ${active ? palette.gold : palette.border}`,
-                  fontSize: "13px",
-                }}
-              >
-                <span>{e.emoji}</span>
-                {e.label}
-              </button>
-            );
-          })}
-
-          {customMoodsLoaded &&
-            customMoods.map((m) => {
-              const active = tradeEmotion === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setTradeEmotion(active ? null : m.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${TAP}`}
-                  style={{
-                    background: active ? palette.gold : palette.field,
-                    color: active ? palette.letterbox : palette.textMuted,
-                    border: `1px dashed ${active ? palette.gold : palette.border}`,
-                    fontSize: "13px",
-                  }}
-                >
-                  <span>{m.emoji}</span>
-                  {m.label}
-                </button>
-              );
-            })}
-        </div>
-
-        <p className="text-xs mb-4" style={{ color: palette.textFaint }}>
-          Enter net P&amp;L for the trade. Positive logs a win, negative logs a loss. The dashed chips quick-fill
-          the note; Setup tags what kind of trade it was (tap the + to add up to {MAX_CUSTOM_SETUPS} of your own);
-          Mood tags how you felt. Tap the pencil on any logged trade below to edit it in place. Tags and a
-          "revenge" flag (opened within {RUNTIME.REVENGE_WINDOW_MINUTES} minutes of a loss) show up per trade in the
-          calendar below.
-        </p>
-
-        {tradesLoadError && (
-          <p className="text-xs mb-4" style={{ color: palette.red }}>
-            {tradesLoadError}
-          </p>
-        )}
         {screenshotError && (
           <p className="text-xs mb-4" style={{ color: palette.red }}>
             {screenshotError}
@@ -14528,66 +14316,76 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
               className="rounded-2xl p-4 mb-4"
               style={{ background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: palette.shadow, transition: THEME_TRANSITION }}
             >
-              <div className="flex items-center justify-between mb-3">
-                <button
-                  type="button"
-                  onClick={goPrevMonth}
-                  aria-label="Previous month"
-                  className={TAP}
-                  style={{ color: palette.textMuted, padding: "2px" }}
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <div style={{ fontFamily: mono, fontSize: "13px", color: palette.text, letterSpacing: "0.04em" }}>
-                  {MONTH_NAMES[viewMonthIdx]} {viewYear}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div style={{ color: palette.text, fontFamily: display, fontSize: "20px", fontWeight: 700 }}>
+                    {MONTH_NAMES[viewMonthIdx]} {viewYear}
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: palette.textFaint }}>
+                    Tap a day to filter the entries
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={goNextMonth}
-                  aria-label="Next month"
-                  className={TAP}
-                  style={{ color: palette.textMuted, padding: "2px" }}
-                >
-                  <ChevronRight size={18} />
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={goPrevMonth}
+                    aria-label="Previous month"
+                    className={`flex items-center justify-center ${TAP}`}
+                    style={{ width: 36, height: 36, borderRadius: "999px", border: `1px solid ${palette.border}`, color: palette.text, background: "transparent" }}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNextMonth}
+                    aria-label="Next month"
+                    className={`flex items-center justify-center ${TAP}`}
+                    style={{ width: 36, height: 36, borderRadius: "999px", border: `1px solid ${palette.border}`, color: palette.text, background: "transparent" }}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 mb-1.5">
-                {WEEKDAY_LABELS.map((w, i) => (
-                  <div
-                    key={i}
-                    className="text-center"
-                    style={{ fontSize: "10px", color: palette.textFaint, fontFamily: mono }}
-                  >
+              <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+                {WEEK_LABELS_MON.map((w, i) => (
+                  <div key={i} className="text-center" style={{ fontSize: "11px", fontWeight: 600, color: palette.textMuted }}>
                     {w}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1.5">
                 {monthCells.map((d, i) => {
                   if (d === null) return <div key={i} />;
                   const key = `${monthPrefix}-${pad2(d)}`;
                   const info = tradesByDay[key];
                   const hasTrades = !!info;
+                  const isFuture = key > todayKey;
                   const isToday = key === todayKey;
                   const isSelected = key === selectedDay;
-                  const posDay = hasTrades && info.total >= 0;
+                  const total = hasTrades ? info.total : 0;
+                  const posDay = total >= 0;
+                  const ruleBreak = hasTrades && info.trades.some((t) => revengeIds.has(t.id));
+                  const alpha = hasTrades ? 0.22 + 0.4 * Math.min(1, Math.abs(total) / monthMaxAbs) : 0;
+                  const alphaHex = Math.round(alpha * 255).toString(16).padStart(2, "0");
+                  const bg = hasTrades
+                    ? `${posDay ? palette.green : palette.red}${alphaHex}`
+                    : isFuture
+                    ? "transparent"
+                    : palette.field;
                   return (
                     <button
                       key={i}
                       type="button"
                       onClick={() => hasTrades && setSelectedDay(isSelected ? null : key)}
-                      className={`flex flex-col items-center justify-center rounded-lg ${hasTrades ? TAP : ""}`}
+                      className={`relative flex flex-col items-start justify-between rounded-xl ${hasTrades ? TAP : ""}`}
                       style={{
                         aspectRatio: "1",
-                        background: hasTrades
-                          ? posDay
-                            ? `${palette.green}26`
-                            : `${palette.red}26`
-                          : "transparent",
-                        border: `1px solid ${
-                          isSelected ? palette.gold : isToday ? palette.textMuted : "transparent"
+                        padding: "5px 6px",
+                        background: bg,
+                        border: `${isSelected ? 2 : 1}px solid ${
+                          isSelected ? palette.text : isToday ? palette.textMuted : "transparent"
                         }`,
                         cursor: hasTrades ? "pointer" : "default",
                         transition: THEME_TRANSITION,
@@ -14595,37 +14393,87 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
                     >
                       <span
                         style={{
-                          fontSize: "11px",
-                          color: hasTrades ? palette.text : palette.textFaint,
-                          fontFamily: mono,
+                          fontSize: "12px",
+                          fontWeight: hasTrades ? 700 : 500,
+                          color: hasTrades ? palette.text : isFuture ? palette.textFaint : palette.textMuted,
+                          opacity: !hasTrades && isFuture ? 0.6 : 1,
                         }}
                       >
                         {d}
                       </span>
                       {hasTrades && (
-                        <span
-                          style={{
-                            fontSize: "9px",
-                            color: posDay ? palette.green : palette.red,
-                            fontFamily: mono,
-                          }}
-                        >
-                          {posDay ? "+" : "-"}
-                          {fmtMoney(info.total)}
-                        </span>
+                        <>
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: 6,
+                              right: 6,
+                              width: 6,
+                              height: 6,
+                              borderRadius: "999px",
+                              background: ruleBreak ? palette.red : palette.green,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              fontFamily: mono,
+                              color: posDay ? palette.green : palette.red,
+                            }}
+                          >
+                            {posDay ? "+" : "-"}
+                            {fmtMoney(total)}
+                          </span>
+                        </>
                       )}
                     </button>
                   );
                 })}
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-              <StatChip
-                label={`${MONTH_NAMES[viewMonthIdx]} Total`}
-                value={`${monthTotal >= 0 ? "+" : "-"}$${fmtMoney(monthTotal)}`}
-              />
-              <StatChip label={`${MONTH_NAMES[viewMonthIdx]} Trades`} value={String(monthTradeCount)} />
+              <div
+                className="grid grid-cols-3 gap-3 mt-4 pt-4"
+                style={{ borderTop: `1px solid ${palette.border}` }}
+              >
+                {[
+                  {
+                    label: "Month P&L",
+                    value: `${monthTotal >= 0 ? "+" : "-"}$${fmtMoney(monthTotal)}`,
+                    color: monthTotal > 0 ? palette.green : monthTotal < 0 ? palette.red : palette.text,
+                  },
+                  { label: "Trading days", value: String(monthTradingDays), color: palette.text },
+                  { label: "Green days", value: `${monthGreenDays} of ${monthTradingDays}`, color: palette.text },
+                ].map((m) => (
+                  <div key={m.label}>
+                    <div style={{ fontSize: "11px", color: palette.textMuted }}>{m.label}</div>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3" style={{ fontSize: "11px", color: palette.textMuted }}>
+                {[
+                  { label: "Profit", swatch: `${palette.green}66`, round: false },
+                  { label: "Loss", swatch: `${palette.red}66`, round: false },
+                  { label: "No trades", swatch: palette.field, round: false },
+                  { label: "Clean day", swatch: palette.green, round: true },
+                  { label: "Rule break", swatch: palette.red, round: true },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1.5">
+                    <span
+                      style={{
+                        width: l.round ? 8 : 12,
+                        height: l.round ? 8 : 12,
+                        borderRadius: l.round ? "999px" : "4px",
+                        background: l.swatch,
+                        display: "inline-block",
+                      }}
+                    />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {(() => {
@@ -14910,6 +14758,295 @@ const filteredFirms = PROP_FIRMS.filter((f) => {
               </p>
             )}
           </>
+        )}
+
+        {logSheetOpen && (
+          <div
+            onClick={() => (editingTradeId ? cancelEditTrade() : setLogSheetOpen(false))}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 45,
+              background: "rgba(5,7,12,0.55)",
+              display: "flex",
+              alignItems: isDesktop ? "center" : "flex-end",
+              justifyContent: "center",
+              padding: isDesktop ? "16px" : 0,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 520,
+                maxHeight: "90vh",
+                overflowY: "auto",
+                background: palette.surface,
+                border: `1px solid ${palette.border}`,
+                borderRadius: isDesktop ? "20px" : "20px 20px 0 0",
+                padding: "14px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+                boxShadow: palette.shadow,
+              }}
+            >
+              <div className="flex justify-end" style={{ marginBottom: "4px" }}>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => (editingTradeId ? cancelEditTrade() : setLogSheetOpen(false))}
+                  className={TAP}
+                  style={{ color: palette.textMuted, padding: "2px" }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+        <div ref={logFormRef} className="flex items-center justify-between mb-1.5">
+          <span
+            className="uppercase"
+            style={{ color: palette.textMuted, letterSpacing: "0.08em", fontSize: "11px" }}
+          >
+            {editingTradeId ? "Edit Trade" : "Log a Trade"}
+          </span>
+          {editingTradeId && (
+            <button
+              type="button"
+              onClick={cancelEditTrade}
+              className={TAP}
+              style={{ color: palette.textFaint, fontSize: "11px", fontFamily: mono }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+        {editingTradeId && (
+          <p className="text-xs -mt-1 mb-2" style={{ color: palette.gold }}>
+            Editing a logged trade.
+          </p>
+        )}
+        <input
+          type="text"
+          value={tradePair}
+          onChange={(e) => setTradePair(e.target.value.toUpperCase())}
+          placeholder="Pair"
+          className="w-full rounded-lg px-3 py-2.5 mb-2 bg-transparent outline-none"
+          style={{
+            background: palette.field,
+            border: `1px solid ${palette.border}`,
+            color: palette.text,
+            fontFamily: mono,
+            fontSize: "14px",
+          }}
+        />
+        <div className="flex gap-2 mb-2">
+          <div
+            className="flex items-center rounded-lg px-3 flex-1"
+            style={{
+              background: palette.field,
+              border: `1px solid ${editingTradeId ? palette.gold : palette.border}`,
+            }}
+          >
+            <span className="text-sm pr-1" style={{ color: palette.textFaint }}>
+              $
+            </span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={tradeInput}
+              onChange={(e) => setTradeInput(e.target.value)}
+              placeholder="+120 or -60"
+              className="w-full bg-transparent py-3 outline-none"
+              style={{ color: palette.text, fontFamily: mono, fontSize: "16px" }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={submitTrade}
+            className={`flex items-center justify-center rounded-lg flex-shrink-0 ${TAP}`}
+            style={{
+              width: "46px",
+              background: palette.gold,
+              color: palette.letterbox,
+            }}
+            aria-label={editingTradeId ? "Save changes" : "Add trade"}
+          >
+            {editingTradeId ? <Check size={20} strokeWidth={2.4} /> : <Plus size={20} strokeWidth={2.4} />}
+          </button>
+        </div>
+        <input
+          type="text"
+          value={tradeNote}
+          onChange={(e) => setTradeNote(e.target.value)}
+          placeholder="Note (optional)"
+          className="w-full rounded-lg px-3 py-2.5 mb-2 bg-transparent outline-none"
+          style={{
+            background: palette.field,
+            border: `1px solid ${palette.border}`,
+            color: palette.textMuted,
+            fontSize: "13px",
+          }}
+        />
+
+        <div className="flex gap-2 flex-wrap mb-2">
+          {NOTE_TAGS.map((tag) => {
+            const active = tradeNote === tag;
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setTradeNote(active ? "" : tag)}
+                className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                style={{
+                  background: active ? palette.field : "transparent",
+                  color: active ? palette.text : palette.textFaint,
+                  border: `1px dashed ${active ? palette.textMuted : palette.border}`,
+                  fontSize: "12px",
+                }}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+
+        <span
+          className="block mb-1.5 uppercase"
+          style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10px" }}
+        >
+          Setup
+        </span>
+        <div className="flex gap-2 flex-wrap mb-2 items-center">
+          {SETUPS.map((s) => {
+            const active = tradeSetup === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setTradeSetup(active ? null : s.id)}
+                className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                style={{
+                  background: active ? palette.gold : palette.field,
+                  color: active ? palette.letterbox : palette.textMuted,
+                  border: `1px solid ${active ? palette.gold : palette.border}`,
+                  fontSize: "13px",
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+
+          {customSetupsLoaded &&
+            customSetups.map((s) => {
+              const active = tradeSetup === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setTradeSetup(active ? null : s.id)}
+                  className={`px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                  style={{
+                    background: active ? palette.gold : palette.field,
+                    color: active ? palette.letterbox : palette.textMuted,
+                    border: `1px dashed ${active ? palette.gold : palette.border}`,
+                    fontSize: "13px",
+                  }}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+        </div>
+
+        <span
+          className="block mb-1.5 uppercase"
+          style={{ color: palette.textFaint, letterSpacing: "0.08em", fontSize: "10px" }}
+        >
+          Mood
+        </span>
+        <div className="flex gap-2 flex-wrap mb-2 items-center">
+          {EMOTIONS.map((e) => {
+            const active = tradeEmotion === e.id;
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setTradeEmotion(active ? null : e.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                style={{
+                  background: active ? palette.gold : palette.field,
+                  color: active ? palette.letterbox : palette.textMuted,
+                  border: `1px solid ${active ? palette.gold : palette.border}`,
+                  fontSize: "13px",
+                }}
+              >
+                <span>{e.emoji}</span>
+                {e.label}
+              </button>
+            );
+          })}
+
+          {customMoodsLoaded &&
+            customMoods.map((m) => {
+              const active = tradeEmotion === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setTradeEmotion(active ? null : m.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${TAP}`}
+                  style={{
+                    background: active ? palette.gold : palette.field,
+                    color: active ? palette.letterbox : palette.textMuted,
+                    border: `1px dashed ${active ? palette.gold : palette.border}`,
+                    fontSize: "13px",
+                  }}
+                >
+                  <span>{m.emoji}</span>
+                  {m.label}
+                </button>
+              );
+            })}
+        </div>
+
+        <p className="text-xs mb-4" style={{ color: palette.textFaint }}>
+          Enter net P&amp;L for the trade. Positive logs a win, negative logs a loss. The dashed chips quick-fill
+          the note; Setup tags what kind of trade it was (tap the + to add up to {MAX_CUSTOM_SETUPS} of your own);
+          Mood tags how you felt. Tap the pencil on any logged trade below to edit it in place. Tags and a
+          "revenge" flag (opened within {RUNTIME.REVENGE_WINDOW_MINUTES} minutes of a loss) show up per trade in the
+          calendar below.
+        </p>
+
+        {tradesLoadError && (
+          <p className="text-xs mb-4" style={{ color: palette.red }}>
+            {tradesLoadError}
+          </p>
+        )}
+            </div>
+          </div>
+        )}
+        {!logSheetOpen && (
+          <button
+            type="button"
+            onClick={() => setLogSheetOpen(true)}
+            aria-label="Log trade"
+            className={`flex items-center gap-2 ${TAP}`}
+            style={{
+              position: "fixed",
+              right: isDesktop ? 32 : 16,
+              bottom: isDesktop ? 32 : 88,
+              zIndex: 40,
+              background: palette.gold,
+              color: palette.letterbox,
+              border: "none",
+              borderRadius: "999px",
+              padding: "13px 20px",
+              fontSize: "14px",
+              fontWeight: 700,
+              boxShadow: palette.shadow,
+            }}
+          >
+            <Plus size={16} strokeWidth={2.6} />
+            Log trade
+          </button>
         )}
 
         <input
@@ -16666,16 +16803,9 @@ const closestWeekday = [...mistakePatterns.weekdayRows].sort(
     );
   }
 
-  const JOURNAL_SUB_TABS = [
-    { id: "log", label: "Journal" },
-    { id: "notepad", label: "Notepad" },
-    { id: "playbook", label: "Playbook" },
-  ];
-  const journalSubNav = renderSubNav(JOURNAL_SUB_TABS, journalSubTab, setJournalSubTab);
-
   if (activeTab === "journal") {
-    if (journalSubTab === "notepad") {
-      // rendered by the Notepad block below
+    if (journalSubTab === "log" || journalSubTab === "notepad") {
+      // "log" is rendered by the merged Journal block above, "notepad" by the Notepad block below
     } else if (journalSubTab === "playbook") {
       const stats = computePlaybookStats(playbookRules, playbookCheckins);
       const todayKey = dayKeyFromDate(new Date());
